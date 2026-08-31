@@ -57,8 +57,8 @@ const config = {
           title: 'Guides',
           items: [
             {label: 'Overview', to: '/'},
-            {label: 'Developer Guide', to: '/docs/developer-guide'},
-            {label: 'User Guide', to: '/docs/user-guide'},
+            {label: 'Developer Guide', to: '/docs/DeveloperGuide'},
+            {label: 'User Guide', to: '/docs/UserGuide'},
           ],
         },
       ],
