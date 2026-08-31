@@ -27,5 +27,5 @@ None. The repository is an initial application scaffold and has no existing feat
 - `src/main/java/nusynapxe`: add domain models, repositories, services, authentication/session handling, and JavaFX views while retaining the existing application entry point and SQLite database boundary.
 - SQLite schema: add tables and indexes for users, patients, appointments, clinical records, prescriptions, payments, and account/bootstrap state.
 - `src/test/java/nusynapxe`: add service, persistence, authorization, and TestFX coverage for the new flows.
-- `README.md`, `docs/user-guide.md`, and `docs/developer-guide.md`: replace scaffold-only descriptions with product and development documentation; the existing Docusaurus configuration will continue to publish these files.
+- `README.md`, `../../../docs/UserGuide.md`, and `../../../docs/DeveloperGuide.md`: replace scaffold-only descriptions with product and development documentation; the existing Docusaurus configuration will continue to publish these files.
 - `build.gradle` and CI may need only test/configuration changes; implementation should prefer the existing Java 25, JavaFX, SQLite, JUnit, Mockito, and TestFX stack and avoid introducing a network service.
