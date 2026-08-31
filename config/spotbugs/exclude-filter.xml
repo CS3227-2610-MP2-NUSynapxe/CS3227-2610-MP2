@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Keep production security findings enabled. Add only narrowly justified exclusions here. -->
+</FindBugsFilter>
