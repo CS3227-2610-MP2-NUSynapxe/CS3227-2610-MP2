@@ -1,2 +1,23 @@
-# IntelliJ configuration files
+# IntelliJ IDEA
 .idea/
+
+# Gradle
+.gradle/
+build/
+
+# Java and application output
+out/
+release/
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local SQLite files
+*.db
+*.db-shm
+*.db-wal
+
+# Docusaurus / npm
+website/node_modules/
+website/build/
+website/.docusaurus/
