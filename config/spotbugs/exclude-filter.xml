@@ -1,4 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <FindBugsFilter>
-    <!-- Keep production security findings enabled. Add only narrowly justified exclusions here. -->
+    <!-- Schema SQL is a fixed internal statement list, never user input. -->
+    <Match>
+        <Class name="nusynapxe.persistence.SchemaInitializer"/>
+        <Bug pattern="SQL_INJECTION_JDBC"/>
+    </Match>
+    <!-- ClinicServices intentionally exposes service facades as its composition API. -->
+    <Match>
+        <Class name="nusynapxe.service.ClinicServices"/>
+        <Method name="clinicalService"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
 </FindBugsFilter>
