@@ -6,19 +6,11 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.sql.Statement;
 import nusynapxe.DatabasePaths;
 
 /** Manages the application's local SQLite connection and bootstrap schema. */
 public final class SqliteDatabase implements AutoCloseable {
   private static final String JDBC_PREFIX = "jdbc:sqlite:";
-  private static final String CREATE_METADATA_TABLE =
-      """
-      CREATE TABLE IF NOT EXISTS app_metadata (
-          key TEXT PRIMARY KEY NOT NULL,
-          value TEXT NOT NULL
-      )
-      """;
 
   private final Path databasePath;
   private Connection jdbcConnection;
@@ -53,9 +45,9 @@ public final class SqliteDatabase implements AutoCloseable {
 
     createParentDirectory();
     jdbcConnection = DriverManager.getConnection(JDBC_PREFIX + databasePath);
-    try (Statement statement = jdbcConnection.createStatement()) {
+    try (var statement = jdbcConnection.createStatement()) {
       statement.execute("PRAGMA foreign_keys = ON");
-      statement.executeUpdate(CREATE_METADATA_TABLE);
+      SchemaInitializer.initialize(jdbcConnection);
     } catch (SQLException exception) {
       close();
       throw exception;
