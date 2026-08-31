@@ -2,14 +2,14 @@ package nusynapxe;
 
 import java.sql.SQLException;
 import javafx.application.Application;
-import javafx.scene.Scene;
 import javafx.stage.Stage;
 import nusynapxe.persistence.SqliteDatabase;
-import nusynapxe.ui.NUSynapxeView;
+import nusynapxe.ui.ApplicationRouter;
 
 /** JavaFX application entry point for NUSynapxe. */
 public final class NUSynapxeApp extends Application {
   private SqliteDatabase database;
+  private ApplicationRouter router;
 
   /** Creates an application instance for the JavaFX runtime. */
   public NUSynapxeApp() {
@@ -28,7 +28,8 @@ public final class NUSynapxeApp extends Application {
     database.open();
 
     stage.setTitle("NUSynapxe");
-    stage.setScene(new Scene(NUSynapxeView.create(database.path()), 640, 360));
+    router = new ApplicationRouter(stage, database);
+    router.showInitial();
     stage.show();
   }
 
@@ -40,6 +41,9 @@ public final class NUSynapxeApp extends Application {
   @Override
   public void stop() throws SQLException {
     if (database != null) {
+      if (router != null) {
+        router.clearSession();
+      }
       database.close();
     }
   }
