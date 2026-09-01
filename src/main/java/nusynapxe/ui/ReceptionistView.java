@@ -5,6 +5,8 @@ import java.math.RoundingMode;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Period;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import javafx.collections.FXCollections;
@@ -12,6 +14,7 @@ import javafx.geometry.Insets;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
@@ -21,6 +24,8 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.util.StringConverter;
 import nusynapxe.domain.Account;
@@ -42,6 +47,7 @@ public final class ReceptionistView {
   private static final DateTimeFormatter DATE_TIME_FORMAT =
       DateTimeFormatter.ofPattern(DATE_TIME_PATTERN);
   private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE;
+  private static final ZoneId SINGAPORE_ZONE = ZoneId.of("Asia/Singapore");
 
   private ReceptionistView() {
     throw new AssertionError("Utility class");
@@ -49,8 +55,8 @@ public final class ReceptionistView {
 
   /** Creates the Receptionist workspace. */
   public static Parent create(ClinicServices services, Session session, Runnable onLogout) {
-    PatientForm registerForm = patientForm("reception-register");
-    PatientForm editForm = patientForm("reception-patient");
+    PatientForm registerForm = patientForm("reception-register", false);
+    PatientForm editForm = patientForm("reception-patient", true);
     clearPatientForm(editForm);
     Button register = button("Register patient", "reception-patient-register");
     Button updatePatient = button("Save patient changes", "reception-patient-update");
@@ -71,6 +77,8 @@ public final class ReceptionistView {
     Button cancel = button("Cancel selected", "reception-cancel");
     ListView<Appointment> appointmentList = new ListView<>();
     appointmentList.setId("reception-appointment-list");
+    ComboBox<Patient> appointmentPatient = new ComboBox<>();
+    appointmentPatient.setId("reception-appointment-patient");
     Button checkIn = button("Check in selected", "reception-check-in");
     TextField charge = field("reception-charge", "Amount");
     ComboBox<PaymentMethod> method =
@@ -78,6 +86,8 @@ public final class ReceptionistView {
     method.setId("reception-method");
     method.getSelectionModel().select(PaymentMethod.CASH);
     Button checkout = button("Complete checkout", "reception-checkout");
+    ListView<Appointment> checkoutAppointmentList = new ListView<>();
+    checkoutAppointmentList.setId("reception-checkout-appointment-list");
     TextField revenueDate = field("reception-revenue-date", "yyyy-MM-dd");
     Button revenueButton = button("Show revenue", "reception-revenue-submit");
     Label revenue = new Label();
@@ -85,7 +95,6 @@ public final class ReceptionistView {
     Label feedback = new Label();
     feedback.setId("reception-feedback");
     SelectionState selection = new SelectionState();
-    Button refresh = button("Refresh", "reception-refresh");
 
     patientList
         .getSelectionModel()
@@ -105,16 +114,24 @@ public final class ReceptionistView {
         .addListener(
             (observable, previous, selected) ->
                 selection.appointmentId = selected == null ? 0 : selected.id());
+    checkoutAppointmentList
+        .getSelectionModel()
+        .selectedItemProperty()
+        .addListener(
+            (observable, previous, selected) ->
+                selection.appointmentId = selected == null ? 0 : selected.id());
 
     register.setOnAction(
         event -> {
           try {
             Patient patient =
                 services.patientService().register(session, patientFromForm(registerForm, 0, true));
-            populatePatientForm(patient, registerForm);
+            clearPatientForm(registerForm);
             feedback.setText("Patient registered");
             refreshPatients(
                 services, session, patientList, selection, feedback, patientSearch.getText());
+            refreshAppointmentPatients(
+                services, session, appointmentPatient, feedback, patient.id());
           } catch (ValidationException | AuthorizationException exception) {
             feedback.setText(exception.getMessage());
           } catch (SQLException exception) {
@@ -173,7 +190,7 @@ public final class ReceptionistView {
     book.setOnAction(
         event -> {
           try {
-            if (selection.patientId == 0 || doctor.getValue() == null) {
+            if (appointmentPatient.getValue() == null || doctor.getValue() == null) {
               throw new ValidationException("Select a patient and Doctor first");
             }
             Appointment appointment =
@@ -181,13 +198,14 @@ public final class ReceptionistView {
                     .appointmentService()
                     .book(
                         session,
-                        selection.patientId,
+                        appointmentPatient.getValue().id(),
                         doctor.getValue().id(),
                         parseDateTime(startsAt.getText(), "Start time"),
                         parseDateTime(endsAt.getText(), "End time"));
             selection.appointmentId = appointment.id();
             feedback.setText("Appointment booked and awaiting Doctor acceptance");
             refreshAppointments(services, session, appointmentList, selection, feedback);
+            refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
           } catch (ValidationException | AuthorizationException exception) {
             feedback.setText(exception.getMessage());
           } catch (SQLException exception) {
@@ -208,6 +226,7 @@ public final class ReceptionistView {
                     parseDateTime(rescheduleEndsAt.getText(), "New end time"));
             feedback.setText("Appointment rescheduled");
             refreshAppointments(services, session, appointmentList, selection, feedback);
+            refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
           } catch (ValidationException | AuthorizationException exception) {
             feedback.setText(exception.getMessage());
           } catch (SQLException exception) {
@@ -222,6 +241,7 @@ public final class ReceptionistView {
             services.appointmentService().cancel(session, selection.appointmentId);
             feedback.setText("Appointment cancelled");
             refreshAppointments(services, session, appointmentList, selection, feedback);
+            refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
           } catch (ValidationException | AuthorizationException exception) {
             feedback.setText(exception.getMessage());
           } catch (SQLException exception) {
@@ -236,6 +256,7 @@ public final class ReceptionistView {
             services.appointmentService().checkIn(session, selection.appointmentId);
             feedback.setText("Patient checked in");
             refreshAppointments(services, session, appointmentList, selection, feedback);
+            refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
           } catch (ValidationException | AuthorizationException exception) {
             feedback.setText(exception.getMessage());
           } catch (SQLException exception) {
@@ -256,6 +277,7 @@ public final class ReceptionistView {
                     method.getValue());
             feedback.setText("Checkout completed");
             refreshAppointments(services, session, appointmentList, selection, feedback);
+            refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
           } catch (ValidationException | AuthorizationException exception) {
             feedback.setText(exception.getMessage());
           } catch (SQLException exception) {
@@ -281,19 +303,13 @@ public final class ReceptionistView {
           }
         });
 
-    refresh.setOnAction(
-        event -> {
-          refreshDoctors(services, session, doctor, feedback);
-          refreshPatients(
-              services, session, patientList, selection, feedback, patientSearch.getText());
-          refreshAppointments(services, session, appointmentList, selection, feedback);
-        });
-
     Button logout = button("Log out", "logout-button");
     logout.setOnAction(event -> onLogout.run());
-    HBox header = new HBox(12, new Label("RECEPTIONIST workspace"), refresh, logout);
+    Region headerSpacer = new Region();
+    HBox.setHgrow(headerSpacer, Priority.ALWAYS);
+    HBox header = new HBox(12, new Label("RECEPTIONIST workspace"), headerSpacer, logout);
 
-    VBox registerContent = new VBox(10, patientGrid(registerForm), register);
+    VBox registerContent = new VBox(10, patientGrid(registerForm, false), register);
     registerContent.setId("reception-patient-register-tab");
     Tab registerTab = new Tab("Register new patient", registerContent);
     registerTab.setClosable(false);
@@ -301,7 +317,7 @@ public final class ReceptionistView {
     HBox patientSearchBar = new HBox(8, patientSearch, searchPatients, clearPatientSearch);
     HBox editActions = new HBox(8, updatePatient, deactivatePatient);
     VBox manageContent =
-        new VBox(10, patientSearchBar, patientList, patientGrid(editForm), editActions);
+        new VBox(10, patientSearchBar, patientList, patientGrid(editForm, true), editActions);
     manageContent.setId("reception-patient-manage-tab");
     Tab manageTab = new Tab("Search and manage patients", manageContent);
     manageTab.setClosable(false);
@@ -311,11 +327,12 @@ public final class ReceptionistView {
     GridPane appointmentForm = new GridPane();
     appointmentForm.setHgap(8);
     appointmentForm.setVgap(8);
-    appointmentForm.addRow(0, new Label("Doctor"), doctor);
-    appointmentForm.addRow(1, new Label("Starts"), startsAt, new Label("Ends"), endsAt, book);
+    appointmentForm.addRow(0, new Label("Patient"), appointmentPatient);
+    appointmentForm.addRow(1, new Label("Doctor"), doctor);
+    appointmentForm.addRow(2, new Label("Starts"), startsAt, new Label("Ends"), endsAt, book);
     appointmentForm.addRow(
-        2, new Label("New start"), rescheduleStartsAt, new Label("New end"), rescheduleEndsAt);
-    appointmentForm.addRow(3, reschedule, cancel);
+        3, new Label("New start"), rescheduleStartsAt, new Label("New end"), rescheduleEndsAt);
+    appointmentForm.addRow(4, reschedule, cancel);
     GridPane checkoutForm = new GridPane();
     checkoutForm.setHgap(8);
     checkoutForm.setVgap(8);
@@ -324,41 +341,70 @@ public final class ReceptionistView {
     revenueForm.setHgap(8);
     revenueForm.setVgap(8);
     revenueForm.addRow(0, new Label("Date"), revenueDate, revenueButton, revenue);
-    VBox content =
-        new VBox(
-            12,
-            new Label("Patient directory and basic data"),
-            patientTabs,
-            new Label("Appointments across all Doctors"),
-            appointmentForm,
-            appointmentList,
-            checkIn,
-            new Label("Checkout"),
-            checkoutForm,
-            new Label("Daily revenue"),
-            revenueForm,
-            feedback);
-    ScrollPane scroll = new ScrollPane(content);
-    scroll.setFitToWidth(true);
-    BorderPane root = new BorderPane(scroll);
+    VBox patientContent = new VBox(12, patientTabs);
+    VBox appointmentContent = new VBox(12, appointmentForm, appointmentList, checkIn);
+    VBox checkoutContent = new VBox(12, checkoutAppointmentList, checkoutForm);
+    VBox revenueContent = new VBox(12, revenueForm);
+    Tab patientFeature = featureTab("Patient directory and basic data", patientContent);
+    Tab appointmentFeature = featureTab("Appointments across all Doctors", appointmentContent);
+    Tab checkoutFeature = featureTab("Checkout", checkoutContent);
+    Tab revenueFeature = featureTab("Daily revenue", revenueContent);
+    TabPane workspaceTabs =
+        new TabPane(patientFeature, appointmentFeature, checkoutFeature, revenueFeature);
+    workspaceTabs.setId("reception-workspace-tabs");
+    workspaceTabs
+        .getSelectionModel()
+        .selectedItemProperty()
+        .addListener(
+            (observable, previous, selected) -> {
+              if (selected == patientFeature) {
+                refreshPatients(
+                    services, session, patientList, selection, feedback, patientSearch.getText());
+              } else if (selected == appointmentFeature) {
+                refreshDoctors(services, session, doctor, feedback);
+                refreshAppointmentPatients(
+                    services, session, appointmentPatient, feedback, selection.patientId);
+                refreshAppointments(services, session, appointmentList, selection, feedback);
+              } else if (selected == checkoutFeature) {
+                refreshAppointments(
+                    services, session, checkoutAppointmentList, selection, feedback);
+              } else if (selected == revenueFeature && !revenueDate.getText().isBlank()) {
+                revenueButton.fire();
+              }
+            });
+    BorderPane root = new BorderPane(workspaceTabs);
     root.setId("receptionist-workspace");
     root.setPadding(new Insets(24));
     root.setTop(header);
+    root.setBottom(feedback);
     refreshDoctors(services, session, doctor, feedback);
     refreshPatients(services, session, patientList, selection, feedback, "");
+    refreshAppointmentPatients(services, session, appointmentPatient, feedback, 0);
     refreshAppointments(services, session, appointmentList, selection, feedback);
+    refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
     return root;
   }
 
-  private static PatientForm patientForm(String prefix) {
-    TextField patientId = field(prefix + "-id", "Generated after registration");
-    patientId.setEditable(false);
+  private static PatientForm patientForm(String prefix, boolean includePatientId) {
+    TextField patientId = includePatientId ? field(prefix + "-id", "Generated Patient ID") : null;
+    if (patientId != null) {
+      patientId.setEditable(false);
+    }
     ComboBox<IdentityType> identityType =
         new ComboBox<>(FXCollections.observableArrayList(IdentityType.values()));
     identityType.setId(prefix + "-identity-type");
     ComboBox<CountryOption> issuingCountry =
         new ComboBox<>(FXCollections.observableArrayList(CountryOption.allCountries()));
     issuingCountry.setId(prefix + "-issuing-country");
+    TextField phoneCountryCode = field(prefix + "-phone-country-code", "+65");
+    issuingCountry
+        .valueProperty()
+        .addListener(
+            (observable, previous, selected) -> {
+              if (selected != null) {
+                phoneCountryCode.setText(selected.callingCode());
+              }
+            });
     identityType
         .valueProperty()
         .addListener(
@@ -371,6 +417,14 @@ public final class ReceptionistView {
     identityType.getSelectionModel().select(IdentityType.NRIC);
     ComboBox<Sex> sex = new ComboBox<>(FXCollections.observableArrayList(Sex.values()));
     sex.setId(prefix + "-sex");
+    DatePicker dateOfBirth = new DatePicker();
+    dateOfBirth.setId(prefix + "-date-of-birth");
+    dateOfBirth.setPromptText("Select date of birth");
+    TextField age = field(prefix + "-age", "Calculated automatically");
+    age.setEditable(false);
+    dateOfBirth
+        .valueProperty()
+        .addListener((observable, previous, selected) -> age.setText(calculateAgeText(selected)));
     return new PatientForm(
         patientId,
         identityType,
@@ -378,34 +432,60 @@ public final class ReceptionistView {
         issuingCountry,
         field(prefix + "-first-name", "First name"),
         field(prefix + "-last-name", "Last name"),
-        field(prefix + "-date-of-birth", "yyyy-MM-dd"),
+        dateOfBirth,
+        age,
         sex,
-        field(prefix + "-phone", "Phone"),
+        phoneCountryCode,
+        field(prefix + "-phone-number", "Digits only"),
         field(prefix + "-email", "Email"),
         field(prefix + "-address", "Address"),
         field(prefix + "-height", "Height (cm), optional"),
         field(prefix + "-weight", "Weight (kg), optional"));
   }
 
-  private static GridPane patientGrid(PatientForm form) {
+  private static GridPane patientGrid(PatientForm form, boolean includePatientId) {
     GridPane grid = new GridPane();
     grid.setHgap(8);
     grid.setVgap(8);
-    grid.addRow(0, new Label("Patient ID"), form.patientId());
+    int row = 0;
+    if (includePatientId) {
+      grid.addRow(row, new Label("Patient ID"), form.patientId());
+      row++;
+    }
     grid.addRow(
-        1,
-        new Label("Identity type"),
+        row,
+        requiredLabel("Identity type"),
         form.identityType(),
-        new Label("Identity number"),
+        requiredLabel("Identity number"),
         form.identityNumber());
-    grid.addRow(2, new Label("Issuing country"), form.issuingCountry());
+    row++;
+    grid.addRow(row, requiredLabel("Issuing country"), form.issuingCountry());
+    row++;
     grid.addRow(
-        3, new Label("First name"), form.firstName(), new Label("Last name"), form.lastName());
-    grid.addRow(4, new Label("Date of birth"), form.dateOfBirth(), new Label("Sex"), form.sex());
-    grid.addRow(5, new Label("Phone"), form.phone(), new Label("Email"), form.email());
-    grid.addRow(6, new Label("Address"), form.address());
+        row,
+        requiredLabel("First name"),
+        form.firstName(),
+        requiredLabel("Last name"),
+        form.lastName());
+    row++;
     grid.addRow(
-        7, new Label("Height (cm)"), form.height(), new Label("Weight (kg)"), form.weight());
+        row, requiredLabel("Date of birth"), form.dateOfBirth(), new Label("Age"), form.age());
+    row++;
+    grid.addRow(row, requiredLabel("Sex"), form.sex());
+    row++;
+    grid.addRow(
+        row,
+        requiredLabel("Phone country code"),
+        form.phoneCountryCode(),
+        requiredLabel("Phone number"),
+        form.phoneNumber());
+    row++;
+    grid.addRow(row, requiredLabel("Email"), form.email());
+    row++;
+    grid.addRow(row, requiredLabel("Address"), form.address());
+    row++;
+    grid.addRow(
+        row, new Label("Height (cm)"), form.height(), new Label("Weight (kg)"), form.weight());
     return grid;
   }
 
@@ -418,9 +498,10 @@ public final class ReceptionistView {
         country == null ? null : country.code(),
         form.firstName().getText(),
         form.lastName().getText(),
-        form.dateOfBirth().getText(),
+        form.dateOfBirth().getValue() == null ? null : form.dateOfBirth().getValue().toString(),
         form.sex().getValue(),
-        form.phone().getText(),
+        form.phoneCountryCode().getText(),
+        form.phoneNumber().getText(),
         form.email().getText(),
         form.address().getText(),
         parseOptionalMeasurement(form.height().getText(), "Height"),
@@ -429,15 +510,19 @@ public final class ReceptionistView {
   }
 
   private static void populatePatientForm(Patient patient, PatientForm form) {
-    form.patientId().setText(patient.displayedId());
+    if (form.patientId() != null) {
+      form.patientId().setText(patient.displayedId());
+    }
     form.identityType().setValue(patient.identityType());
     form.identityNumber().setText(valueOrEmpty(patient.identityNumber()));
     form.issuingCountry().setValue(CountryOption.fromCode(patient.issuingCountry()).orElse(null));
     form.firstName().setText(valueOrEmpty(patient.firstName()));
     form.lastName().setText(valueOrEmpty(patient.lastName()));
-    form.dateOfBirth().setText(valueOrEmpty(patient.dateOfBirth()));
+    form.dateOfBirth()
+        .setValue(patient.dateOfBirth() == null ? null : LocalDate.parse(patient.dateOfBirth()));
     form.sex().setValue(patient.sex());
-    form.phone().setText(valueOrEmpty(patient.phone()));
+    form.phoneCountryCode().setText(valueOrEmpty(patient.phoneCountryCode()));
+    form.phoneNumber().setText(valueOrEmpty(patient.phoneNumber()));
     form.email().setText(valueOrEmpty(patient.email()));
     form.address().setText(valueOrEmpty(patient.address()));
     form.height().setText(patient.heightCm() == null ? "" : patient.heightCm().toString());
@@ -446,19 +531,45 @@ public final class ReceptionistView {
 
   private static void clearPatientForm(PatientForm form) {
     clear(
-        form.patientId(),
         form.identityNumber(),
         form.firstName(),
         form.lastName(),
-        form.dateOfBirth(),
-        form.phone(),
+        form.age(),
+        form.phoneCountryCode(),
+        form.phoneNumber(),
         form.email(),
         form.address(),
         form.height(),
         form.weight());
+    if (form.patientId() != null) {
+      form.patientId().clear();
+    }
+    form.dateOfBirth().setValue(null);
     form.identityType().getSelectionModel().clearSelection();
     form.issuingCountry().getSelectionModel().clearSelection();
     form.sex().getSelectionModel().clearSelection();
+  }
+
+  private static Label requiredLabel(String text) {
+    return new Label(text + " *");
+  }
+
+  static String calculateAgeText(LocalDate dateOfBirth) {
+    if (dateOfBirth == null) {
+      return "";
+    }
+    LocalDate today = LocalDate.now(SINGAPORE_ZONE);
+    return dateOfBirth.isAfter(today)
+        ? ""
+        : Integer.toString(Period.between(dateOfBirth, today).getYears());
+  }
+
+  private static Tab featureTab(String title, VBox content) {
+    ScrollPane scroll = new ScrollPane(content);
+    scroll.setFitToWidth(true);
+    Tab tab = new Tab(title, scroll);
+    tab.setClosable(false);
+    return tab;
   }
 
   private static TextField field(String id, String prompt) {
@@ -525,6 +636,26 @@ public final class ReceptionistView {
     }
   }
 
+  private static void refreshAppointmentPatients(
+      ClinicServices services,
+      Session session,
+      ComboBox<Patient> selector,
+      Label feedback,
+      long preferredPatientId) {
+    try {
+      selector.setItems(
+          FXCollections.observableArrayList(
+              services.patientService().searchAdministrative(session, "").stream()
+                  .filter(Patient::active)
+                  .toList()));
+      if (!selectPatient(selector, preferredPatientId) && !selector.getItems().isEmpty()) {
+        selector.getSelectionModel().selectFirst();
+      }
+    } catch (SQLException exception) {
+      feedback.setText("Patients are temporarily unavailable");
+    }
+  }
+
   private static Double parseOptionalMeasurement(String value, String fieldName) {
     if (value == null || value.isBlank()) {
       return null;
@@ -566,6 +697,17 @@ public final class ReceptionistView {
       }
     }
     list.getSelectionModel().clearSelection();
+    return false;
+  }
+
+  private static boolean selectPatient(ComboBox<Patient> selector, long id) {
+    for (Patient patient : selector.getItems()) {
+      if (patient.id() == id) {
+        selector.getSelectionModel().select(patient);
+        return true;
+      }
+    }
+    selector.getSelectionModel().clearSelection();
     return false;
   }
 
@@ -642,9 +784,11 @@ public final class ReceptionistView {
       ComboBox<CountryOption> issuingCountry,
       TextField firstName,
       TextField lastName,
-      TextField dateOfBirth,
+      DatePicker dateOfBirth,
+      TextField age,
       ComboBox<Sex> sex,
-      TextField phone,
+      TextField phoneCountryCode,
+      TextField phoneNumber,
       TextField email,
       TextField address,
       TextField height,
