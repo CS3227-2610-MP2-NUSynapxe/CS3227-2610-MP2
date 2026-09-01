@@ -6,7 +6,7 @@ Provide Receptionists with secure basic patient-data lookup and maintenance for 
 
 ### Requirement: Every patient has a generated Patient ID and documented identity
 
-The system SHALL assign every new patient an immutable database-generated numeric Patient ID used by all internal relationships. Registration SHALL require an identity type of `NRIC`, `FIN`, `PASSPORT`, or `OTHER`, a non-blank identity number, and an issuing country. The system SHALL trim and uppercase identity values without applying country-specific format, length, or checksum validation, and SHALL reject a normalized identity type, issuing country, and identity number combination already assigned to another patient.
+The system SHALL assign every new patient an immutable database-generated numeric Patient ID used by all internal relationships. Registration SHALL require an identity type of `NRIC`, `FIN`, `PASSPORT`, or `OTHER`, a non-blank identity number, and an issuing country. The system SHALL trim and uppercase identity values. NRIC SHALL use `S` or `T`, seven digits, and one letter; FIN SHALL use `F`, `G`, or `M`, seven digits, and one letter; passport numbers SHALL contain 5 to 20 ASCII letters or digits; and OTHER SHALL remain non-blank. The system SHALL reject a normalized identity type, issuing country, and identity number combination already assigned to another patient.
 
 #### Scenario: Register a local patient with NRIC
 
@@ -18,12 +18,12 @@ The system SHALL assign every new patient an immutable database-generated numeri
 #### Scenario: Register a foreign patient with a passport
 
 - **WHEN** an authenticated Receptionist submits otherwise valid patient information with identity type `PASSPORT`, an issuing country, and an unused non-blank identity number
-- **THEN** the system registers the patient without applying an NRIC-specific format or checksum rule
+- **THEN** the system registers the patient when the normalized passport contains 5 to 20 letters or digits
 
 #### Scenario: Register a patient with another identity document
 
 - **WHEN** an authenticated Receptionist selects identity type `FIN` or `OTHER` and supplies an issuing country and unused non-blank identity number
-- **THEN** the system registers the patient without applying a country-specific document format or length rule
+- **THEN** the system applies Singapore FIN syntax to FIN and a non-blank rule to OTHER
 
 #### Scenario: Reject a duplicate identity document during registration
 
@@ -43,10 +43,10 @@ The system SHALL assign every new patient an immutable database-generated numeri
 - **THEN** the system rejects registration with a field-specific validation error
 - **AND** no patient record is created
 
-#### Scenario: Accept an unfamiliar document format
+#### Scenario: Reject an invalid document format
 
-- **WHEN** an authenticated Receptionist supplies non-blank identity information whose document format is not recognized by the application
-- **THEN** the system accepts the identity subject to normalized uniqueness and all other patient validation rules
+- **WHEN** an authenticated Receptionist supplies an NRIC, FIN, or passport that does not match its applicable syntax
+- **THEN** the system rejects the registration with a field-specific identity-number error
 
 #### Scenario: Concurrent duplicate registrations
 
@@ -90,7 +90,7 @@ The system SHALL allow an authenticated Receptionist to search basic patient rec
 
 ### Requirement: Receptionists can create, view, and edit basic patient data
 
-The system SHALL allow an authenticated Receptionist to register, select, view, and edit a patient's identity type, identity number, issuing country, name, date of birth, sex, phone, email, address, height, and weight. Sex SHALL be either `FEMALE` or `MALE`. Patient billing information SHALL not be collected or stored; appointment payment and checkout records remain separate. An update SHALL either persist all validated changes or leave the existing patient unchanged. Patient removal SHALL deactivate rather than physically delete a patient with retained history.
+The system SHALL allow an authenticated Receptionist to register, select, view, and edit a patient's identity type, identity number, issuing country, name, date of birth, sex, phone country code, phone number, email, address, height, and weight. All fields except height and weight SHALL be required and marked with `*`. Sex SHALL be either `FEMALE` or `MALE`. Patient billing information SHALL not be collected or stored; appointment payment and checkout records remain separate. An update SHALL either persist all validated changes or leave the existing patient unchanged. Patient removal SHALL deactivate rather than physically delete a patient with retained history.
 
 #### Scenario: View an administrative patient record
 
@@ -114,25 +114,37 @@ The system SHALL allow an authenticated Receptionist to register, select, view, 
 - **THEN** the system shows a field-appropriate validation error
 - **AND** the selected patient's existing information remains unchanged
 
+#### Scenario: Select date of birth and calculate age
+
+- **WHEN** a Receptionist selects a date of birth using the calendar control
+- **THEN** the system displays the patient's age calculated against the current date in the `Asia/Singapore` time zone
+- **AND** age is read-only and is not persisted as a second source of truth
+
 #### Scenario: Save optional measurements
 
-- **WHEN** an authenticated Receptionist supplies positive height or weight values, or leaves either optional measurement blank
+- **WHEN** an authenticated Receptionist supplies a positive whole-number height in centimetres or a positive weight with at most one decimal place, or leaves either optional measurement blank
 - **THEN** the system saves the patient using the supplied measurement values or null for omitted values
 
 #### Scenario: Reject invalid measurements
 
-- **WHEN** an authenticated Receptionist submits a zero, negative, or non-numeric height or weight value
+- **WHEN** an authenticated Receptionist submits a zero, negative, non-numeric, fractional height, or weight with more than one decimal place
 - **THEN** the system rejects the update without changing the patient
 
-#### Scenario: Save an international phone number
+#### Scenario: Populate and edit a phone country code
 
-- **WHEN** an authenticated Receptionist submits a phone number containing an optional leading `+` followed by one or more digits
-- **THEN** the system accepts the phone number without imposing a country-specific length
+- **WHEN** a Receptionist selects an issuing country
+- **THEN** the phone country-code field is populated from international calling-code metadata
+- **AND** the Receptionist may edit the populated country code
 
 #### Scenario: Reject unsupported phone characters
 
-- **WHEN** an authenticated Receptionist submits a blank phone number, a `+` without digits, a `+` outside the first position, or characters other than `+` and digits
+- **WHEN** an authenticated Receptionist submits a country code other than `+` followed by 1 to 3 digits, or submits a blank/non-digits phone number
 - **THEN** the system rejects the registration or update with a phone validation error
+
+#### Scenario: Reject missing required data or invalid email
+
+- **WHEN** any required patient field is missing or the email lacks a non-empty local part, `@`, and non-empty domain part
+- **THEN** the system rejects the registration or update with a field-specific validation error
 
 #### Scenario: Deactivate a patient
 
@@ -152,7 +164,7 @@ The Receptionist workspace SHALL place new-patient registration in a `Register n
 #### Scenario: Open the registration tab
 
 - **WHEN** a Receptionist opens `Register new patient`
-- **THEN** the system displays a blank registration form and register action without search results, save-changes, or deactivation controls
+- **THEN** the system displays a blank registration form and register action without Patient ID, search results, save-changes, or deactivation controls
 
 #### Scenario: Open the search and manage tab
 
@@ -174,6 +186,21 @@ The Receptionist registration and edit forms SHALL use an issuing-country dropdo
 - **WHEN** a Receptionist selects `PASSPORT` or `OTHER`
 - **THEN** the Receptionist can select any country in the country dropdown
 - **AND** the selected normalized country code is used for identity uniqueness
+
+### Requirement: Receptionist features use separate automatically refreshed tabs
+
+The workspace SHALL provide separate top-level tabs for `Patient directory and basic data`, `Appointments across all Doctors`, `Checkout`, and `Daily revenue`. The Log out button SHALL be positioned at the top right. The workspace SHALL not expose a manual Refresh button and SHALL refresh affected data after successful writes, searches, and relevant feature-tab selection.
+
+#### Scenario: Navigate between Receptionist features
+
+- **WHEN** a Receptionist selects a top-level feature tab
+- **THEN** only that feature's controls are presented as the primary page content
+- **AND** the feature reloads data that may have changed since it was last viewed
+
+#### Scenario: Complete a write or search
+
+- **WHEN** a Receptionist registers, edits, deactivates, searches, books, reschedules, cancels, checks in, or checks out
+- **THEN** the affected list and selection refresh automatically without a Refresh button
 
 ### Requirement: Patient-directory access is authorized below the user interface
 

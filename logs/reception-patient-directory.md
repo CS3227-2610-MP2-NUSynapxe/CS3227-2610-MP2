@@ -84,3 +84,30 @@ repository, service, and Receptionist view contain no diagnosis, consultation
 note, follow-up note, or prescription fields.
 
 No real identity-document number or patient record appears in this summary.
+
+## Validated form and feature-tab revision
+
+The user subsequently requested separate editable phone country-code and
+digits-only number controls, automatic calling-code suggestions, a calendar
+date-of-birth control with Singapore-time age, required markers and stronger
+validation, separate top-level feature tabs, automatic refresh, top-right
+logout, and no Patient ID on registration. This correction supersedes the
+earlier permissive NRIC/FIN decision: NRIC and FIN now receive Singapore syntax
+checks, passports use a broad international alphanumeric rule, and no checksum
+or external government verification is claimed.
+
+The accepted implementation advances the schema to version 4 without losing
+the old phone text, derives age rather than storing it, uses maintained Google
+libphonenumber calling-code metadata, and keeps the suggested country code
+editable. Patient data, appointments, checkout, and daily revenue are separate
+top-level tabs. No manual Receptionist refresh button remains; successful
+actions and feature navigation reload affected data.
+
+Revision tests cover direct version-3 phone migration, required fields,
+email, NRIC/FIN/passport formats, future dates, measurement precision,
+calling-code autofill, calendar age, absence of a registration Patient ID,
+four feature tabs, automatic refresh, and the existing confidentiality and
+workflow boundaries. The final full run completed 55 tests and passed
+Spotless, Checkstyle, PMD, SpotBugs with FindSecBugs, JaCoCo report generation,
+Javadoc, and strict OpenSpec validation. Only synthetic identifiers are used
+in tests.

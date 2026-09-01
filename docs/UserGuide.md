@@ -43,7 +43,7 @@ medical records through the protected services.
 
 Every patient receives an immutable, automatically generated Patient ID. The
 interface displays it in a form such as `P000042`; staff do not enter or edit
-this value. Appointments, payments, and retained records continue to use the
+this value, and it is not shown on the new-patient form. Appointments, payments, and retained records continue to use the
 same Patient ID even when basic details are corrected.
 
 Select the **Register new patient** tab to create a record:
@@ -52,19 +52,21 @@ Select the **Register new patient** tab to create a record:
 2. Select the issuing country from the country dropdown, which lists Singapore
    first and then every other ISO country alphabetically. Choosing **NRIC** or
    **FIN** automatically selects Singapore. The application stores the
-   two-letter country code but deliberately does not validate a document's
-   country-specific format, length, or checksum. Staff must check the source
-   document.
-3. Enter the identity-document number, first and last name, date of birth as
-   `yyyy-MM-dd`, and choose **Female** or **Male**. Enter phone, email, and
-   address. Height in centimetres and weight in kilograms are optional
-   positive numbers. There is no patient billing-information field; checkout
-   payments are managed separately.
-4. Enter phone using an optional leading `+` followed only by digits. There
-   is no Singapore-specific length requirement. Spaces, hyphens, letters,
-   multiple `+` characters, and a `+` without digits are rejected.
-5. Select **Register patient**. The generated Patient ID appears in that tab's
-   read-only field. Registration does not reuse or overwrite the edit form.
+   two-letter country code. NRIC must use `S` or `T`, seven digits, and a final
+   letter. FIN must use `F`, `G`, or `M`, seven digits, and a final letter.
+   Passport accepts 5–20 letters or digits. These checks do not verify a
+   government checksum, so staff must still check the source document.
+3. Select date of birth with the calendar. The read-only age is recalculated
+   using the current date in Singapore. Choose **Female** or **Male**.
+4. The phone country code is suggested from the issuing country (for example,
+   `+65` for Singapore) but can be edited. Enter the remaining phone number as
+   digits only. Enter an email containing `@` and an address.
+5. Every field marked `*` is required. Height and weight are the only optional
+   fields. Height is a positive whole number of centimetres, such as `171`;
+   weight is positive kilograms with at most one decimal, such as `70.4`.
+   There is no patient billing-information field; checkout is separate.
+6. Select **Register patient**. The new record and patient selectors refresh
+   automatically, and the blank registration form remains independent of edit.
 
 The combination of identity type, issuing country, and identity number must
 be unique after trimming and uppercasing. A duplicate is completely rejected
@@ -94,12 +96,14 @@ changes do not alter them.
 
 ### Book and manage a visit
 
-1. Select the patient from the patient directory and choose a Doctor.
+Open the separate **Appointments across all Doctors** feature tab.
+
+1. Choose a patient and a Doctor.
 2. Enter appointment times as `yyyy-MM-dd HH:mm` and select **Book
    appointment**. The new appointment starts as `PENDING` and awaits the
    assigned Doctor's acceptance.
-3. Use **Refresh** after another staff member changes the appointment. The
-   scheduler covers every Doctor, but overlapping appointments and Doctor
+3. Reopen the appointment tab after another staff member changes an appointment;
+   its data reloads automatically. The scheduler covers every Doctor, but overlapping appointments and Doctor
    time-off are rejected. Adjacent appointments are allowed.
 
 To change an existing pending or accepted visit, select it, enter the new
@@ -108,17 +112,17 @@ selected** to cancel it before completion.
 
 ### Check in, checkout, and revenue
 
-1. After the assigned Doctor accepts the appointment, select **Refresh** and
-   select the appointment.
+1. After the assigned Doctor accepts the appointment, reopen **Appointments
+   across all Doctors** and select the appointment; the list refreshes automatically.
 2. At or after the scheduled start time, select **Check in selected**. The
    appointment changes to `CHECKED_IN`.
 3. The Doctor records the consultation and selects **Mark consultation
-   completed**. Refresh the receptionist workspace.
+   completed**. Open the separate **Checkout** tab and select the appointment.
 4. Enter a positive charge in major currency units, such as `45.00`, choose
    Cash, Card, Transfer, or Other, and select **Complete checkout**. This
    records the successful payment and changes the appointment to
    `CHECKED_OUT`.
-5. Enter a date as `yyyy-MM-dd` and select **Show revenue** to see the count
+5. Open **Daily revenue**, enter a date as `yyyy-MM-dd`, and select **Show revenue** to see the count
    and total of successful checkouts for that local clinic date.
 
 Zero, negative, malformed, or missing amounts are rejected. Cancelled visits
@@ -127,6 +131,10 @@ and unsuccessful payment attempts do not contribute to the revenue summary.
 Receptionists can see the basic patient data described above, but no clinical
 record, diagnosis, consultation note, follow-up note, or prescription is
 returned by Receptionist services or screens.
+
+The Receptionist header keeps **Log out** at the top right. There is no manual
+Refresh button: searches and successful writes update their affected data, and
+opening a feature tab reloads information that another workflow may have changed.
 
 ## Doctor workflow
 

@@ -72,9 +72,11 @@ payments              checkout amount in integer minor units and method
 Schema version 2 adds nullable identity type/number/country, sex, height,
 weight, and active columns for backward compatibility. Schema version 3
 removes `patients.billing_information` and clears legacy sex values other than
-`FEMALE` and `MALE`; it does not alter the separate `payments` table. Version-1
-databases apply both migrations in order within one transaction, while
-version-2 databases apply only version 3. Existing rows keep their generated numeric
+`FEMALE` and `MALE`; it does not alter the separate `payments` table. Schema
+version 4 renames legacy `phone` to `phone_number` and adds nullable
+`phone_country_code`. Existing telephone text is retained verbatim and a
+migrated row requires a country code on its next save. Version-1
+databases apply all migrations in order within one transaction. Existing rows keep their generated numeric
 Patient IDs and related records; no identity or measurement values are
 invented. New registrations require complete identity and sex values, and a
 legacy row requires complete identity fields on its next basic-data save.
@@ -89,9 +91,13 @@ not primary keys. SQLite enforces uniqueness over the normalized
 trims and uppercases document values, while the service performs a friendly
 pre-check and maps uniqueness races to a non-sensitive duplicate message.
 
-Document numbers have no country-specific syntax, length, or checksum rule.
-Phone follows `^\+?[0-9]+$`, with no fixed national length. Height and weight
-are optional positive finite decimal values in centimetres and kilograms.
+NRIC syntax is `[ST][0-9]{7}[A-Z]`, FIN syntax is
+`[FGM][0-9]{7}[A-Z]`, and passport syntax is `[A-Z0-9]{5,20}`; these rules do
+not perform government checksum validation. `phone_country_code` follows
+`^\+[1-9][0-9]{0,2}$` and `phone_number` contains digits only. Calling-code
+suggestions use Google libphonenumber metadata and remain editable. Email has
+non-empty text around `@`. Height is an optional positive whole number of
+centimetres; weight is optional, positive, and limited to one decimal place.
 Patient sex is limited to `FEMALE` or `MALE`. Patient-level billing information
 is not stored; appointment payments remain in `payments`.
 Patient removal sets `active = 0`; it never reuses the Patient ID or deletes
@@ -153,9 +159,15 @@ semantic ids remain easy to assert. The patient area has independent
 `Register new patient` and `Search and manage patients` tabs. Country options
 come from `Locale.getISOCountries()`, use English display names, persist ISO
 two-letter codes, and order Singapore first. NRIC and FIN selection chooses
-Singapore automatically. Important ids include `login-submit`, `setup-submit`,
-`admin-account-submit`, `reception-patient-tabs`, `reception-register-id`,
+Singapore automatically. Patient forms use `DatePicker`; age is derived with
+the `Asia/Singapore` date and is never persisted. The top-level
+`reception-workspace-tabs` separates patient data, appointments, checkout, and
+revenue. Actions and tab selection refresh affected data, so Receptionist view
+has no manual refresh control. Important ids include `login-submit`, `setup-submit`,
+`admin-account-submit`, `reception-patient-tabs`,
 `reception-register-identity-type`, `reception-register-issuing-country`,
+`reception-register-phone-country-code`, `reception-register-phone-number`,
+`reception-register-date-of-birth`, `reception-register-age`,
 `reception-patient-id`,
 `reception-patient-identity-type`, `reception-patient-identity-number`,
 `reception-patient-issuing-country`, `reception-patient-search`,

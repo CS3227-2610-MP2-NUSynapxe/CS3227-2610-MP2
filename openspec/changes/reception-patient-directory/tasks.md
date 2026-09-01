@@ -43,3 +43,10 @@
 - [x] 7.2 Restrict patient sex to Female or Male and add a reusable ISO-country selector with English country names, Singapore first, normalized country-code persistence, and automatic Singapore selection for NRIC and FIN; verify service and focused UI behavior.
 - [x] 7.3 Split the Receptionist patient area into independent `Register new patient` and `Search and manage patients` tabs, keep edit/deactivate with search results, preserve appointment patient selection, and verify semantic IDs, state separation, registration, search, edit, and deactivation with TestFX.
 - [x] 7.4 Update the User Guide, Developer Guide, and interaction summary for the revised workflow, then run Spotless, the full Gradle quality gate, strict OpenSpec validation, and final privacy/diff review.
+
+## 8. Validated patient form and feature navigation revision
+
+- [x] 8.1 Split persisted phone data into editable country code and digits-only number, add a transactional schema-version-4 migration, update repository search/mappings, and verify fresh and migrated databases.
+- [x] 8.2 Add required-field, email, NRIC/FIN/passport, whole-centimetre height, one-decimal weight, date-of-birth, Singapore-age, and calling-code behavior with focused service and UI tests.
+- [x] 8.3 Reorganize Receptionist features into separate top-level tabs, omit Patient ID from registration, remove manual refresh, position Log out at top right, and verify automatic refresh and stable TestFX controls.
+- [x] 8.4 Update documentation and the interaction log, run focused tests, Spotless, the full Gradle quality gate, strict OpenSpec validation, and a final privacy/diff review.
