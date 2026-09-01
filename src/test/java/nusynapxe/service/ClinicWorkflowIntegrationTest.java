@@ -10,10 +10,12 @@ import java.time.LocalDateTime;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
+import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.PaymentMethod;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
+import nusynapxe.domain.Sex;
 import nusynapxe.persistence.SqliteDatabase;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -55,13 +57,20 @@ final class ClinicWorkflowIntegrationTest {
                   receptionistSession,
                   new Patient(
                       0,
+                      IdentityType.NRIC,
+                      "S123UNKNOWN",
+                      "SG",
                       "Grace",
                       "Hopper",
                       "1906-12-09",
-                      "555-0100",
+                      Sex.FEMALE,
+                      "+655550100",
                       "grace@example.test",
                       "Address",
-                      "Billing"));
+                      "Billing",
+                      170.0,
+                      65.0,
+                      true));
       LocalDateTime start = LocalDateTime.now().minusMinutes(5).withSecond(0).withNano(0);
       Appointment appointment =
           services
@@ -112,6 +121,41 @@ final class ClinicWorkflowIntegrationTest {
               .billingService()
               .dailyRevenue(receptionistSession, LocalDate.now())
               .totalMinor());
+
+      var clinicalBefore =
+          services.clinicalService().findForDoctor(doctorSession, appointment.id()).orElseThrow();
+      var prescriptionsBefore =
+          services.clinicalService().prescriptionsForDoctor(doctorSession, appointment.id());
+      Patient updated =
+          services
+              .patientService()
+              .updateAdministrative(
+                  receptionistSession,
+                  new Patient(
+                      patient.id(),
+                      patient.identityType(),
+                      patient.identityNumber(),
+                      patient.issuingCountry(),
+                      patient.firstName(),
+                      patient.lastName(),
+                      patient.dateOfBirth(),
+                      patient.sex(),
+                      "+442071234567",
+                      patient.email(),
+                      patient.address(),
+                      "Updated billing",
+                      patient.heightCm(),
+                      patient.weightKg(),
+                      true));
+      services.patientService().deactivateAdministrative(receptionistSession, patient.id());
+
+      assertEquals("+442071234567", updated.phone());
+      assertEquals(
+          clinicalBefore,
+          services.clinicalService().findForDoctor(doctorSession, appointment.id()).orElseThrow());
+      assertEquals(
+          prescriptionsBefore,
+          services.clinicalService().prescriptionsForDoctor(doctorSession, appointment.id()));
 
       long appointmentId = appointment.id();
       assertThrows(

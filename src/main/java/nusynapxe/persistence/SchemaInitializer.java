@@ -1,23 +1,25 @@
 package nusynapxe.persistence;
 
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 
 /** Creates and versions the SQLite schema used by the clinic application. */
 final class SchemaInitializer {
-  static final int CURRENT_VERSION = 1;
+  static final int CURRENT_VERSION = 2;
 
   private static final String SCHEMA_VERSION_KEY = "schema_version";
+  private static final String CREATE_METADATA =
+      """
+      CREATE TABLE IF NOT EXISTS app_metadata (
+          key TEXT PRIMARY KEY NOT NULL,
+          value TEXT NOT NULL
+      )
+      """;
   private static final List<String> SCHEMA_STATEMENTS =
       List.of(
-          """
-          CREATE TABLE IF NOT EXISTS app_metadata (
-              key TEXT PRIMARY KEY NOT NULL,
-              value TEXT NOT NULL
-          )
-          """,
           """
           CREATE TABLE IF NOT EXISTS users (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,13 +35,24 @@ final class SchemaInitializer {
           """
           CREATE TABLE IF NOT EXISTS patients (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
+              identity_type TEXT COLLATE NOCASE
+                  CHECK (identity_type IS NULL
+                         OR identity_type IN ('NRIC', 'FIN', 'PASSPORT', 'OTHER')),
+              identity_number TEXT COLLATE NOCASE,
+              issuing_country TEXT COLLATE NOCASE,
               first_name TEXT NOT NULL,
               last_name TEXT NOT NULL,
               date_of_birth TEXT NOT NULL,
+              sex TEXT CHECK (
+                  sex IS NULL OR sex IN ('FEMALE', 'MALE', 'OTHER', 'UNDISCLOSED')
+              ),
               phone TEXT NOT NULL,
               email TEXT NOT NULL,
               address TEXT NOT NULL,
               billing_information TEXT NOT NULL,
+              height_cm REAL CHECK (height_cm IS NULL OR height_cm > 0),
+              weight_kg REAL CHECK (weight_kg IS NULL OR weight_kg > 0),
+              active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
               created_at TEXT NOT NULL,
               updated_at TEXT NOT NULL
           )
@@ -105,38 +118,108 @@ final class SchemaInitializer {
               recorded_at TEXT NOT NULL
           )
           """,
+          """
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_patients_document_identity
+              ON patients(identity_type, issuing_country, identity_number)
+              WHERE identity_type IS NOT NULL
+                AND issuing_country IS NOT NULL
+                AND identity_number IS NOT NULL
+          """,
           "CREATE INDEX IF NOT EXISTS idx_appointments_doctor_time ON appointments(doctor_id, starts_at)",
           "CREATE INDEX IF NOT EXISTS idx_appointments_patient_time ON appointments(patient_id, starts_at)",
           "CREATE INDEX IF NOT EXISTS idx_time_off_doctor_time ON doctor_time_off(doctor_id, starts_at)",
           "CREATE INDEX IF NOT EXISTS idx_payments_recorded_status ON payments(recorded_at, status)");
+  private static final List<String> VERSION_TWO_MIGRATION =
+      List.of(
+          "ALTER TABLE patients ADD COLUMN identity_type TEXT COLLATE NOCASE "
+              + "CHECK (identity_type IS NULL OR identity_type IN "
+              + "('NRIC', 'FIN', 'PASSPORT', 'OTHER'))",
+          "ALTER TABLE patients ADD COLUMN identity_number TEXT COLLATE NOCASE",
+          "ALTER TABLE patients ADD COLUMN issuing_country TEXT COLLATE NOCASE",
+          "ALTER TABLE patients ADD COLUMN sex TEXT CHECK "
+              + "(sex IS NULL OR sex IN ('FEMALE', 'MALE', 'OTHER', 'UNDISCLOSED'))",
+          "ALTER TABLE patients ADD COLUMN height_cm REAL "
+              + "CHECK (height_cm IS NULL OR height_cm > 0)",
+          "ALTER TABLE patients ADD COLUMN weight_kg REAL "
+              + "CHECK (weight_kg IS NULL OR weight_kg > 0)",
+          "ALTER TABLE patients ADD COLUMN active INTEGER NOT NULL DEFAULT 1 "
+              + "CHECK (active IN (0, 1))",
+          """
+          CREATE UNIQUE INDEX idx_patients_document_identity
+              ON patients(identity_type, issuing_country, identity_number)
+              WHERE identity_type IS NOT NULL
+                AND issuing_country IS NOT NULL
+                AND identity_number IS NOT NULL
+          """);
 
   private SchemaInitializer() {
     throw new AssertionError("Utility class");
   }
 
-  /** Initializes the schema in one transaction. */
+  /** Initializes or migrates the schema in one transaction. */
   static void initialize(Connection connection) throws SQLException {
     boolean originalAutoCommit = connection.getAutoCommit();
     try {
       connection.setAutoCommit(false);
-      try (Statement statement = connection.createStatement()) {
-        for (String sql : SCHEMA_STATEMENTS) {
-          statement.executeUpdate(sql);
-        }
-        try (var versionStatement =
-            connection.prepareStatement(
-                "INSERT OR IGNORE INTO app_metadata(key, value) VALUES (?, ?)")) {
-          versionStatement.setString(1, SCHEMA_VERSION_KEY);
-          versionStatement.setString(2, Integer.toString(CURRENT_VERSION));
-          versionStatement.executeUpdate();
-        }
+      execute(connection, CREATE_METADATA);
+      Integer existingVersion = readVersion(connection);
+      if (existingVersion != null && (existingVersion < 1 || existingVersion > CURRENT_VERSION)) {
+        throw new SQLException("Unsupported schema version: " + existingVersion);
       }
+      if (Integer.valueOf(1).equals(existingVersion)) {
+        executeAll(connection, VERSION_TWO_MIGRATION);
+      }
+      executeAll(connection, SCHEMA_STATEMENTS);
+      writeVersion(connection, CURRENT_VERSION);
       connection.commit();
     } catch (SQLException exception) {
       connection.rollback();
       throw exception;
     } finally {
       connection.setAutoCommit(originalAutoCommit);
+    }
+  }
+
+  private static Integer readVersion(Connection connection) throws SQLException {
+    try (var statement =
+        connection.prepareStatement("SELECT value FROM app_metadata WHERE key = ?")) {
+      statement.setString(1, SCHEMA_VERSION_KEY);
+      try (ResultSet resultSet = statement.executeQuery()) {
+        if (!resultSet.next()) {
+          return null;
+        }
+        try {
+          return Integer.valueOf(resultSet.getString(1));
+        } catch (NumberFormatException exception) {
+          throw new SQLException("Invalid stored schema version", exception);
+        }
+      }
+    }
+  }
+
+  private static void writeVersion(Connection connection, int version) throws SQLException {
+    try (var statement =
+        connection.prepareStatement(
+            """
+            INSERT INTO app_metadata(key, value) VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            """)) {
+      statement.setString(1, SCHEMA_VERSION_KEY);
+      statement.setString(2, Integer.toString(version));
+      statement.executeUpdate();
+    }
+  }
+
+  private static void executeAll(Connection connection, List<String> statements)
+      throws SQLException {
+    for (String sql : statements) {
+      execute(connection, sql);
+    }
+  }
+
+  private static void execute(Connection connection, String sql) throws SQLException {
+    try (Statement statement = connection.createStatement()) {
+      statement.executeUpdate(sql);
     }
   }
 }

@@ -66,8 +66,8 @@ final class DoctorViewTest extends ApplicationTest {
 
   @Test
   void doctorOpensAssignedConsultationAddsPrescriptionAndCompletesVisit() {
-    clickOn("#login-username").write("doctor");
-    clickOn("#login-password").write("doctor-pass");
+    setText("#login-username", "doctor");
+    setText("#login-password", "doctor-pass");
     fire("#login-submit");
     waitForNode("#doctor-workspace");
 

@@ -26,9 +26,11 @@ final class SqliteDatabaseTest {
 
       assertTrue(database.isOpen());
       assertEquals(1, foreignKeysEnabled(database));
-      assertEquals("1", metadataValue(database, "schema_version"));
+      assertEquals("2", metadataValue(database, "schema_version"));
       assertTrue(tableNames(database).containsAll(expectedFeatureTables()));
       assertTrue(indexNames(database).contains("idx_appointments_doctor_time"));
+      assertTrue(indexNames(database).contains("idx_patients_document_identity"));
+      assertTrue(columnNames(database, "patients").containsAll(expectedPatientColumns()));
     }
 
     try (SqliteDatabase database = new SqliteDatabase(databasePath)) {
@@ -84,6 +86,19 @@ final class SqliteDatabaseTest {
     return objectNames(database, "index");
   }
 
+  private static Set<String> columnNames(SqliteDatabase database, String table)
+      throws SQLException {
+    try (PreparedStatement statement =
+            database.connection().prepareStatement("PRAGMA table_info(" + table + ")");
+        ResultSet resultSet = statement.executeQuery()) {
+      Set<String> names = new HashSet<>();
+      while (resultSet.next()) {
+        names.add(resultSet.getString("name"));
+      }
+      return Set.copyOf(names);
+    }
+  }
+
   private static Set<String> objectNames(SqliteDatabase database, String type) throws SQLException {
     try (PreparedStatement statement =
         database.connection().prepareStatement("SELECT name FROM sqlite_master WHERE type = ?")) {
@@ -112,5 +127,26 @@ final class SqliteDatabaseTest {
         "clinical_records",
         "prescriptions",
         "payments");
+  }
+
+  private static Set<String> expectedPatientColumns() {
+    return Set.of(
+        "id",
+        "identity_type",
+        "identity_number",
+        "issuing_country",
+        "first_name",
+        "last_name",
+        "date_of_birth",
+        "sex",
+        "phone",
+        "email",
+        "address",
+        "billing_information",
+        "height_cm",
+        "weight_kg",
+        "active",
+        "created_at",
+        "updated_at");
   }
 }

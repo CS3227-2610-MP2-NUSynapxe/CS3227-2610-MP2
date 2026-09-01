@@ -18,6 +18,8 @@ Useful focused commands are:
 ```powershell
 .\gradlew.bat test --no-daemon --console=plain
 .\gradlew.bat test --tests nusynapxe.service.AppointmentServiceTest --no-daemon --console=plain
+.\gradlew.bat test --tests nusynapxe.persistence.SchemaMigrationTest --tests nusynapxe.persistence.PatientDirectoryRepositoryTest --no-daemon --console=plain
+.\gradlew.bat test --tests nusynapxe.service.PatientServiceTest --tests nusynapxe.ui.ReceptionistViewTest --no-daemon --console=plain
 .\gradlew.bat checkstyleMain checkstyleTest --no-daemon --console=plain
 .\gradlew.bat pmdMain --no-daemon --console=plain
 .\gradlew.bat spotbugsMain --no-daemon --console=plain
@@ -59,7 +61,7 @@ stores the schema version in `app_metadata` and creates:
 
 ```text
 users                 account identity, role, enabled flag, salt/verifier
-patients              contact and billing administration only
+patients              Patient ID, documented identity, basic data, active flag
 appointments          patient/Doctor interval and lifecycle status
 doctor_time_off       blocked Doctor availability intervals
 clinical_records      diagnosis and consultation/follow-up notes
@@ -67,8 +69,36 @@ prescriptions         medication and usage instructions
 payments              checkout amount in integer minor units and method
 ```
 
-New schema changes should be versioned and applied in one transaction. Keep
-administrative and clinical columns in separate repository projections. All
+Schema version 2 adds nullable identity type/number/country, sex, height,
+weight, and active columns for backward compatibility. Version-1 databases
+are migrated in one transaction. Existing rows keep their generated numeric
+Patient IDs and related records; no identity or measurement values are
+invented. New registrations require complete identity and sex values, and a
+legacy row requires complete identity fields on its next basic-data save.
+Migration advances `app_metadata.schema_version` only after every statement
+succeeds, so failure rolls back both schema changes and the version marker.
+
+`patients.id INTEGER PRIMARY KEY AUTOINCREMENT` is the immutable relational
+Patient ID. The UI formats value `42` as `P000042` without storing another
+identifier. NRIC, FIN, passport, and other documents are business identifiers,
+not primary keys. SQLite enforces uniqueness over the normalized
+`(identity_type, issuing_country, identity_number)` tuple. Repository binding
+trims and uppercases document values, while the service performs a friendly
+pre-check and maps uniqueness races to a non-sensitive duplicate message.
+
+Document numbers have no country-specific syntax, length, or checksum rule.
+Phone follows `^\+?[0-9]+$`, with no fixed national length. Height and weight
+are optional positive finite decimal values in centimetres and kilograms.
+Patient removal sets `active = 0`; it never reuses the Patient ID or deletes
+appointment, payment, or clinical history.
+
+Directory search accepts an exact numeric or `P`-formatted Patient ID and
+case-insensitive partial document, country, name, phone, or email text. SQL
+wildcards supplied by a user are escaped and treated literally. Blank search
+lists the directory, and results use deterministic name-then-ID ordering.
+
+New schema changes should remain ordered, versioned, and transactional. Keep
+basic administrative and clinical columns in separate repository projections. All
 appointment and time-off interval writes use transactions and reject overlap;
 the overlap rule is `existing_start < new_end` and `existing_end > new_start`,
 so adjacent intervals are valid.
@@ -82,9 +112,16 @@ creates an in-memory `Session` after verifying an enabled account and clears
 the submitted password array. Sessions are never serialized to SQLite.
 
 `Authorization.requireRole` and `requireDoctorOwnership` are called by every
-protected service operation. Receptionists receive `Patient` administrative
-records only. `ClinicalService` requires the assigned Doctor and a checked-in
-or later appointment. System Admin is limited to account administration.
+protected service operation. Receptionist registration, search, detail,
+update, and deactivation require `Role.RECEPTIONIST`. `PatientRepository`
+selects an explicit basic-data projection and never joins clinical tables;
+the `Patient` record cannot contain diagnoses, notes, or prescriptions.
+`ClinicalService` requires the assigned Doctor and a checked-in or later
+appointment. System Admin is limited to account administration.
+
+Treat document numbers as private data: do not include complete values in
+exceptions, logs, screenshots, fixtures, or generated reports. Duplicate
+failures use one fixed message and never echo the submitted identity tuple.
 
 ## Workflow rules
 
@@ -107,10 +144,13 @@ stores integer minor units and aggregates successful payments by local date.
 
 `ApplicationRouter` opens Login or first-run Setup and routes an authenticated
 session to one of the role workspaces. Views are built programmatically so
-semantic ids remain easy to assert. Important ids include
-`login-submit`, `setup-submit`, `admin-account-submit`,
-`reception-book`, `reception-checkout`, `doctor-consultation-save`, and
-`logout-button`.
+semantic ids remain easy to assert. Important ids include `login-submit`,
+`setup-submit`, `admin-account-submit`, `reception-patient-id`,
+`reception-patient-identity-type`, `reception-patient-identity-number`,
+`reception-patient-issuing-country`, `reception-patient-search`,
+`reception-patient-search-submit`, `reception-patient-update`,
+`reception-patient-deactivate`, `reception-book`, `reception-checkout`,
+`doctor-consultation-save`, and `logout-button`.
 
 TestFX tests require a display. The CI workflow runs the Java suite through
 `xvfb-run --auto-servernum` on Ubuntu. For controls inside a scroll pane,

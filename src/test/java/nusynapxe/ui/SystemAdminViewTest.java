@@ -7,6 +7,7 @@ import static org.testfx.matcher.control.LabeledMatchers.hasText;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import javafx.scene.control.Button;
+import javafx.scene.control.TextInputControl;
 import javafx.stage.Stage;
 import nusynapxe.persistence.SqliteDatabase;
 import org.junit.jupiter.api.AfterEach;
@@ -39,9 +40,9 @@ final class SystemAdminViewTest extends ApplicationTest {
     createInitialAdminAndLogin();
     verifyThat("#system-admin-workspace", isVisible());
 
-    clickOn("#admin-account-username").write("doctor");
-    clickOn("#admin-account-display-name").write("Dr. Ada");
-    clickOn("#admin-account-password").write("doctor-pass");
+    setText("#admin-account-username", "doctor");
+    setText("#admin-account-display-name", "Dr. Ada");
+    setText("#admin-account-password", "doctor-pass");
     fire("#admin-account-submit");
 
     verifyThat("#admin-account-feedback", hasText("Account created"));
@@ -50,9 +51,9 @@ final class SystemAdminViewTest extends ApplicationTest {
     fire("#admin-account-submit");
     verifyThat("#admin-account-feedback", hasText("Username is required"));
 
-    clickOn("#admin-account-username").write("doctor");
-    clickOn("#admin-account-display-name").write("Dr. Duplicate");
-    clickOn("#admin-account-password").write("doctor-pass");
+    setText("#admin-account-username", "doctor");
+    setText("#admin-account-display-name", "Dr. Duplicate");
+    setText("#admin-account-password", "doctor-pass");
     fire("#admin-account-submit");
     verifyThat(
         "#admin-account-feedback",
@@ -60,19 +61,23 @@ final class SystemAdminViewTest extends ApplicationTest {
   }
 
   private void createInitialAdminAndLogin() {
-    clickOn("#setup-username").write("admin");
-    clickOn("#setup-password").write("secure-pass");
-    clickOn("#setup-confirm-password").write("secure-pass");
+    setText("#setup-username", "admin");
+    setText("#setup-password", "secure-pass");
+    setText("#setup-confirm-password", "secure-pass");
     fire("#setup-submit");
     WaitForAsyncUtils.waitForFxEvents();
     verifyThat("#login-view", isVisible());
-    clickOn("#login-username").write("admin");
-    clickOn("#login-password").write("secure-pass");
+    setText("#login-username", "admin");
+    setText("#login-password", "secure-pass");
     fire("#login-submit");
     WaitForAsyncUtils.waitForFxEvents();
   }
 
   private void fire(String selector) {
     interact(() -> lookup(selector).queryAs(Button.class).fire());
+  }
+
+  private void setText(String selector, String value) {
+    interact(() -> lookup(selector).queryAs(TextInputControl.class).setText(value));
   }
 }

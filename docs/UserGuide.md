@@ -39,16 +39,61 @@ medical records through the protected services.
 
 ## Receptionist workflow
 
-### Register a patient and book a visit
+### Patient directory and basic data
 
-1. In **RECEPTIONIST workspace**, enter the patient's first name, last name,
-   phone, email, and billing information. Select **Register patient**.
-2. Select the patient from the administrative patient list and choose a
-   Doctor.
-3. Enter appointment times as `yyyy-MM-dd HH:mm` and select **Book
+Every patient receives an immutable, automatically generated Patient ID. The
+interface displays it in a form such as `P000042`; staff do not enter or edit
+this value. Appointments, payments, and retained records continue to use the
+same Patient ID even when basic details are corrected.
+
+To register a patient:
+
+1. Choose **NRIC**, **FIN**, **PASSPORT**, or **OTHER** as the identity type.
+2. Enter the identity-document number and issuing country. The application
+   trims and uppercases these values but deliberately does not validate a
+   country-specific format, length, or checksum. Staff must check the source
+   document.
+3. Enter first and last name, date of birth as `yyyy-MM-dd`, sex, phone,
+   email, address, and billing information. Height in centimetres and weight
+   in kilograms are optional positive numbers.
+4. Enter phone using an optional leading `+` followed only by digits. There
+   is no Singapore-specific length requirement. Spaces, hyphens, letters,
+   multiple `+` characters, and a `+` without digits are rejected.
+5. Select **Register patient**. The generated Patient ID appears in the
+   read-only field and the new patient remains selected.
+
+The combination of identity type, issuing country, and identity number must
+be unique after trimming and uppercasing. A duplicate is completely rejected
+with `A patient with this identity document already exists`; no second patient
+is created. The message and application logs do not repeat the full document
+number.
+
+Use the directory search field to find patients by Patient ID (for example,
+`P000042` or `42`), identity type/number/country, name, phone, or email.
+Search is case-insensitive, partial text is accepted, and **Clear search**
+restores the full directory. No matches produce an empty list rather than an
+application error.
+
+Select a result to populate the permitted basic-data fields. Correct them and
+select **Save patient changes**. A failed validation or duplicate identity
+leaves the entire stored record unchanged. Select **Deactivate patient** when
+a record should no longer be active; deactivation does not delete its Patient
+ID, appointments, payments, or clinical history. A patient migrated from an
+older database remains searchable, but its identity-document fields must be
+completed before its next basic-data save.
+
+Receptionists can view and maintain only basic identity, demographic,
+measurement, contact, address, and billing data. The directory never returns
+diagnoses, consultation or follow-up notes, or prescriptions, and basic-data
+changes do not alter them.
+
+### Book and manage a visit
+
+1. Select the patient from the patient directory and choose a Doctor.
+2. Enter appointment times as `yyyy-MM-dd HH:mm` and select **Book
    appointment**. The new appointment starts as `PENDING` and awaits the
    assigned Doctor's acceptance.
-4. Use **Refresh** after another staff member changes the appointment. The
+3. Use **Refresh** after another staff member changes the appointment. The
    scheduler covers every Doctor, but overlapping appointments and Doctor
    time-off are rejected. Adjacent appointments are allowed.
 
@@ -74,9 +119,9 @@ selected** to cancel it before completion.
 Zero, negative, malformed, or missing amounts are rejected. Cancelled visits
 and unsuccessful payment attempts do not contribute to the revenue summary.
 
-Receptionists can see patient contact and billing data, but no clinical
+Receptionists can see the basic patient data described above, but no clinical
 record, diagnosis, consultation note, follow-up note, or prescription is
-returned by receptionist services or administrative screens.
+returned by Receptionist services or screens.
 
 ## Doctor workflow
 
@@ -118,8 +163,10 @@ Windows: %USERPROFILE%\.nusynapxe\nusynapxe.db
 macOS/Linux: ~/.nusynapxe/nusynapxe.db
 ```
 
-The database is local to the current computer and contains patient and
-clinical information. Do not commit it to version control or attach it to bug
-reports. Close NUSynapxe before copying, backing up, or removing the file.
+The database is local to the current computer and contains identity-document
+numbers, patient data, and clinical information. Do not commit it to version
+control, include it in interaction logs, or attach it to bug reports. Error
+reports and screenshots should not expose real identity numbers. Close
+NUSynapxe before copying, backing up, or removing the file.
 For a development-only database, set the `nusynapxe.database` Java system
 property to an isolated path.
