@@ -17,7 +17,6 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
-import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
@@ -482,9 +481,12 @@ public final class ReceptionistView {
     identityType.getSelectionModel().select(IdentityType.NRIC);
     ComboBox<Sex> sex = new ComboBox<>(FXCollections.observableArrayList(Sex.MALE, Sex.FEMALE));
     sex.setId(prefix + "-sex");
-    DatePicker dateOfBirth = new DatePicker();
-    dateOfBirth.setId(prefix + "-date-of-birth");
-    dateOfBirth.setPromptText("Select date of birth");
+    ComboBox<Integer> birthDay = new ComboBox<>();
+    birthDay.setId(prefix + "-date-of-birth-day");
+    birthDay.setPromptText("Day");
+    for (int day = 1; day <= 31; day++) {
+      birthDay.getItems().add(day);
+    }
     ComboBox<Month> birthMonth = new ComboBox<>(FXCollections.observableArrayList(Month.values()));
     birthMonth.setId(prefix + "-date-of-birth-month");
     birthMonth.setPromptText("Month");
@@ -497,43 +499,27 @@ public final class ReceptionistView {
     }
     TextField age = field(prefix + "-age", "");
     age.setEditable(false);
-    boolean[] synchronizingDate = {false};
-    dateOfBirth
-        .valueProperty()
-        .addListener(
-            (observable, previous, selected) -> {
-              age.setText(calculateAgeText(selected));
-              if (!synchronizingDate[0]) {
-                synchronizingDate[0] = true;
-                birthMonth.setValue(selected == null ? null : selected.getMonth());
-                birthYear.setValue(selected == null ? null : selected.getYear());
-                synchronizingDate[0] = false;
-              }
-            });
-    Runnable updateDateFromSelectors =
+    Runnable updateAgeDisplay =
         () -> {
-          if (synchronizingDate[0]
-              || birthMonth.getValue() == null
-              || birthYear.getValue() == null) {
-            return;
+          if (birthDay.getValue() != null
+              && birthMonth.getValue() != null
+              && birthYear.getValue() != null) {
+            LocalDate dateOfBirth =
+                LocalDate.of(birthYear.getValue(), birthMonth.getValue(), birthDay.getValue());
+            age.setText(calculateAgeText(dateOfBirth));
+          } else {
+            age.setText("");
           }
-          LocalDate existing = dateOfBirth.getValue();
-          YearMonth selectedMonth = YearMonth.of(birthYear.getValue(), birthMonth.getValue());
-          int day =
-              existing == null
-                  ? 1
-                  : Math.min(existing.getDayOfMonth(), selectedMonth.lengthOfMonth());
-          synchronizingDate[0] = true;
-          dateOfBirth.setValue(selectedMonth.atDay(day));
-          age.setText(calculateAgeText(dateOfBirth.getValue()));
-          synchronizingDate[0] = false;
         };
+    birthDay
+        .valueProperty()
+        .addListener((observable, previous, selected) -> updateAgeDisplay.run());
     birthMonth
         .valueProperty()
-        .addListener((observable, previous, selected) -> updateDateFromSelectors.run());
+        .addListener((observable, previous, selected) -> updateAgeDisplay.run());
     birthYear
         .valueProperty()
-        .addListener((observable, previous, selected) -> updateDateFromSelectors.run());
+        .addListener((observable, previous, selected) -> updateAgeDisplay.run());
     return new PatientForm(
         patientId,
         identityType,
@@ -541,7 +527,7 @@ public final class ReceptionistView {
         issuingCountry,
         field(prefix + "-first-name", "First name"),
         field(prefix + "-last-name", "Last name"),
-        dateOfBirth,
+        birthDay,
         birthMonth,
         birthYear,
         age,
@@ -606,6 +592,16 @@ public final class ReceptionistView {
 
   private static Patient patientFromForm(PatientForm form, long id, boolean active) {
     CountryOption country = form.issuingCountry().getValue();
+    LocalDate dateOfBirth = null;
+    if (form.birthDay().getValue() != null
+        && form.birthMonth().getValue() != null
+        && form.birthYear().getValue() != null) {
+      dateOfBirth =
+          LocalDate.of(
+              form.birthYear().getValue(),
+              form.birthMonth().getValue(),
+              form.birthDay().getValue());
+    }
     return new Patient(
         id,
         form.identityType().getValue(),
@@ -613,7 +609,7 @@ public final class ReceptionistView {
         country == null ? null : country.code(),
         form.firstName().getText(),
         form.lastName().getText(),
-        form.dateOfBirth().getValue() == null ? null : form.dateOfBirth().getValue().toString(),
+        dateOfBirth == null ? null : dateOfBirth.toString(),
         form.sex().getValue(),
         form.phoneCountryCode().getText(),
         form.phoneNumber().getText(),
@@ -635,8 +631,12 @@ public final class ReceptionistView {
     }
     form.firstName().setText(valueOrEmpty(patient.firstName()));
     form.lastName().setText(valueOrEmpty(patient.lastName()));
-    form.dateOfBirth()
-        .setValue(patient.dateOfBirth() == null ? null : LocalDate.parse(patient.dateOfBirth()));
+    if (patient.dateOfBirth() != null) {
+      LocalDate dob = LocalDate.parse(patient.dateOfBirth());
+      form.birthDay().setValue(dob.getDayOfMonth());
+      form.birthMonth().setValue(dob.getMonth());
+      form.birthYear().setValue(dob.getYear());
+    }
     form.sex().setValue(patient.sex());
     form.phoneCountryCode().setText(valueOrEmpty(patient.phoneCountryCode()));
     form.phoneNumber().setText(valueOrEmpty(patient.phoneNumber()));
@@ -661,7 +661,9 @@ public final class ReceptionistView {
     if (form.patientId() != null) {
       form.patientId().clear();
     }
-    form.dateOfBirth().setValue(null);
+    form.birthDay().getSelectionModel().clearSelection();
+    form.birthMonth().getSelectionModel().clearSelection();
+    form.birthYear().getSelectionModel().clearSelection();
     form.identityType().getSelectionModel().clearSelection();
     form.issuingCountry().getSelectionModel().clearSelection();
     form.sex().getSelectionModel().clearSelection();
@@ -901,7 +903,7 @@ public final class ReceptionistView {
       ComboBox<CountryOption> issuingCountry,
       TextField firstName,
       TextField lastName,
-      DatePicker dateOfBirth,
+      ComboBox<Integer> birthDay,
       ComboBox<Month> birthMonth,
       ComboBox<Integer> birthYear,
       TextField age,
