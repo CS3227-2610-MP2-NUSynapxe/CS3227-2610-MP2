@@ -100,9 +100,20 @@ Versions are pinned for reproducible builds as of 31 August 2026.
 .\gradlew.bat check javadoc --no-daemon --console=plain
 ```
 
-`check` runs JUnit (including TestFX), Checkstyle, PMD, SpotBugs with
-FindSecBugs, and JaCoCo. Reports are written below `build/reports/`, including
-the HTML coverage report at `build/reports/jacoco/test/html/index.html`.
+`check` runs JUnit (including TestFX), Checkstyle, PMD against production and
+test sources, SpotBugs with FindSecBugs, and JaCoCo. Test sources use the
+separate relaxed policy in `config/pmd/test-ruleset.xml`; violations still
+fail the quality gate. Reports are written below `build/reports/`, including
+test PMD at `build/reports/pmd/test.xml`, JUnit XML at
+`build/test-results/test/TEST-*.xml`, and the HTML coverage report at
+`build/reports/jacoco/test/html/index.html`.
+
+Dependabot checks the root Gradle build and wrapper, the `website` npm project,
+and GitHub Actions references weekly. Pull-request CI retains available JUnit
+and JaCoCo XML in the `quality-reports` artifact. For pull requests from this
+repository that are not authored by Dependabot, CI updates one combined sticky
+test-and-coverage comment; fork and Dependabot pull requests retain CI results
+and artifacts without a comment write.
 
 ## Build the documentation site
 
