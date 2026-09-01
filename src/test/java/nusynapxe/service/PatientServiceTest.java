@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
@@ -35,7 +36,7 @@ final class PatientServiceTest {
       Patient patient =
           fixture.service.register(
               fixture.receptionistSession,
-              patient(0, IdentityType.NRIC, " s123unknown ", " sg ", "+6587654321"));
+              patient(0, IdentityType.NRIC, " s1234567d ", " sg ", "+6587654321"));
       Appointment appointment =
           new AppointmentRepository(database)
               .create(
@@ -62,7 +63,7 @@ final class PatientServiceTest {
       Patient inactive =
           fixture.service.deactivateAdministrative(fixture.receptionistSession, patient.id());
 
-      assertEquals("S123UNKNOWN", updated.identityNumber());
+      assertEquals("S1234567D", updated.identityNumber());
       assertEquals("SG", updated.issuingCountry());
       assertEquals("+442071234567", updated.phone());
       assertFalse(inactive.active());
@@ -88,7 +89,7 @@ final class PatientServiceTest {
       Patient first =
           fixture.service.register(
               fixture.receptionistSession,
-              patient(0, IdentityType.PASSPORT, " odd/format ", " gb ", "+1"));
+              patient(0, IdentityType.PASSPORT, " oddformat ", " gb ", "+112345"));
       Patient second =
           fixture.service.register(
               fixture.receptionistSession,
@@ -100,7 +101,7 @@ final class PatientServiceTest {
               () ->
                   fixture.service.register(
                       fixture.receptionistSession,
-                      patient(0, IdentityType.PASSPORT, "ODD/FORMAT", "GB", "+123")));
+                      patient(0, IdentityType.PASSPORT, "ODDFORMAT", "GB", "+1123")));
       ValidationException duplicateUpdate =
           assertThrows(
               ValidationException.class,
@@ -127,18 +128,30 @@ final class PatientServiceTest {
       assertInvalid(fixture, withCountry(validPatient(), ""), "Issuing country is required");
       assertInvalid(fixture, withSex(validPatient(), null), "Sex is required");
       assertInvalid(fixture, withDate(validPatient(), "01/09/1990"), "Date of birth must use");
-      assertInvalid(fixture, withPhone(validPatient(), "+"), "Phone must contain");
-      assertInvalid(fixture, withPhone(validPatient(), "12-34"), "Phone must contain");
-      assertInvalid(fixture, withPhone(validPatient(), "1+234"), "Phone must contain");
+      assertInvalid(
+          fixture,
+          withDate(validPatient(), LocalDate.now().plusDays(1).toString()),
+          "cannot be in the future");
+      assertInvalid(fixture, withEmail(validPatient(), "invalid"), "Email must contain @");
+      assertInvalid(fixture, withAddress(validPatient(), " "), "Address is required");
+      assertInvalid(
+          fixture, withIdentity(IdentityType.NRIC, "S123A"), "NRIC must start with S or T");
+      assertInvalid(
+          fixture, withIdentity(IdentityType.FIN, "A1234567Z"), "FIN must start with F, G or M");
+      assertInvalid(fixture, withPhoneCountryCode(validPatient(), "+"), "Phone country code");
+      assertInvalid(fixture, withPhone(validPatient(), "12-34"), "Phone number");
+      assertInvalid(fixture, withPhone(validPatient(), "1+234"), "Phone number");
+      assertInvalid(fixture, withIdentityNumber(validPatient(), "AB-123"), "Passport number must");
+      assertInvalid(fixture, withHeight(validPatient(), 170.5), "whole number");
+      assertInvalid(fixture, withWeight(validPatient(), 70.45), "at most 1 decimal");
       assertInvalid(fixture, withHeight(validPatient(), 0.0), "Height must be a positive number");
       assertInvalid(fixture, withWeight(validPatient(), -1.0), "Weight must be a positive number");
 
       assertEquals(
-          "+12345678901234567890",
+          "+441234567890",
           fixture
               .service
-              .register(
-                  fixture.receptionistSession, withPhone(validPatient(), "+12345678901234567890"))
+              .register(fixture.receptionistSession, withPhone(validPatient(), "1234567890"))
               .phone());
     }
   }
@@ -151,7 +164,7 @@ final class PatientServiceTest {
       Patient legacy =
           new PatientRepository(database)
               .create(new Patient(0, "Legacy", "Patient", "1990-01-01", "123", "", ""));
-      Patient completed = patient(legacy.id(), IdentityType.FIN, "G123", "SG", "+6588888888");
+      Patient completed = patient(legacy.id(), IdentityType.FIN, "G1234567A", "SG", "+6588888888");
 
       assertThrows(
           ValidationException.class,
@@ -216,6 +229,8 @@ final class PatientServiceTest {
 
   private static Patient patient(
       long id, IdentityType type, String identityNumber, String country, String phone) {
+    String countryCode = phone.startsWith("+44") ? "+44" : phone.startsWith("+1") ? "+1" : "+65";
+    String number = phone.startsWith(countryCode) ? phone.substring(countryCode.length()) : phone;
     return new Patient(
         id,
         type,
@@ -225,25 +240,111 @@ final class PatientServiceTest {
         "Hopper",
         "1906-12-09",
         Sex.FEMALE,
-        phone,
+        countryCode,
+        number,
         "grace@example.test",
         "Address",
-        170.5,
+        170.0,
         65.5,
         true);
   }
 
   private static Patient withPhone(Patient patient, String phone) {
-    return copy(
-        patient,
+    String countryCode = phone.startsWith("+44") ? "+44" : patient.phoneCountryCode();
+    String number = phone.startsWith(countryCode) ? phone.substring(countryCode.length()) : phone;
+    return new Patient(
+        patient.id(),
         patient.identityType(),
         patient.identityNumber(),
         patient.issuingCountry(),
-        patient.sex(),
+        patient.firstName(),
+        patient.lastName(),
         patient.dateOfBirth(),
-        phone,
+        patient.sex(),
+        countryCode,
+        number,
+        patient.email(),
+        patient.address(),
         patient.heightCm(),
-        patient.weightKg());
+        patient.weightKg(),
+        patient.active());
+  }
+
+  private static Patient withPhoneCountryCode(Patient patient, String countryCode) {
+    return new Patient(
+        patient.id(),
+        patient.identityType(),
+        patient.identityNumber(),
+        patient.issuingCountry(),
+        patient.firstName(),
+        patient.lastName(),
+        patient.dateOfBirth(),
+        patient.sex(),
+        countryCode,
+        patient.phoneNumber(),
+        patient.email(),
+        patient.address(),
+        patient.heightCm(),
+        patient.weightKg(),
+        patient.active());
+  }
+
+  private static Patient withEmail(Patient patient, String email) {
+    return new Patient(
+        patient.id(),
+        patient.identityType(),
+        patient.identityNumber(),
+        patient.issuingCountry(),
+        patient.firstName(),
+        patient.lastName(),
+        patient.dateOfBirth(),
+        patient.sex(),
+        patient.phoneCountryCode(),
+        patient.phoneNumber(),
+        email,
+        patient.address(),
+        patient.heightCm(),
+        patient.weightKg(),
+        patient.active());
+  }
+
+  private static Patient withAddress(Patient patient, String address) {
+    return new Patient(
+        patient.id(),
+        patient.identityType(),
+        patient.identityNumber(),
+        patient.issuingCountry(),
+        patient.firstName(),
+        patient.lastName(),
+        patient.dateOfBirth(),
+        patient.sex(),
+        patient.phoneCountryCode(),
+        patient.phoneNumber(),
+        patient.email(),
+        address,
+        patient.heightCm(),
+        patient.weightKg(),
+        patient.active());
+  }
+
+  private static Patient withIdentity(IdentityType type, String number) {
+    Patient patient = validPatient();
+    return new Patient(
+        patient.id(),
+        type,
+        number,
+        "SG",
+        patient.firstName(),
+        patient.lastName(),
+        patient.dateOfBirth(),
+        patient.sex(),
+        patient.phoneCountryCode(),
+        patient.phoneNumber(),
+        patient.email(),
+        patient.address(),
+        patient.heightCm(),
+        patient.weightKg(),
+        patient.active());
   }
 
   private static Patient withIdentity(Patient patient, Patient identitySource) {
@@ -254,7 +355,7 @@ final class PatientServiceTest {
         identitySource.issuingCountry(),
         patient.sex(),
         patient.dateOfBirth(),
-        patient.phone(),
+        patient.phoneNumber(),
         patient.heightCm(),
         patient.weightKg());
   }
@@ -267,7 +368,7 @@ final class PatientServiceTest {
         patient.issuingCountry(),
         patient.sex(),
         patient.dateOfBirth(),
-        patient.phone(),
+        patient.phoneNumber(),
         patient.heightCm(),
         patient.weightKg());
   }
@@ -280,7 +381,7 @@ final class PatientServiceTest {
         patient.issuingCountry(),
         patient.sex(),
         patient.dateOfBirth(),
-        patient.phone(),
+        patient.phoneNumber(),
         patient.heightCm(),
         patient.weightKg());
   }
@@ -293,7 +394,7 @@ final class PatientServiceTest {
         country,
         patient.sex(),
         patient.dateOfBirth(),
-        patient.phone(),
+        patient.phoneNumber(),
         patient.heightCm(),
         patient.weightKg());
   }
@@ -306,7 +407,7 @@ final class PatientServiceTest {
         patient.issuingCountry(),
         sex,
         patient.dateOfBirth(),
-        patient.phone(),
+        patient.phoneNumber(),
         patient.heightCm(),
         patient.weightKg());
   }
@@ -319,7 +420,7 @@ final class PatientServiceTest {
         patient.issuingCountry(),
         patient.sex(),
         date,
-        patient.phone(),
+        patient.phoneNumber(),
         patient.heightCm(),
         patient.weightKg());
   }
@@ -332,7 +433,7 @@ final class PatientServiceTest {
         patient.issuingCountry(),
         patient.sex(),
         patient.dateOfBirth(),
-        patient.phone(),
+        patient.phoneNumber(),
         height,
         patient.weightKg());
   }
@@ -345,7 +446,7 @@ final class PatientServiceTest {
         patient.issuingCountry(),
         patient.sex(),
         patient.dateOfBirth(),
-        patient.phone(),
+        patient.phoneNumber(),
         patient.heightCm(),
         weight);
   }
@@ -369,6 +470,7 @@ final class PatientServiceTest {
         patient.lastName(),
         date,
         sex,
+        patient.phoneCountryCode(),
         phone,
         patient.email(),
         patient.address(),
