@@ -57,12 +57,15 @@ Select the **Register new patient** tab to create a record:
    letter. FIN must use `F`, `G`, or `M`, seven digits, and a final letter.
    Passport accepts 5–20 letters or digits. These checks do not verify a
    government checksum, so staff must still check the source document.
-3. Select date of birth with the calendar. The read-only age is recalculated
-   using the current date in Singapore. Choose **Female** or **Male**.
+3. Select date of birth with the calendar, or jump directly with the adjacent
+   month and year dropdowns. Changing month or year preserves the selected day
+   where possible and otherwise uses that month's final day. The blank,
+   read-only age field is filled using the current date in Singapore. Choose
+   **Male** or **Female**; Male is listed first.
 4. The phone country code is suggested from the issuing country (for example,
    `65` for Singapore) but can be edited. Both the country code and remaining
-   phone number accept digits only; do not type `+` into either field. The
-   complete number is displayed conventionally with `+`. Enter an email
+   phone number accept digits only. The fixed `+` displayed before the country
+   code is not editable. The complete number is displayed conventionally with `+`. Enter an email
    containing `@` and an address.
 5. Every field marked `*` is required. Height and weight are the only optional
    fields. Height is a positive whole number of centimetres, such as `171`;
@@ -83,12 +86,14 @@ Search is case-insensitive, partial text is accepted, and **Clear search**
 restores the full directory. No matches produce an empty list rather than an
 application error.
 
-Select a result to populate that tab's permitted basic-data fields. Correct them and
-select **Save patient changes**. A failed validation or duplicate identity
-leaves the entire stored record unchanged. **Deactivate patient** is located
-with the search results and edit action; select it when
-a record should no longer be active; deactivation does not delete its Patient
-ID, appointments, payments, or clinical history. A patient migrated from an
+The search tab contains only the search controls and results. Select a result
+to open its permitted basic-data fields in a separate patient-details window.
+Correct them and select **Save patient changes**. A failed validation or
+duplicate identity leaves the entire stored record unchanged. Select
+**Deactivate patient** when a record should no longer be active; the same
+button changes to **Activate patient** for an inactive record. Either status
+change preserves its Patient ID, appointments, payments, and clinical history.
+A patient migrated from an
 older database remains searchable, but its identity-document fields must be
 completed before its next basic-data save.
 

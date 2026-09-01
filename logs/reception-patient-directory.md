@@ -119,3 +119,19 @@ before implementation. The UI now locks Singapore for NRIC/FIN, the service
 rejects non-Singapore values if the UI is bypassed, and calling codes are stored
 as digits such as `65`; a leading plus is added only for combined display and
 search. This correction was kept in local commits and was not pushed.
+
+## Date navigation and patient-details revision
+
+The user next requested direct month and year navigation for date of birth,
+Male first in the sex selector, a fixed telephone plus sign, no automatic-age
+placeholder, patient details in a separate window, and reversible patient
+activation. The OpenSpec proposal, specification, design, and tasks were
+updated before implementation.
+
+The implementation keeps the calendar day selector and synchronizes it with
+month/year dropdowns, opens an owned modal details stage only after a search
+result is selected, and exposes one status button whose text follows the
+patient's current state. Repository and Receptionist service operations now
+support both status transitions while retaining the same Patient ID and all
+history. Focused repository, service, and TestFX tests cover these behaviors.
+Only synthetic patient data is used in tests, and no changes were pushed.

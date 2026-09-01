@@ -10,11 +10,12 @@ Receptionists need a reliable way to find and maintain basic patient records wit
 - Completely reject a duplicate normalized combination of identity type, issuing country, and identity number, and show a clear duplicate-identity error rather than a warning.
 - Store the digits-only international calling code separately from the digits-only subscriber number. Automatically suggest the calling code for the selected issuing country while allowing staff to edit it.
 - Add Receptionist patient search by generated Patient ID, identity document, name, phone, and email.
-- Add separate Receptionist tabs for new-patient registration and patient search/editing, with deactivation located alongside search results.
+- Add separate Receptionist tabs for new-patient registration and patient search, opening administrative details and edit/status actions in a separate window only after a result is selected.
 - Organize patient data, appointments, checkout, and daily revenue into separate top-level feature tabs; remove manual refresh and refresh relevant data automatically after actions and when a feature tab is opened.
 - Use an ISO country dropdown with Singapore first, lock the issuing country to Singapore for NRIC and FIN, and restrict sex to Male or Female.
 - Add a Receptionist basic patient-data view and editing workflow for identity, name, date of birth, sex, contact details, address, height, and weight; remove patient billing information while retaining appointment payment/checkout records.
-- Use a calendar date selector, calculate a read-only age using the current date in Singapore, hide generated Patient ID from registration, and mark every required field except optional height and weight with `*`.
+- Use a calendar date selector with direct month and year dropdowns, calculate a read-only age using the current date in Singapore without placeholder text, hide generated Patient ID from registration, and mark every required field except optional height and weight with `*`.
+- List Male before Female, show a fixed non-editable `+` before the editable digits-only calling code, and allow inactive patients to be activated again without deleting history.
 - Validate required fields, email syntax, digits-only phone numbers, positive whole-centimetre height, and positive weight with at most one decimal place using field-specific errors.
 - Enforce Receptionist authorization and the clinical-confidentiality boundary in the service and persistence layers, not only in the JavaFX interface.
 - Add repository, service, authorization, and TestFX coverage for search, editing, duplicate rejection, validation, and clinical-data isolation.

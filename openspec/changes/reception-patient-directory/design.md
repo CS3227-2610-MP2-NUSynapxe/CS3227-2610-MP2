@@ -73,9 +73,9 @@ Height and weight remain optional. Height is a positive whole number of centimet
 
 Full country-specific subscriber-number validation was rejected because clinics may need to record uncommon or incomplete international contact details. A single combined phone string was rejected because it cannot reliably drive an editable calling-code control.
 
-### Derive age from date of birth
+### Derive age from date of birth with direct navigation
 
-The JavaFX form uses `DatePicker` for date of birth and a read-only age field. Age is calculated with `Period.between(dateOfBirth, LocalDate.now(ZoneId.of("Asia/Singapore")))`. Date of birth remains the sole persisted source of truth; age is recalculated when the date changes and whenever a patient is loaded. Future dates are rejected.
+The JavaFX form uses `DatePicker` for the day plus explicit month and year `ComboBox` controls. The dropdowns synchronize with the date picker, preserve the selected day where possible, and clamp dates such as 31 February to the month's final day. The year list runs from the current Singapore year down to 1900; the DatePicker editor still supports valid earlier ISO dates without changing service-layer date support. Age is calculated with `Period.between(dateOfBirth, LocalDate.now(ZoneId.of("Asia/Singapore")))`. Date of birth remains the sole persisted source of truth; age is recalculated when the date changes and whenever a patient is loaded. Future dates are rejected. The read-only age control has no prompt text.
 
 ### Migrate split phone storage in schema version 4
 
@@ -83,13 +83,13 @@ Fresh databases create `phone_country_code` and `phone_number`. Version-3 databa
 
 ### Deactivate rather than hard-delete patients
 
-Receptionist “delete” behavior sets an active flag rather than physically removing the patient. Patient IDs are never reused, and appointments, billing, and clinical history remain referentially intact. Physical deletion was rejected because it would destroy audit and medical history and conflict with existing foreign keys.
+Receptionist status changes set the active flag rather than physically removing the patient. Active patients can be deactivated and inactive patients reactivated. Patient IDs are never reused, and appointments, billing, and clinical history remain referentially intact. Physical deletion was rejected because it would destroy audit and medical history and conflict with existing foreign keys.
 
 ### Use constrained country and sex choices
 
 Issuing country is selected from the Java runtime's ISO 3166 country list. The interface displays English country names, stores normalized two-letter codes, and orders Singapore first followed by all other countries alphabetically. Selecting NRIC or FIN selects Singapore and disables the selector until another identity type is selected; the service independently rejects non-`SG` NRIC/FIN data. Passport and Other allow any listed country. This avoids free-text country variants. Google libphonenumber remains the runtime source for calling-code metadata.
 
-Sex is limited to `FEMALE` or `MALE` in the domain, service, and interface. When a version-2 database contains `OTHER` or `UNDISCLOSED`, the version-3 migration clears that value so staff must choose one of the supported options on the next save.
+Sex is limited to `FEMALE` or `MALE` in the domain, service, and interface, with Male listed first in the dropdown. When a version-2 database contains `OTHER` or `UNDISCLOSED`, the version-3 migration clears that value so staff must choose one of the supported options on the next save.
 
 ### Remove patient billing information in schema version 3
 
@@ -97,7 +97,7 @@ Patient-level billing information is removed from the domain, repository, servic
 
 ### Split the Receptionist patient workflow into tabs
 
-The Receptionist view uses a `Register new patient` tab with its own blank form and register action, and a `Search and manage patients` tab with search controls, results, selected-patient edit form, and deactivation action. Each tab has distinct stable semantic IDs for TestFX. Clearing search shows the directory; selecting a result populates only the edit form. Successful edits and deactivation refresh the result list while retaining the affected selection when possible. Registration stays independent of the search/edit form.
+The Receptionist view uses a `Register new patient` tab with its own blank form and register action, and a `Search and manage patients` tab containing only search controls and results. Selecting a result opens one modal patient-details `Stage` owned by the Receptionist workspace. The window contains a separate edit form, save action, and a status action whose label and behavior toggle between activation and deactivation. Closing the window returns focus to search. Successful edits and status changes refresh the result list and the details-window state. Registration stays independent of the details form.
 
 Duplicate feedback states that a patient with the identity document already exists but does not display its full number. UI visibility remains only a convenience; services enforce authorization independently.
 
@@ -105,7 +105,7 @@ Patient forms sit within the top-level `Patient directory and basic data` featur
 
 ### Test each enforcement boundary
 
-Persistence tests cover migration through version 4, billing-column removal, split-phone preservation, composite normalized uniqueness, concurrent duplicate resistance, parameterized search, deterministic order, atomic updates, deactivation, and administrative projections. Service tests cover document normalization and syntax, strict Singapore issuance for NRIC/FIN, digits-only split-phone and required contact validation, measurement precision, binary sex, future DOB rejection, authorization, duplicate error mapping, legacy identity completion, and clinical preservation. TestFX covers nested patient tabs, top-level feature tabs, all-country selection, digits-only calling-code autofill, locked Singapore issuance for NRIC/FIN, calendar DOB and age, local and foreign registration, search, selection, editing, duplicate feedback, deactivation placement, automatic refresh behavior, and stable control IDs. Integration tests confirm that basic-data edits do not change clinical records or payment history.
+Persistence tests cover migration through version 4, billing-column removal, split-phone preservation, composite normalized uniqueness, concurrent duplicate resistance, parameterized search, deterministic order, atomic updates, reversible active status, and administrative projections. Service tests cover document normalization and syntax, strict Singapore issuance for NRIC/FIN, digits-only split-phone and required contact validation, measurement precision, binary sex, future DOB rejection, authorization, duplicate error mapping, activation/deactivation, legacy identity completion, and clinical preservation. TestFX covers nested patient tabs, top-level feature tabs, all-country selection, fixed plus and digits-only calling-code autofill, locked Singapore issuance for NRIC/FIN, Male-first ordering, calendar/month/year DOB and age, local and foreign registration, search-only results, modal details, editing, duplicate feedback, activation/deactivation, automatic refresh behavior, and stable control IDs. Integration tests confirm that basic-data edits and status changes do not change clinical records or payment history.
 
 The implementation adds Google libphonenumber as a runtime dependency solely for maintained ISO-region-to-calling-code metadata.
 

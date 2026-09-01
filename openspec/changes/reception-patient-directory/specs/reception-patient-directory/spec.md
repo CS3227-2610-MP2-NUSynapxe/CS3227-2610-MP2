@@ -125,6 +125,13 @@ The system SHALL allow an authenticated Receptionist to register, select, view, 
 - **WHEN** a Receptionist selects a date of birth using the calendar control
 - **THEN** the system displays the patient's age calculated against the current date in the `Asia/Singapore` time zone
 - **AND** age is read-only and is not persisted as a second source of truth
+- **AND** the age control has no placeholder text when no date is selected
+
+#### Scenario: Navigate date of birth by month and year
+
+- **WHEN** a Receptionist chooses a month or year from the date-of-birth dropdowns
+- **THEN** the calendar moves directly to that month and year without repeated previous/next navigation
+- **AND** the selected day is preserved when valid or clamped to the last valid day of the selected month
 
 #### Scenario: Save optional measurements
 
@@ -141,6 +148,7 @@ The system SHALL allow an authenticated Receptionist to register, select, view, 
 - **WHEN** a Receptionist selects an issuing country
 - **THEN** the phone country-code field is populated with digits from international calling-code metadata, such as `65` for Singapore
 - **AND** the Receptionist may edit the populated country code
+- **AND** a fixed non-editable `+` is displayed immediately before the country-code control
 
 #### Scenario: Reject unsupported phone characters
 
@@ -157,15 +165,22 @@ The system SHALL allow an authenticated Receptionist to register, select, view, 
 - **WHEN** an authenticated Receptionist removes a patient who has retained clinic history
 - **THEN** the system marks the patient inactive instead of physically deleting the patient or related records
 
+#### Scenario: Reactivate an inactive patient
+
+- **WHEN** an authenticated Receptionist activates an inactive patient from the patient-details window
+- **THEN** the system marks the patient active again without changing the Patient ID or retained history
+- **AND** the status action changes back to `Deactivate patient`
+
 #### Scenario: Restrict sex choices
 
 - **WHEN** a Receptionist registers or edits a patient
 - **THEN** the interface offers only Male and Female
+- **AND** Male is the first option
 - **AND** the service rejects any other or missing sex value
 
 ### Requirement: Registration and patient management use separate tabs
 
-The Receptionist workspace SHALL place new-patient registration in a `Register new patient` tab and search, selection, editing, and deactivation in a separate `Search and manage patients` tab. The registration and edit forms SHALL use independent controls and state.
+The Receptionist workspace SHALL place new-patient registration in a `Register new patient` tab and only search controls and patient results in a separate `Search and manage patients` tab. Selecting a patient result SHALL open a separate patient-details window containing permitted administrative details, editing, and activate/deactivate actions. The registration and details-window forms SHALL use independent controls and state.
 
 #### Scenario: Open the registration tab
 
@@ -175,8 +190,14 @@ The Receptionist workspace SHALL place new-patient registration in a `Register n
 #### Scenario: Open the search and manage tab
 
 - **WHEN** a Receptionist opens `Search and manage patients`
-- **THEN** the system displays search controls, patient results, the selected-patient edit form, save-changes, and deactivation together
+- **THEN** the system displays search controls and patient results without the patient edit form or status actions
 - **AND** no new-patient register action appears in that tab
+
+#### Scenario: Select a search result
+
+- **WHEN** a Receptionist selects a patient in the search results
+- **THEN** a separate patient-details window opens with the permitted administrative fields, generated Patient ID, save action, and an active-status action
+- **AND** the active-status action reads `Deactivate patient` for an active patient and `Activate patient` for an inactive patient
 
 ### Requirement: Issuing country uses a complete constrained selector
 

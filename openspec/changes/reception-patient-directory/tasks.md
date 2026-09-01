@@ -56,3 +56,10 @@
 - [x] 9.1 Require issuing country `SG` for NRIC and FIN at the service boundary, lock the JavaFX country selector to Singapore for those document types, and verify registration and update rejection when the UI is bypassed.
 - [x] 9.2 Store and edit calling codes as 1–3 digits without `+`, continue displaying complete telephone values conventionally, and verify automatic international calling-code population and invalid-character rejection.
 - [x] 9.3 Align the User Guide, Developer Guide, and interaction log, run focused and full verification, perform strict OpenSpec validation, and commit the correction locally without pushing.
+
+## 10. Patient form navigation and modal details revision
+
+- [x] 10.1 Add synchronized month and year dropdowns to the date-of-birth calendar, preserve/clamp the selected day, remove the age placeholder, list Male first, and render a fixed non-editable `+` before the numeric calling-code field.
+- [x] 10.2 Replace inline search-result details with a separate owned patient-details window that opens only on result selection and retains stable semantic IDs for editing and status actions.
+- [x] 10.3 Add authorized patient activation in the repository and service, toggle the detail-window action between activate/deactivate, preserve all retained history, and verify both state transitions.
+- [x] 10.4 Update guides and the interaction log, run focused and full quality gates plus strict OpenSpec validation, then create separate local commits without pushing.

@@ -102,8 +102,9 @@ non-empty text around `@`. Height is an optional positive whole number of
 centimetres; weight is optional, positive, and limited to one decimal place.
 Patient sex is limited to `FEMALE` or `MALE`. Patient-level billing information
 is not stored; appointment payments remain in `payments`.
-Patient removal sets `active = 0`; it never reuses the Patient ID or deletes
-appointment, payment, or clinical history.
+Patient deactivation sets `active = 0`, and reactivation restores `active = 1`;
+neither transition reuses the Patient ID or deletes appointment, payment, or
+clinical history.
 
 Directory search accepts an exact numeric or `P`-formatted Patient ID and
 case-insensitive partial document, country, name, phone, or email text. SQL
@@ -126,7 +127,7 @@ the submitted password array. Sessions are never serialized to SQLite.
 
 `Authorization.requireRole` and `requireDoctorOwnership` are called by every
 protected service operation. Receptionist registration, search, detail,
-update, and deactivation require `Role.RECEPTIONIST`. `PatientRepository`
+update, deactivation, and activation require `Role.RECEPTIONIST`. `PatientRepository`
 selects an explicit basic-data projection and never joins clinical tables;
 the `Patient` record cannot contain diagnoses, notes, or prescriptions.
 `ClinicalService` requires the assigned Doctor and a checked-in or later
@@ -162,16 +163,22 @@ semantic ids remain easy to assert. The patient area has independent
 come from `Locale.getISOCountries()`, use English display names, persist ISO
 two-letter codes, and order Singapore first. NRIC and FIN selection chooses
 and locks Singapore automatically; service validation independently enforces
-the same rule. Patient forms use `DatePicker`; age is derived with
-the `Asia/Singapore` date and is never persisted. The top-level
+the same rule. Patient forms use `DatePicker` plus synchronized month and year
+selectors; impossible day/month combinations clamp to the month's final day.
+Age is derived with the `Asia/Singapore` date, has no placeholder, and is never
+persisted. Male precedes Female in the sex selector. The telephone `+` is a
+fixed label outside the editable, digits-only country-code field. The search
+tab contains only search controls and results; selecting a result opens an
+owned modal details stage for editing and reversible active-status changes. The top-level
 `reception-workspace-tabs` separates patient data, appointments, checkout, and
 revenue. Actions and tab selection refresh affected data, so Receptionist view
 has no manual refresh control. Important ids include `login-submit`, `setup-submit`,
 `admin-account-submit`, `reception-patient-tabs`,
 `reception-register-identity-type`, `reception-register-issuing-country`,
 `reception-register-phone-country-code`, `reception-register-phone-number`,
-`reception-register-date-of-birth`, `reception-register-age`,
-`reception-patient-id`,
+`reception-register-phone-plus`, `reception-register-date-of-birth`,
+`reception-register-date-of-birth-month`, `reception-register-date-of-birth-year`,
+`reception-register-age`, `reception-patient-details-window`, `reception-patient-id`,
 `reception-patient-identity-type`, `reception-patient-identity-number`,
 `reception-patient-issuing-country`, `reception-patient-search`,
 `reception-patient-search-submit`, `reception-patient-update`,
