@@ -20,15 +20,20 @@ Useful focused commands are:
 .\gradlew.bat test --tests nusynapxe.service.AppointmentServiceTest --no-daemon --console=plain
 .\gradlew.bat checkstyleMain checkstyleTest --no-daemon --console=plain
 .\gradlew.bat pmdMain --no-daemon --console=plain
+.\gradlew.bat pmdTest --no-daemon --console=plain
 .\gradlew.bat spotbugsMain --no-daemon --console=plain
 .\gradlew.bat jacocoTestReport --no-daemon --console=plain
 ```
 
 `spotlessApply` formats Java source. `spotlessCheck` is the read-only CI
 equivalent. `check` runs JUnit, Checkstyle, PMD, SpotBugs with FindSecBugs, and
-JaCoCo. Production quality gates fail the build on violations; PMD and
-SpotBugs test tasks are disabled because their framework-specific analysis is
-not useful for the TestFX harness.
+JaCoCo. PMD analyzes both production and test sources: production uses
+`config/pmd/ruleset.xml`, while tests use the narrower
+`config/pmd/test-ruleset.xml` policy. The test policy keeps error-prone and
+selected best-practice checks, with documented accommodations for JUnit,
+Mockito, persistence fixtures, and TestFX lifecycle code; unapproved findings
+still fail the build. SpotBugs test analysis remains disabled because its
+framework-specific analysis is not useful for the TestFX harness.
 
 ## Package layout and boundaries
 
@@ -40,7 +45,7 @@ src/main/java/nusynapxe/service/     Authorization and business-use-case rules
 src/main/java/nusynapxe/ui/          Programmatic JavaFX views and scene router
 src/test/java/nusynapxe/             JUnit, Mockito, persistence, service, TestFX tests
 config/checkstyle/                   Checkstyle configuration
-config/pmd/                          PMD ruleset
+config/pmd/                          Production and test PMD rulesets
 config/spotbugs/                     SpotBugs exclusions
 website/                             Docusaurus configuration and lockfile
 ```
@@ -123,6 +128,9 @@ JaCoCo reports are generated at:
 ```text
 build/reports/jacoco/test/html/index.html
 build/reports/jacoco/test/jacocoTestReport.xml
+build/reports/pmd/test.xml
+build/reports/pmd/test.html
+build/test-results/test/TEST-*.xml
 ```
 
 ## Documentation site and CI
@@ -139,5 +147,16 @@ npm run start
 `website/docusaurus.config.js` reads `README.md` and the two files in `docs/`
 as documentation pages. Broken site links fail the production build. GitHub
 Actions uses JDK 25, Node.js 24, `xvfb-run`, `./gradlew check javadoc`, and
-`npm ci && npm run build`; it publishes the generated `build/reports/` files
-as a quality-report artifact.
+`npm ci && npm run build`. The read-only verification job stages available
+quality, JUnit, and JaCoCo reports into the `quality-reports` artifact even
+when a later verification step fails. A separate job downloads only that
+artifact and, for same-repository pull requests not authored by Dependabot,
+updates one sticky comment with the JUnit summary and overall and changed-code
+coverage. Pushes, manual runs, fork pull requests, and Dependabot pull
+requests do not enter the comment path; fork and Dependabot runs still retain
+the verification result and any available artifact.
+
+Dependabot runs weekly update checks for the root Gradle build and wrapper,
+the npm project under `website/`, and GitHub Actions references. Updates are
+reviewed through the normal Java and documentation checks; no automatic merge
+is configured.
