@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="NUSynapxe Test Rules"
+    xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+    <description>
+        PMD rules for JUnit, Mockito, persistence-fixture, service, and TestFX
+        tests. Error-prone checks remain enabled. The selected best-practice
+        checks focus on resource safety, unused code, and maintainable loops.
+
+        JUnit tests may omit assertion messages when the assertion and test name
+        already explain the failure, and Mockito stubbing and verification are
+        intentionally left to the Mockito/JUnit checks. Persistence tests use
+        repeated database and domain literals as readable fixtures. TestFX
+        classes own the ApplicationTest lifecycle, so their start methods do not
+        call an inherited implementation.
+    </description>
+
+    <!--
+        Keep the complete error-prone policy for tests, with only the observed
+        test-harness accommodations documented above.
+    -->
+    <rule ref="category/java/errorprone.xml">
+        <exclude name="AvoidDuplicateLiterals"/>
+        <exclude name="CallSuperFirst"/>
+        <exclude name="CallSuperLast"/>
+    </rule>
+
+    <!-- Selected best-practice checks that remain useful for test code. -->
+    <rule ref="category/java/bestpractices.xml/AvoidReassigningCatchVariables"/>
+    <rule ref="category/java/bestpractices.xml/AvoidReassigningLoopVariables"/>
+    <rule ref="category/java/bestpractices.xml/AvoidReassigningParameters"/>
+    <rule ref="category/java/bestpractices.xml/ForLoopCanBeForeach"/>
+    <rule ref="category/java/bestpractices.xml/JUnitJupiterTestShouldBePackagePrivate"/>
+    <rule ref="category/java/bestpractices.xml/UnusedLocalVariable"/>
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateField"/>
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateMethod"/>
+    <rule ref="category/java/bestpractices.xml/UseTryWithResources"/>
+</ruleset>

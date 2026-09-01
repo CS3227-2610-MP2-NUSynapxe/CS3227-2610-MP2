@@ -92,11 +92,17 @@ pmd {
     consoleOutput = true
 }
 
+tasks.named('pmdMain') {
+    ruleSetFiles = files('config/pmd/ruleset.xml')
+}
+
 tasks.named('pmdTest') {
-    enabled = false
+    enabled = true
+    ruleSetFiles = files('config/pmd/test-ruleset.xml')
 }
 
 tasks.withType(org.gradle.api.plugins.quality.Pmd).configureEach {
+    ignoreFailures = false
     reports {
         html.required = true
         xml.required = true
@@ -135,5 +141,6 @@ tasks.named('jacocoTestReport') {
 }
 
 tasks.named('check') {
+    dependsOn tasks.named('pmdTest')
     dependsOn tasks.named('jacocoTestReport')
 }
