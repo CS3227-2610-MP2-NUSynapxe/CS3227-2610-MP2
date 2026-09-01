@@ -21,7 +21,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
-import javafx.scene.control.DatePicker;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
@@ -244,12 +243,132 @@ final class ReceptionistViewTest extends ApplicationTest {
     assertTrue(services.patientService().getAdministrative(receptionistSession(), 1).active());
   }
 
+  @Test
+  void patientSelectionHighlightsSelectedPatientAndOpensDetailsWindow() throws SQLException {
+    loginAsReceptionist();
+    selectCombo("#reception-register-sex", Sex.MALE);
+    setText("#reception-register-first-name", "John");
+    setText("#reception-register-last-name", "Doe");
+    setText("#reception-register-identity-number", "S9876543A");
+    setDate("#reception-register-date-of-birth", LocalDate.of(1985, 5, 15));
+    setText("#reception-register-phone-number", "6565656565");
+    setText("#reception-register-email", "john.doe@example.test");
+    setText("#reception-register-address", "123 Main Street");
+    fire("#reception-patient-register");
+    verifyThat("#reception-feedback", hasText("Patient registered"));
+
+    selectPatientManagementTab();
+    fire("#reception-patient-search-clear");
+    assertEquals(1, patientList().getItems().size());
+
+    // Select patient and verify details window opens
+    selectFirstPatient();
+    waitForNode("#reception-patient-details-window");
+    assertTrue(lookup("#reception-patient-details-window").tryQuery().isPresent());
+    assertEquals("P000001", text("#reception-patient-id"));
+
+    // Verify patient remains selected in list (highlighted in blue)
+    assertEquals(0, patientList().getSelectionModel().getSelectedIndex());
+    assertEquals(
+        "John Doe",
+        patientList().getSelectionModel().getSelectedItem().firstName()
+            + " "
+            + patientList().getSelectionModel().getSelectedItem().lastName());
+
+    closePatientDetails();
+    // Patient should still be highlighted after closing details window
+    assertEquals(0, patientList().getSelectionModel().getSelectedIndex());
+  }
+
+  @Test
+  void patientDetailsWindowDisplaysAndEditsPatientInformation() throws SQLException {
+    loginAsReceptionist();
+    selectCombo("#reception-register-sex", Sex.FEMALE);
+    setText("#reception-register-identity-number", "T1234567B");
+    setText("#reception-register-first-name", "Jane");
+    setText("#reception-register-last-name", "Smith");
+    setDate("#reception-register-date-of-birth", LocalDate.of(1992, 8, 20));
+    setText("#reception-register-phone-number", "8888888");
+    setText("#reception-register-email", "jane.smith@example.test");
+    setText("#reception-register-address", "456 Oak Avenue");
+    setText("#reception-register-height", "165");
+    setText("#reception-register-weight", "62.5");
+    fire("#reception-patient-register");
+
+    selectPatientManagementTab();
+    fire("#reception-patient-search-clear");
+    selectFirstPatient();
+    waitForNode("#reception-patient-details-window");
+
+    // Verify patient information is displayed
+    assertEquals("T1234567B", text("#reception-patient-identity-number"));
+    assertEquals("Jane", text("#reception-patient-first-name"));
+    assertEquals("Smith", text("#reception-patient-last-name"));
+    assertTrue(text("#reception-patient-height").startsWith("165"));
+    assertEquals("62.5", text("#reception-patient-weight"));
+
+    // Edit patient information
+    setText("#reception-patient-phone-number", "9876543");
+    setText("#reception-patient-email", "jane.updated@example.test");
+    fire("#reception-patient-update");
+    verifyThat("#reception-feedback", hasText("Patient changes saved"));
+
+    // Verify changes persisted
+    assertEquals(
+        "+659876543",
+        services.patientService().getAdministrative(receptionistSession(), 1).phone());
+    assertEquals(
+        "jane.updated@example.test",
+        services.patientService().getAdministrative(receptionistSession(), 1).email());
+  }
+
+  @Test
+  void patientStatusTogglingWorksCorrectly() throws SQLException {
+    loginAsReceptionist();
+    selectCombo("#reception-register-sex", Sex.MALE);
+    setText("#reception-register-first-name", "Active");
+    setText("#reception-register-last-name", "Patient");
+    setText("#reception-register-identity-number", "S5555555E");
+    setDate("#reception-register-date-of-birth", LocalDate.of(1980, 12, 25));
+    setText("#reception-register-phone-number", "1111111");
+    setText("#reception-register-email", "active@example.test");
+    setText("#reception-register-address", "789 Pine Road");
+    fire("#reception-patient-register");
+
+    selectPatientManagementTab();
+    fire("#reception-patient-search-clear");
+    selectFirstPatient();
+    waitForNode("#reception-patient-details-window");
+
+    // Verify initial status is "Deactivate patient"
+    verifyThat("#reception-patient-deactivate", hasText("Deactivate patient"));
+    assertTrue(services.patientService().getAdministrative(receptionistSession(), 1).active());
+
+    // Deactivate patient
+    fire("#reception-patient-deactivate");
+    verifyThat("#reception-feedback", hasText("Patient deactivated"));
+    verifyThat("#reception-patient-deactivate", hasText("Activate patient"));
+    assertFalse(services.patientService().getAdministrative(receptionistSession(), 1).active());
+
+    // Reactivate patient
+    fire("#reception-patient-deactivate");
+    verifyThat("#reception-feedback", hasText("Patient activated"));
+    verifyThat("#reception-patient-deactivate", hasText("Deactivate patient"));
+    assertTrue(services.patientService().getAdministrative(receptionistSession(), 1).active());
+  }
+
   private void setText(String selector, String value) {
     interact(() -> lookup(selector).queryAs(TextField.class).setText(value));
   }
 
+  @SuppressWarnings("unchecked")
   private void setDate(String selector, LocalDate value) {
-    interact(() -> lookup(selector).queryAs(DatePicker.class).setValue(value));
+    interact(
+        () -> {
+          lookup(selector + "-day").queryAs(ComboBox.class).setValue(value.getDayOfMonth());
+          lookup(selector + "-month").queryAs(ComboBox.class).setValue(value.getMonth());
+          lookup(selector + "-year").queryAs(ComboBox.class).setValue(value.getYear());
+        });
   }
 
   private String text(String selector) {
@@ -260,8 +379,17 @@ final class ReceptionistViewTest extends ApplicationTest {
     return lookup(selector).queryAs(TextField.class);
   }
 
+  @SuppressWarnings("unchecked")
   private LocalDate date(String selector) {
-    return lookup(selector).queryAs(DatePicker.class).getValue();
+    ComboBox<Integer> dayCombo = lookup(selector + "-day").queryAs(ComboBox.class);
+    ComboBox<Month> monthCombo = lookup(selector + "-month").queryAs(ComboBox.class);
+    ComboBox<Integer> yearCombo = lookup(selector + "-year").queryAs(ComboBox.class);
+    if (dayCombo.getValue() == null
+        || monthCombo.getValue() == null
+        || yearCombo.getValue() == null) {
+      return null;
+    }
+    return LocalDate.of(yearCombo.getValue(), monthCombo.getValue(), dayCombo.getValue());
   }
 
   private void closePatientDetails() {

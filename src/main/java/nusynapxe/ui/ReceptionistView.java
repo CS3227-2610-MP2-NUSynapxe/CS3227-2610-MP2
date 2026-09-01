@@ -7,7 +7,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.time.Period;
-import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -44,13 +43,12 @@ import nusynapxe.service.AuthorizationException;
 import nusynapxe.service.ClinicServices;
 import nusynapxe.service.ValidationException;
 
-/**
- * Builds the Receptionist scheduling, patient, checkout, and revenue workspace.
- */
+/** Builds the Receptionist scheduling, patient, checkout, and revenue workspace. */
 public final class ReceptionistView {
   private static final String APPOINTMENT_REQUIRED = "Select an appointment first";
   private static final String DATE_TIME_PATTERN = "yyyy-MM-dd HH:mm";
-  private static final DateTimeFormatter DATE_TIME_FORMAT = DateTimeFormatter.ofPattern(DATE_TIME_PATTERN);
+  private static final DateTimeFormatter DATE_TIME_FORMAT =
+      DateTimeFormatter.ofPattern(DATE_TIME_PATTERN);
   private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE;
   private static final ZoneId SINGAPORE_ZONE = ZoneId.of("Asia/Singapore");
 
@@ -82,7 +80,8 @@ public final class ReceptionistView {
     appointmentPatient.setId("reception-appointment-patient");
     Button checkIn = button("Check in selected", "reception-check-in");
     TextField charge = field("reception-charge", "Amount");
-    ComboBox<PaymentMethod> method = new ComboBox<>(FXCollections.observableArrayList(PaymentMethod.values()));
+    ComboBox<PaymentMethod> method =
+        new ComboBox<>(FXCollections.observableArrayList(PaymentMethod.values()));
     method.setId("reception-method");
     method.getSelectionModel().select(PaymentMethod.CASH);
     Button checkout = button("Complete checkout", "reception-checkout");
@@ -118,17 +117,20 @@ public final class ReceptionistView {
         .getSelectionModel()
         .selectedItemProperty()
         .addListener(
-            (observable, previous, selected) -> selection.appointmentId = selected == null ? 0 : selected.id());
+            (observable, previous, selected) ->
+                selection.appointmentId = selected == null ? 0 : selected.id());
     checkoutAppointmentList
         .getSelectionModel()
         .selectedItemProperty()
         .addListener(
-            (observable, previous, selected) -> selection.appointmentId = selected == null ? 0 : selected.id());
+            (observable, previous, selected) ->
+                selection.appointmentId = selected == null ? 0 : selected.id());
 
     register.setOnAction(
         event -> {
           try {
-            Patient patient = services.patientService().register(session, patientFromForm(registerForm, 0, true));
+            Patient patient =
+                services.patientService().register(session, patientFromForm(registerForm, 0, true));
             clearPatientForm(registerForm);
             feedback.setText("Patient registered");
             refreshPatients(
@@ -143,8 +145,9 @@ public final class ReceptionistView {
         });
 
     searchPatients.setOnAction(
-        event -> refreshPatients(
-            services, session, patientList, selection, feedback, patientSearch.getText()));
+        event ->
+            refreshPatients(
+                services, session, patientList, selection, feedback, patientSearch.getText()));
     clearPatientSearch.setOnAction(
         event -> {
           patientSearch.clear();
@@ -157,14 +160,15 @@ public final class ReceptionistView {
             if (appointmentPatient.getValue() == null || doctor.getValue() == null) {
               throw new ValidationException("Select a patient and Doctor first");
             }
-            Appointment appointment = services
-                .appointmentService()
-                .book(
-                    session,
-                    appointmentPatient.getValue().id(),
-                    doctor.getValue().id(),
-                    parseDateTime(startsAt.getText(), "Start time"),
-                    parseDateTime(endsAt.getText(), "End time"));
+            Appointment appointment =
+                services
+                    .appointmentService()
+                    .book(
+                        session,
+                        appointmentPatient.getValue().id(),
+                        doctor.getValue().id(),
+                        parseDateTime(startsAt.getText(), "Start time"),
+                        parseDateTime(endsAt.getText(), "End time"));
             selection.appointmentId = appointment.id();
             feedback.setText("Appointment booked and awaiting Doctor acceptance");
             refreshAppointments(services, session, appointmentList, selection, feedback);
@@ -251,9 +255,10 @@ public final class ReceptionistView {
     revenueButton.setOnAction(
         event -> {
           try {
-            RevenueSummary summary = services
-                .billingService()
-                .dailyRevenue(session, parseDate(revenueDate.getText(), "Revenue date"));
+            RevenueSummary summary =
+                services
+                    .billingService()
+                    .dailyRevenue(session, parseDate(revenueDate.getText(), "Revenue date"));
             revenue.setText(
                 summary.transactionCount()
                     + " successful payment(s), total "
@@ -309,7 +314,8 @@ public final class ReceptionistView {
     Tab appointmentFeature = featureTab("Appointments across all Doctors", appointmentContent);
     Tab checkoutFeature = featureTab("Checkout", checkoutContent);
     Tab revenueFeature = featureTab("Daily revenue", revenueContent);
-    TabPane workspaceTabs = new TabPane(patientFeature, appointmentFeature, checkoutFeature, revenueFeature);
+    TabPane workspaceTabs =
+        new TabPane(patientFeature, appointmentFeature, checkoutFeature, revenueFeature);
     workspaceTabs.setId("reception-workspace-tabs");
     workspaceTabs
         .getSelectionModel()
@@ -355,7 +361,7 @@ public final class ReceptionistView {
       ComboBox<Patient> appointmentPatient) {
     PatientForm form = patientForm("reception-patient", true);
     populatePatientForm(selected, form);
-    Patient[] current = { selected };
+    Patient[] current = {selected};
     Label feedback = new Label();
     feedback.setId("reception-patient-details-feedback");
     Button update = button("Save patient changes", "reception-patient-update");
@@ -364,10 +370,11 @@ public final class ReceptionistView {
     update.setOnAction(
         event -> {
           try {
-            Patient updated = services
-                .patientService()
-                .updateAdministrative(
-                    session, patientFromForm(form, current[0].id(), current[0].active()));
+            Patient updated =
+                services
+                    .patientService()
+                    .updateAdministrative(
+                        session, patientFromForm(form, current[0].id(), current[0].active()));
             current[0] = updated;
             populatePatientForm(updated, form);
             feedback.setText("Patient changes saved");
@@ -392,9 +399,10 @@ public final class ReceptionistView {
     status.setOnAction(
         event -> {
           try {
-            Patient updated = current[0].active()
-                ? services.patientService().deactivateAdministrative(session, current[0].id())
-                : services.patientService().activateAdministrative(session, current[0].id());
+            Patient updated =
+                current[0].active()
+                    ? services.patientService().deactivateAdministrative(session, current[0].id())
+                    : services.patientService().activateAdministrative(session, current[0].id());
             current[0] = updated;
             populatePatientForm(updated, form);
             status.setText(patientStatusButtonText(updated));
@@ -441,10 +449,11 @@ public final class ReceptionistView {
     if (patientId != null) {
       patientId.setEditable(false);
     }
-    ComboBox<IdentityType> identityType = new ComboBox<>(FXCollections.observableArrayList(IdentityType.values()));
+    ComboBox<IdentityType> identityType =
+        new ComboBox<>(FXCollections.observableArrayList(IdentityType.values()));
     identityType.setId(prefix + "-identity-type");
-    ComboBox<CountryOption> issuingCountry = new ComboBox<>(
-        FXCollections.observableArrayList(CountryOption.allCountries()));
+    ComboBox<CountryOption> issuingCountry =
+        new ComboBox<>(FXCollections.observableArrayList(CountryOption.allCountries()));
     issuingCountry.setId(prefix + "-issuing-country");
     TextField phoneCountryCode = field(prefix + "-phone-country-code", "65");
     issuingCountry
@@ -459,7 +468,8 @@ public final class ReceptionistView {
         .valueProperty()
         .addListener(
             (observable, previous, selected) -> {
-              boolean singaporeIdentity = selected == IdentityType.NRIC || selected == IdentityType.FIN;
+              boolean singaporeIdentity =
+                  selected == IdentityType.NRIC || selected == IdentityType.FIN;
               if (singaporeIdentity) {
                 CountryOption.fromCode("SG")
                     .ifPresent(country -> issuingCountry.getSelectionModel().select(country));
@@ -487,16 +497,18 @@ public final class ReceptionistView {
     }
     TextField age = field(prefix + "-age", "");
     age.setEditable(false);
-    Runnable updateAgeDisplay = () -> {
-      if (birthDay.getValue() != null
-          && birthMonth.getValue() != null
-          && birthYear.getValue() != null) {
-        LocalDate dateOfBirth = LocalDate.of(birthYear.getValue(), birthMonth.getValue(), birthDay.getValue());
-        age.setText(calculateAgeText(dateOfBirth));
-      } else {
-        age.setText("");
-      }
-    };
+    Runnable updateAgeDisplay =
+        () -> {
+          if (birthDay.getValue() != null
+              && birthMonth.getValue() != null
+              && birthYear.getValue() != null) {
+            LocalDate dateOfBirth =
+                LocalDate.of(birthYear.getValue(), birthMonth.getValue(), birthDay.getValue());
+            age.setText(calculateAgeText(dateOfBirth));
+          } else {
+            age.setText("");
+          }
+        };
     birthDay
         .valueProperty()
         .addListener((observable, previous, selected) -> updateAgeDisplay.run());
@@ -551,7 +563,7 @@ public final class ReceptionistView {
         requiredLabel("Last name"),
         form.lastName());
     row++;
-    HBox dateOfBirthControls = new HBox(6, form.dateOfBirth(), form.birthMonth(), form.birthYear());
+    HBox dateOfBirthControls = new HBox(6, form.birthDay(), form.birthMonth(), form.birthYear());
     grid.addRow(
         row, requiredLabel("Date of birth"), dateOfBirthControls, new Label("Age"), form.age());
     row++;
@@ -582,10 +594,11 @@ public final class ReceptionistView {
     if (form.birthDay().getValue() != null
         && form.birthMonth().getValue() != null
         && form.birthYear().getValue() != null) {
-      dateOfBirth = LocalDate.of(
-          form.birthYear().getValue(),
-          form.birthMonth().getValue(),
-          form.birthDay().getValue());
+      dateOfBirth =
+          LocalDate.of(
+              form.birthYear().getValue(),
+              form.birthMonth().getValue(),
+              form.birthDay().getValue());
     }
     return new Patient(
         id,
