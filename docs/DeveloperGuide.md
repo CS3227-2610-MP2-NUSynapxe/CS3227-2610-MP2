@@ -92,9 +92,11 @@ trims and uppercases document values, while the service performs a friendly
 pre-check and maps uniqueness races to a non-sensitive duplicate message.
 
 NRIC syntax is `[ST][0-9]{7}[A-Z]`, FIN syntax is
-`[FGM][0-9]{7}[A-Z]`, and passport syntax is `[A-Z0-9]{5,20}`; these rules do
+`[FGM][0-9]{7}[A-Z]`, and both require normalized issuing country `SG` at the
+service boundary. Passport syntax is `[A-Z0-9]{5,20}`; these rules do
 not perform government checksum validation. `phone_country_code` follows
-`^\+[1-9][0-9]{0,2}$` and `phone_number` contains digits only. Calling-code
+`^[1-9][0-9]{0,2}$` and `phone_number` contains digits only. The plus sign is
+added only when formatting the combined telephone number. Calling-code
 suggestions use Google libphonenumber metadata and remain editable. Email has
 non-empty text around `@`. Height is an optional positive whole number of
 centimetres; weight is optional, positive, and limited to one decimal place.
@@ -159,7 +161,8 @@ semantic ids remain easy to assert. The patient area has independent
 `Register new patient` and `Search and manage patients` tabs. Country options
 come from `Locale.getISOCountries()`, use English display names, persist ISO
 two-letter codes, and order Singapore first. NRIC and FIN selection chooses
-Singapore automatically. Patient forms use `DatePicker`; age is derived with
+and locks Singapore automatically; service validation independently enforces
+the same rule. Patient forms use `DatePicker`; age is derived with
 the `Asia/Singapore` date and is never persisted. The top-level
 `reception-workspace-tabs` separates patient data, appointments, checkout, and
 revenue. Actions and tab selection refresh affected data, so Receptionist view

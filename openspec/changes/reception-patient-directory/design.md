@@ -37,7 +37,7 @@ Making NRIC, FIN, or passport number the primary key was rejected because foreig
 
 ### Store a flexible composite document identity
 
-The patient stores `identity_type`, `identity_number`, and `issuing_country`. Identity type is restricted to `NRIC`, `FIN`, `PASSPORT`, or `OTHER`; document number and country are required non-blank values. The service trims and applies locale-independent uppercase before search or persistence. It applies Singapore syntax rules to NRIC and FIN, a broad 5–20 ASCII alphanumeric passport rule, and a non-blank rule to OTHER. It does not perform government checksum or external identity verification.
+The patient stores `identity_type`, `identity_number`, and `issuing_country`. Identity type is restricted to `NRIC`, `FIN`, `PASSPORT`, or `OTHER`; document number and country are required non-blank values. The service trims and applies locale-independent uppercase before search or persistence. It applies Singapore syntax rules to NRIC and FIN and requires their normalized issuing country to equal `SG`; a broad 5–20 ASCII alphanumeric passport rule applies to passports, and OTHER remains non-blank. It does not perform government checksum or external identity verification.
 
 SQLite enforces uniqueness over the normalized `(identity_type, issuing_country, identity_number)` tuple. This allows identical passport numbers from different issuing countries and prevents case/whitespace variants from creating duplicates. The service performs a pre-check for user-friendly feedback, while the unique constraint closes concurrency races. Any uniqueness violation becomes `A patient with this identity document already exists`; errors and diagnostic output must not echo the complete number.
 
@@ -67,7 +67,7 @@ The generated Patient ID identifies the record being edited even when its identi
 
 ### Split telephone data and apply bounded form validation
 
-The administrative model stores `phone_country_code` separately from `phone_number`. Country selection suggests the corresponding international calling code using Google's libphonenumber metadata, but the country-code control remains editable. Country code follows `^\+[1-9][0-9]{0,2}$`; subscriber number contains digits only. This separation supports search and display without claiming that an issuing country must always equal residence or telephone country.
+The administrative model stores `phone_country_code` separately from `phone_number`. Country selection suggests the corresponding international calling code using Google's libphonenumber metadata, but the country-code control remains editable. Both fields store digits only: country code follows `^[1-9][0-9]{0,2}$` and subscriber number follows `^[0-9]+$`. The UI may display the complete telephone number with a leading `+`, but the plus sign is not part of either stored field. This separation supports search and display without claiming that an issuing country must always equal residence or telephone country.
 
 Height and weight remain optional. Height is a positive whole number of centimetres; weight is positive kilograms with at most one decimal place. Email requires non-empty text on both sides of `@`. All other patient fields are required. NRIC uses `[ST][0-9]{7}[A-Z]`, FIN uses `[FGM][0-9]{7}[A-Z]`, passport uses `[A-Z0-9]{5,20}`, and OTHER remains non-blank. These are syntax checks, not government identity verification or NRIC/FIN checksum validation.
 
@@ -87,7 +87,7 @@ Receptionist “delete” behavior sets an active flag rather than physically re
 
 ### Use constrained country and sex choices
 
-Issuing country is selected from the Java runtime's ISO 3166 country list. The interface displays English country names, stores normalized two-letter codes, and orders Singapore first followed by all other countries alphabetically. Selecting NRIC or FIN automatically selects Singapore; Passport and Other allow any listed country. This avoids free-text country variants without adding a runtime dependency.
+Issuing country is selected from the Java runtime's ISO 3166 country list. The interface displays English country names, stores normalized two-letter codes, and orders Singapore first followed by all other countries alphabetically. Selecting NRIC or FIN selects Singapore and disables the selector until another identity type is selected; the service independently rejects non-`SG` NRIC/FIN data. Passport and Other allow any listed country. This avoids free-text country variants. Google libphonenumber remains the runtime source for calling-code metadata.
 
 Sex is limited to `FEMALE` or `MALE` in the domain, service, and interface. When a version-2 database contains `OTHER` or `UNDISCLOSED`, the version-3 migration clears that value so staff must choose one of the supported options on the next save.
 
@@ -105,7 +105,7 @@ Patient forms sit within the top-level `Patient directory and basic data` featur
 
 ### Test each enforcement boundary
 
-Persistence tests cover migration through version 4, billing-column removal, split-phone preservation, composite normalized uniqueness, concurrent duplicate resistance, parameterized search, deterministic order, atomic updates, deactivation, and administrative projections. Service tests cover document normalization and syntax, split-phone and required contact validation, measurement precision, binary sex, future DOB rejection, authorization, duplicate error mapping, legacy identity completion, and clinical preservation. TestFX covers nested patient tabs, top-level feature tabs, all-country selection, calling-code and Singapore autofill, calendar DOB and age, local and foreign registration, search, selection, editing, duplicate feedback, deactivation placement, automatic refresh behavior, and stable control IDs. Integration tests confirm that basic-data edits do not change clinical records or payment history.
+Persistence tests cover migration through version 4, billing-column removal, split-phone preservation, composite normalized uniqueness, concurrent duplicate resistance, parameterized search, deterministic order, atomic updates, deactivation, and administrative projections. Service tests cover document normalization and syntax, strict Singapore issuance for NRIC/FIN, digits-only split-phone and required contact validation, measurement precision, binary sex, future DOB rejection, authorization, duplicate error mapping, legacy identity completion, and clinical preservation. TestFX covers nested patient tabs, top-level feature tabs, all-country selection, digits-only calling-code autofill, locked Singapore issuance for NRIC/FIN, calendar DOB and age, local and foreign registration, search, selection, editing, duplicate feedback, deactivation placement, automatic refresh behavior, and stable control IDs. Integration tests confirm that basic-data edits do not change clinical records or payment history.
 
 The implementation adds Google libphonenumber as a runtime dependency solely for maintained ISO-region-to-calling-code metadata.
 

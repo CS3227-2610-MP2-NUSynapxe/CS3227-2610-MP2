@@ -6,7 +6,7 @@ Provide Receptionists with secure basic patient-data lookup and maintenance for 
 
 ### Requirement: Every patient has a generated Patient ID and documented identity
 
-The system SHALL assign every new patient an immutable database-generated numeric Patient ID used by all internal relationships. Registration SHALL require an identity type of `NRIC`, `FIN`, `PASSPORT`, or `OTHER`, a non-blank identity number, and an issuing country. The system SHALL trim and uppercase identity values. NRIC SHALL use `S` or `T`, seven digits, and one letter; FIN SHALL use `F`, `G`, or `M`, seven digits, and one letter; passport numbers SHALL contain 5 to 20 ASCII letters or digits; and OTHER SHALL remain non-blank. The system SHALL reject a normalized identity type, issuing country, and identity number combination already assigned to another patient.
+The system SHALL assign every new patient an immutable database-generated numeric Patient ID used by all internal relationships. Registration SHALL require an identity type of `NRIC`, `FIN`, `PASSPORT`, or `OTHER`, a non-blank identity number, and an issuing country. The system SHALL trim and uppercase identity values. NRIC SHALL use `S` or `T`, seven digits, and one letter; FIN SHALL use `F`, `G`, or `M`, seven digits, and one letter; and both SHALL require issuing country `SG`. Passport numbers SHALL contain 5 to 20 ASCII letters or digits; OTHER SHALL remain non-blank. The system SHALL reject a normalized identity type, issuing country, and identity number combination already assigned to another patient.
 
 #### Scenario: Register a local patient with NRIC
 
@@ -22,8 +22,14 @@ The system SHALL assign every new patient an immutable database-generated numeri
 
 #### Scenario: Register a patient with another identity document
 
-- **WHEN** an authenticated Receptionist selects identity type `FIN` or `OTHER` and supplies an issuing country and unused non-blank identity number
-- **THEN** the system applies Singapore FIN syntax to FIN and a non-blank rule to OTHER
+- **WHEN** an authenticated Receptionist selects identity type `FIN` or `OTHER` and supplies an unused non-blank identity number
+- **THEN** the system applies Singapore FIN syntax and issuing-country rules to FIN and a non-blank rule to OTHER
+
+#### Scenario: Reject a non-Singapore issuing country for NRIC or FIN
+
+- **WHEN** registration or editing submits identity type `NRIC` or `FIN` with an issuing country other than `SG`
+- **THEN** the system rejects the complete operation with `Issuing country must be Singapore for NRIC and FIN`
+- **AND** no patient data is created or changed
 
 #### Scenario: Reject a duplicate identity document during registration
 
@@ -133,12 +139,12 @@ The system SHALL allow an authenticated Receptionist to register, select, view, 
 #### Scenario: Populate and edit a phone country code
 
 - **WHEN** a Receptionist selects an issuing country
-- **THEN** the phone country-code field is populated from international calling-code metadata
+- **THEN** the phone country-code field is populated with digits from international calling-code metadata, such as `65` for Singapore
 - **AND** the Receptionist may edit the populated country code
 
 #### Scenario: Reject unsupported phone characters
 
-- **WHEN** an authenticated Receptionist submits a country code other than `+` followed by 1 to 3 digits, or submits a blank/non-digits phone number
+- **WHEN** an authenticated Receptionist submits a blank country code, a country code containing a plus sign or non-digit, a country code longer than 3 digits, or a blank/non-digits phone number
 - **THEN** the system rejects the registration or update with a phone validation error
 
 #### Scenario: Reject missing required data or invalid email
@@ -179,7 +185,8 @@ The Receptionist registration and edit forms SHALL use an issuing-country dropdo
 #### Scenario: Select NRIC or FIN
 
 - **WHEN** a Receptionist selects identity type `NRIC` or `FIN`
-- **THEN** the issuing-country selector automatically selects Singapore
+- **THEN** the issuing-country selector automatically selects Singapore and cannot be changed while that identity type remains selected
+- **AND** service-layer validation rejects a non-Singapore issuing country even if the interface is bypassed
 
 #### Scenario: Select a foreign country
 

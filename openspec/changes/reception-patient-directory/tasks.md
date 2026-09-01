@@ -13,8 +13,8 @@
 
 ## 3. Receptionist service rules and confidentiality
 
-- [x] 3.1 Add focused document identity normalization for required trimmed uppercase type/number/country values without country-specific syntax, length, or checksum validation; verify NRIC, FIN, passport, other, unfamiliar-format, blank, case-variant, and whitespace-variant inputs.
-- [x] 3.2 Add international phone validation using an optional leading `+` followed by one or more digits with no fixed length, plus optional positive decimal height/weight validation; verify accepted international values and rejected blank, misplaced-plus, unsupported-character, zero, negative, and non-numeric inputs.
+- [x] 3.1 Add focused document identity normalization for required trimmed uppercase type/number/country values, Singapore NRIC/FIN syntax, broad passport syntax, and no government checksum validation; verify NRIC, FIN, passport, other, blank, case-variant, and whitespace-variant inputs.
+- [x] 3.2 Add separately stored international calling code and subscriber-number validation, plus optional positive measurement validation; verify accepted international values and rejected blank or unsupported-character input.
 - [x] 3.3 Extend Receptionist registration and basic-data editing with generated Patient ID, flexible identity documents, sex, measurements, hard duplicate rejection, deactivation, and non-sensitive errors; verify duplicate, invalid, missing-patient, legacy-patient, deactivation, and successful update service tests.
 - [x] 3.4 Add Receptionist-authorized directory search and detail retrieval while rejecting Doctor and missing-session access in this role-specific change; verify authorization tests demonstrate no data is returned or changed on denial.
 - [x] 3.5 Add integration coverage proving Receptionist search results contain only basic non-clinical fields and that registration, editing, or deactivation never reads, replaces, or deletes diagnoses, consultation notes, follow-up notes, or prescriptions.
@@ -50,3 +50,9 @@
 - [x] 8.2 Add required-field, email, NRIC/FIN/passport, whole-centimetre height, one-decimal weight, date-of-birth, Singapore-age, and calling-code behavior with focused service and UI tests.
 - [x] 8.3 Reorganize Receptionist features into separate top-level tabs, omit Patient ID from registration, remove manual refresh, position Log out at top right, and verify automatic refresh and stable TestFX controls.
 - [x] 8.4 Update documentation and the interaction log, run focused tests, Spotless, the full Gradle quality gate, strict OpenSpec validation, and a final privacy/diff review.
+
+## 9. Strict Singapore issuance and numeric calling-code correction
+
+- [x] 9.1 Require issuing country `SG` for NRIC and FIN at the service boundary, lock the JavaFX country selector to Singapore for those document types, and verify registration and update rejection when the UI is bypassed.
+- [x] 9.2 Store and edit calling codes as 1–3 digits without `+`, continue displaying complete telephone values conventionally, and verify automatic international calling-code population and invalid-character rejection.
+- [x] 9.3 Align the User Guide, Developer Guide, and interaction log, run focused and full verification, perform strict OpenSpec validation, and commit the correction locally without pushing.

@@ -51,7 +51,8 @@ Select the **Register new patient** tab to create a record:
 1. Choose **NRIC**, **FIN**, **PASSPORT**, or **OTHER** as the identity type.
 2. Select the issuing country from the country dropdown, which lists Singapore
    first and then every other ISO country alphabetically. Choosing **NRIC** or
-   **FIN** automatically selects Singapore. The application stores the
+   **FIN** automatically selects and locks Singapore; the service rejects any
+   non-Singapore issuing country for these document types. The application stores the
    two-letter country code. NRIC must use `S` or `T`, seven digits, and a final
    letter. FIN must use `F`, `G`, or `M`, seven digits, and a final letter.
    Passport accepts 5–20 letters or digits. These checks do not verify a
@@ -59,8 +60,10 @@ Select the **Register new patient** tab to create a record:
 3. Select date of birth with the calendar. The read-only age is recalculated
    using the current date in Singapore. Choose **Female** or **Male**.
 4. The phone country code is suggested from the issuing country (for example,
-   `+65` for Singapore) but can be edited. Enter the remaining phone number as
-   digits only. Enter an email containing `@` and an address.
+   `65` for Singapore) but can be edited. Both the country code and remaining
+   phone number accept digits only; do not type `+` into either field. The
+   complete number is displayed conventionally with `+`. Enter an email
+   containing `@` and an address.
 5. Every field marked `*` is required. Height and weight are the only optional
    fields. Height is a positive whole number of centimetres, such as `171`;
    weight is positive kilograms with at most one decimal, such as `70.4`.

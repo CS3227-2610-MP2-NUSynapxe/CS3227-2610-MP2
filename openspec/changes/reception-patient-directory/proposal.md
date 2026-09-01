@@ -6,13 +6,13 @@ Receptionists need a reliable way to find and maintain basic patient records wit
 
 - Retain an immutable, database-generated numeric Patient ID as the primary key and display it in a patient-friendly form such as `P000042`.
 - Replace the proposed NRIC-only field with identity-document type (`NRIC`, `FIN`, `PASSPORT`, or `OTHER`), identity number, and issuing country so local and foreign patients can be registered.
-- Normalize document identity values by trimming whitespace and uppercasing letters. Validate NRIC and FIN using Singapore syntax rules, and validate passports using a deliberately broad international letters-and-digits rule because no single worldwide passport format exists.
+- Normalize document identity values by trimming whitespace and uppercasing letters. Validate NRIC and FIN using Singapore syntax rules and require Singapore as their issuing country. Validate passports using a deliberately broad international letters-and-digits rule because no single worldwide passport format exists.
 - Completely reject a duplicate normalized combination of identity type, issuing country, and identity number, and show a clear duplicate-identity error rather than a warning.
-- Store phone country code separately from the digits-only subscriber number. Automatically suggest the calling code for the selected issuing country while allowing staff to edit it.
+- Store the digits-only international calling code separately from the digits-only subscriber number. Automatically suggest the calling code for the selected issuing country while allowing staff to edit it.
 - Add Receptionist patient search by generated Patient ID, identity document, name, phone, and email.
 - Add separate Receptionist tabs for new-patient registration and patient search/editing, with deactivation located alongside search results.
 - Organize patient data, appointments, checkout, and daily revenue into separate top-level feature tabs; remove manual refresh and refresh relevant data automatically after actions and when a feature tab is opened.
-- Use an ISO country dropdown with Singapore first, automatically select Singapore for NRIC and FIN, and restrict sex to Male or Female.
+- Use an ISO country dropdown with Singapore first, lock the issuing country to Singapore for NRIC and FIN, and restrict sex to Male or Female.
 - Add a Receptionist basic patient-data view and editing workflow for identity, name, date of birth, sex, contact details, address, height, and weight; remove patient billing information while retaining appointment payment/checkout records.
 - Use a calendar date selector, calculate a read-only age using the current date in Singapore, hide generated Patient ID from registration, and mark every required field except optional height and weight with `*`.
 - Validate required fields, email syntax, digits-only phone numbers, positive whole-centimetre height, and positive weight with at most one decimal place using field-specific errors.

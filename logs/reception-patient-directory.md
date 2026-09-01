@@ -111,3 +111,11 @@ workflow boundaries. The final full run completed 55 tests and passed
 Spotless, Checkstyle, PMD, SpotBugs with FindSecBugs, JaCoCo report generation,
 Javadoc, and strict OpenSpec validation. Only synthetic identifiers are used
 in tests.
+
+The user then clarified that NRIC and FIN must strictly use Singapore as the
+issuing country and that the calling-code field itself must contain only
+numbers. The OpenSpec proposal, specification, design, and tasks were corrected
+before implementation. The UI now locks Singapore for NRIC/FIN, the service
+rejects non-Singapore values if the UI is bypassed, and calling codes are stored
+as digits such as `65`; a leading plus is added only for combined display and
+search. This correction was kept in local commits and was not pushed.
