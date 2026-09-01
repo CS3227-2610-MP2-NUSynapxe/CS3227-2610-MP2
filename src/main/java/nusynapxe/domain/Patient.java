@@ -10,7 +10,8 @@ public record Patient(
     String lastName,
     String dateOfBirth,
     Sex sex,
-    String phone,
+    String phoneCountryCode,
+    String phoneNumber,
     String email,
     String address,
     Double heightCm,
@@ -40,12 +41,19 @@ public record Patient(
         lastName,
         dateOfBirth,
         null,
+        null,
         phone,
         email,
         address,
         null,
         null,
         true);
+  }
+
+  /** Returns the complete telephone number for display and compatibility. */
+  public String phone() {
+    return (phoneCountryCode == null ? "" : phoneCountryCode)
+        + (phoneNumber == null ? "" : phoneNumber);
   }
 
   /** Returns the human-readable form of the generated Patient ID. */

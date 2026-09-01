@@ -38,6 +38,7 @@ javafx {
 
 dependencies {
     implementation 'org.xerial:sqlite-jdbc:3.53.2.1'
+    implementation 'com.googlecode.libphonenumber:libphonenumber:9.0.38'
 
     testImplementation platform('org.junit:junit-bom:6.1.3')
     testImplementation 'org.junit.jupiter:junit-jupiter'

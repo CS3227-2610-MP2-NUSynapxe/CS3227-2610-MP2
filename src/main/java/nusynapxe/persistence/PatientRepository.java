@@ -18,7 +18,8 @@ public final class PatientRepository {
   private static final int EXPECTED_UPDATE_COUNT = 1;
   private static final String PATIENT_COLUMNS =
       "id, identity_type, identity_number, issuing_country, first_name, last_name, "
-          + "date_of_birth, sex, phone, email, address, height_cm, weight_kg, active";
+          + "date_of_birth, sex, phone_country_code, phone_number, email, address, "
+          + "height_cm, weight_kg, active";
   private static final String PATIENT_ORDER = " ORDER BY last_name, first_name, id";
   private static final String SELECT_PATIENTS = "SELECT " + PATIENT_COLUMNS + " FROM patients";
   private static final String SELECT_PATIENT_BY_ID = SELECT_PATIENTS + " WHERE id = ?";
@@ -29,7 +30,9 @@ public final class PatientRepository {
           + " WHERE (identity_type LIKE ? ESCAPE '\\' "
           + "OR identity_number LIKE ? ESCAPE '\\' OR issuing_country LIKE ? ESCAPE '\\' "
           + "OR first_name LIKE ? ESCAPE '\\' OR last_name LIKE ? ESCAPE '\\' "
-          + "OR phone LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\' "
+          + "OR phone_country_code LIKE ? ESCAPE '\\' OR phone_number LIKE ? ESCAPE '\\' "
+          + "OR (phone_country_code || phone_number) LIKE ? ESCAPE '\\' "
+          + "OR email LIKE ? ESCAPE '\\' "
           + "OR (? IS NOT NULL AND id = ?))"
           + PATIENT_ORDER;
   private final SqliteDatabase database;
@@ -50,16 +53,17 @@ public final class PatientRepository {
               """
               INSERT INTO patients(
                   identity_type, identity_number, issuing_country, first_name, last_name,
-                  date_of_birth, sex, phone, email, address, height_cm, weight_kg, active,
+                  date_of_birth, sex, phone_country_code, phone_number, email, address,
+                  height_cm, weight_kg, active,
                   created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               """;
           try (PreparedStatement statement =
               connection.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
             bindPatient(statement, patient);
             String timestamp = SqliteQueries.formatTimestamp(LocalDateTime.now());
-            statement.setString(14, timestamp);
             statement.setString(15, timestamp);
+            statement.setString(16, timestamp);
             statement.executeUpdate();
             try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
               if (!generatedKeys.next()) {
@@ -82,15 +86,16 @@ public final class PatientRepository {
               """
               UPDATE patients SET
                   identity_type = ?, identity_number = ?, issuing_country = ?,
-                  first_name = ?, last_name = ?, date_of_birth = ?, sex = ?, phone = ?,
-                  email = ?, address = ?, height_cm = ?, weight_kg = ?, active = ?,
+                  first_name = ?, last_name = ?, date_of_birth = ?, sex = ?,
+                  phone_country_code = ?, phone_number = ?, email = ?, address = ?,
+                  height_cm = ?, weight_kg = ?, active = ?,
                   updated_at = ?
               WHERE id = ?
               """;
           try (PreparedStatement statement = connection.prepareStatement(sql)) {
             bindPatient(statement, patient);
-            statement.setString(14, SqliteQueries.formatTimestamp(LocalDateTime.now()));
-            statement.setLong(15, patient.id());
+            statement.setString(15, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+            statement.setLong(16, patient.id());
             if (statement.executeUpdate() != EXPECTED_UPDATE_COUNT) {
               throw new SQLException("Patient does not exist: " + patient.id());
             }
@@ -178,15 +183,15 @@ public final class PatientRepository {
     Long patientId = parsePatientId(query);
     try (PreparedStatement statement = database.connection().prepareStatement(SEARCH_PATIENTS)) {
       String pattern = "%" + escapeLike(query) + "%";
-      for (int index = 1; index <= 7; index++) {
+      for (int index = 1; index <= 9; index++) {
         statement.setString(index, pattern);
       }
       if (patientId == null) {
-        statement.setNull(8, Types.BIGINT);
-        statement.setNull(9, Types.BIGINT);
+        statement.setNull(10, Types.BIGINT);
+        statement.setNull(11, Types.BIGINT);
       } else {
-        statement.setLong(8, patientId);
-        statement.setLong(9, patientId);
+        statement.setLong(10, patientId);
+        statement.setLong(11, patientId);
       }
       return SqliteQueries.readAll(statement, PatientRepository::readPatient);
     }
@@ -220,12 +225,13 @@ public final class PatientRepository {
     statement.setString(5, patient.lastName());
     statement.setString(6, patient.dateOfBirth());
     setEnum(statement, 7, patient.sex());
-    statement.setString(8, patient.phone());
-    statement.setString(9, patient.email());
-    statement.setString(10, patient.address());
-    setNullableDouble(statement, 11, patient.heightCm());
-    setNullableDouble(statement, 12, patient.weightKg());
-    statement.setInt(13, patient.active() ? 1 : 0);
+    setNullableString(statement, 8, patient.phoneCountryCode());
+    statement.setString(9, patient.phoneNumber());
+    statement.setString(10, patient.email());
+    statement.setString(11, patient.address());
+    setNullableDouble(statement, 12, patient.heightCm());
+    setNullableDouble(statement, 13, patient.weightKg());
+    statement.setInt(14, patient.active() ? 1 : 0);
   }
 
   private static void setEnum(PreparedStatement statement, int index, Enum<?> value)
@@ -265,7 +271,8 @@ public final class PatientRepository {
         resultSet.getString("last_name"),
         resultSet.getString("date_of_birth"),
         enumValue(Sex.class, resultSet.getString("sex")),
-        resultSet.getString("phone"),
+        resultSet.getString("phone_country_code"),
+        resultSet.getString("phone_number"),
         resultSet.getString("email"),
         resultSet.getString("address"),
         nullableDouble(resultSet, "height_cm"),
@@ -292,7 +299,8 @@ public final class PatientRepository {
         patient.lastName(),
         patient.dateOfBirth(),
         patient.sex(),
-        patient.phone(),
+        patient.phoneCountryCode(),
+        patient.phoneNumber(),
         patient.email(),
         patient.address(),
         patient.heightCm(),
@@ -318,7 +326,8 @@ public final class PatientRepository {
         patient.lastName(),
         patient.dateOfBirth(),
         patient.sex(),
-        patient.phone(),
+        patient.phoneCountryCode(),
+        patient.phoneNumber(),
         patient.email(),
         patient.address(),
         patient.heightCm(),
@@ -336,7 +345,8 @@ public final class PatientRepository {
         patient.lastName(),
         patient.dateOfBirth(),
         patient.sex(),
-        patient.phone(),
+        patient.phoneCountryCode(),
+        patient.phoneNumber(),
         patient.email(),
         patient.address(),
         patient.heightCm(),

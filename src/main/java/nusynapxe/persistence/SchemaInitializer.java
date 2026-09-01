@@ -10,7 +10,8 @@ import java.util.List;
 final class SchemaInitializer {
   private static final int FIRST_VERSION = 1;
   private static final int SECOND_VERSION = 2;
-  static final int CURRENT_VERSION = 3;
+  private static final int THIRD_VERSION = 3;
+  static final int CURRENT_VERSION = 4;
 
   private static final String SCHEMA_VERSION_KEY = "schema_version";
   private static final String CREATE_METADATA =
@@ -48,7 +49,8 @@ final class SchemaInitializer {
               sex TEXT CHECK (
                   sex IS NULL OR sex IN ('FEMALE', 'MALE')
               ),
-              phone TEXT NOT NULL,
+              phone_country_code TEXT,
+              phone_number TEXT NOT NULL,
               email TEXT NOT NULL,
               address TEXT NOT NULL,
               height_cm REAL CHECK (height_cm IS NULL OR height_cm > 0),
@@ -156,6 +158,10 @@ final class SchemaInitializer {
       List.of(
           "UPDATE patients SET sex = NULL WHERE sex NOT IN ('FEMALE', 'MALE')",
           "ALTER TABLE patients DROP COLUMN billing_information");
+  private static final List<String> VERSION_FOUR_MIGRATION =
+      List.of(
+          "ALTER TABLE patients RENAME COLUMN phone TO phone_number",
+          "ALTER TABLE patients ADD COLUMN phone_country_code TEXT");
 
   private SchemaInitializer() {
     throw new AssertionError("Utility class");
@@ -178,8 +184,12 @@ final class SchemaInitializer {
           executeAll(connection, VERSION_TWO_MIGRATION);
           version = SECOND_VERSION;
         }
-        if (version < CURRENT_VERSION) {
+        if (version < THIRD_VERSION) {
           executeAll(connection, VERSION_THREE_MIGRATION);
+          version = THIRD_VERSION;
+        }
+        if (version < CURRENT_VERSION) {
+          executeAll(connection, VERSION_FOUR_MIGRATION);
         }
       }
       executeAll(connection, SCHEMA_STATEMENTS);

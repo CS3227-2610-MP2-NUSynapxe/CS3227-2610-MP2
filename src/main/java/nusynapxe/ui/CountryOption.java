@@ -1,5 +1,6 @@
 package nusynapxe.ui;
 
+import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -23,6 +24,12 @@ public record CountryOption(String code, String name) {
     }
     String normalized = requestedCode.trim().toUpperCase(Locale.ROOT);
     return ALL_COUNTRIES.stream().filter(country -> country.code.equals(normalized)).findFirst();
+  }
+
+  /** Returns the international calling code suggested for this ISO country. */
+  public String callingCode() {
+    int value = PhoneNumberUtil.getInstance().getCountryCodeForRegion(code);
+    return value == 0 ? "" : "+" + value;
   }
 
   /** Returns the English country name shown in the dropdown. */

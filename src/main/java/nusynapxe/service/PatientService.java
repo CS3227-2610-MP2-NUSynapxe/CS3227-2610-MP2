@@ -1,7 +1,9 @@
 package nusynapxe.service;
 
+import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Locale;
@@ -10,6 +12,7 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.ClinicalRecord;
+import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
@@ -23,7 +26,13 @@ public final class PatientService {
   public static final String DUPLICATE_IDENTITY_MESSAGE =
       "A patient with this identity document already exists";
 
-  private static final Pattern PHONE_PATTERN = Pattern.compile("^\\+?[0-9]+$");
+  private static final Pattern PHONE_COUNTRY_CODE_PATTERN = Pattern.compile("^\\+[1-9][0-9]{0,2}$");
+  private static final Pattern PHONE_NUMBER_PATTERN = Pattern.compile("^[0-9]+$");
+  private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\\s]+@[^@\\s]+$");
+  private static final Pattern NRIC_PATTERN = Pattern.compile("^[ST][0-9]{7}[A-Z]$");
+  private static final Pattern FIN_PATTERN = Pattern.compile("^[FGM][0-9]{7}[A-Z]$");
+  private static final Pattern PASSPORT_PATTERN = Pattern.compile("^[A-Z0-9]{5,20}$");
+  private static final ZoneId SINGAPORE_ZONE = ZoneId.of("Asia/Singapore");
   private final PatientRepository patients;
   private final AppointmentRepository appointments;
   private final ClinicalRecordRepository clinicalRecords;
@@ -125,33 +134,84 @@ public final class PatientService {
     if (patient.sex() == null) {
       throw new ValidationException("Sex is required");
     }
+    String identityNumber = normalizedRequired(patient.identityNumber(), "Identity number");
+    validateIdentityNumber(patient.identityType(), identityNumber);
     String dateOfBirth = required(patient.dateOfBirth(), "Date of birth");
+    LocalDate birthDate;
     try {
-      LocalDate.parse(dateOfBirth);
+      birthDate = LocalDate.parse(dateOfBirth);
     } catch (DateTimeParseException exception) {
       throw new ValidationException("Date of birth must use yyyy-MM-dd", exception);
     }
-    String phone = required(patient.phone(), "Phone");
-    if (!PHONE_PATTERN.matcher(phone).matches()) {
-      throw new ValidationException("Phone must contain an optional leading + followed by digits");
+    if (birthDate.isAfter(LocalDate.now(SINGAPORE_ZONE))) {
+      throw new ValidationException("Date of birth cannot be in the future");
     }
-    Double height = positiveMeasurement(patient.heightCm(), "Height");
-    Double weight = positiveMeasurement(patient.weightKg(), "Weight");
+    String phoneCountryCode = required(patient.phoneCountryCode(), "Phone country code");
+    if (!PHONE_COUNTRY_CODE_PATTERN.matcher(phoneCountryCode).matches()) {
+      throw new ValidationException("Phone country code must be + followed by 1 to 3 digits");
+    }
+    String phoneNumber = required(patient.phoneNumber(), "Phone number");
+    if (!PHONE_NUMBER_PATTERN.matcher(phoneNumber).matches()) {
+      throw new ValidationException("Phone number must contain digits only");
+    }
+    String email = required(patient.email(), "Email");
+    if (!EMAIL_PATTERN.matcher(email).matches()) {
+      throw new ValidationException("Email must contain @ with text before and after it");
+    }
+    Double height = validateHeight(patient.heightCm());
+    Double weight = validateWeight(patient.weightKg());
     return new Patient(
         patient.id(),
         patient.identityType(),
-        normalizedRequired(patient.identityNumber(), "Identity number"),
+        identityNumber,
         normalizedRequired(patient.issuingCountry(), "Issuing country"),
         required(patient.firstName(), "First name"),
         required(patient.lastName(), "Last name"),
         dateOfBirth,
         patient.sex(),
-        phone,
-        optional(patient.email()),
-        optional(patient.address()),
+        phoneCountryCode,
+        phoneNumber,
+        email,
+        required(patient.address(), "Address"),
         height,
         weight,
         registration || patient.active());
+  }
+
+  private static void validateIdentityNumber(IdentityType type, String identityNumber) {
+    Pattern pattern =
+        switch (type) {
+          case NRIC -> NRIC_PATTERN;
+          case FIN -> FIN_PATTERN;
+          case PASSPORT -> PASSPORT_PATTERN;
+          case OTHER -> null;
+        };
+    if (pattern != null && !pattern.matcher(identityNumber).matches()) {
+      String rule =
+          switch (type) {
+            case NRIC -> "NRIC must start with S or T, followed by 7 digits and a letter";
+            case FIN -> "FIN must start with F, G or M, followed by 7 digits and a letter";
+            case PASSPORT -> "Passport number must contain 5 to 20 letters or digits";
+            case OTHER -> throw new AssertionError("OTHER has no format rule");
+          };
+      throw new ValidationException(rule);
+    }
+  }
+
+  private static Double validateHeight(Double value) {
+    Double result = positiveMeasurement(value, "Height");
+    if (result != null && result.doubleValue() != Math.rint(result.doubleValue())) {
+      throw new ValidationException("Height must be a whole number of centimetres");
+    }
+    return result;
+  }
+
+  private static Double validateWeight(Double value) {
+    Double result = positiveMeasurement(value, "Weight");
+    if (result != null && BigDecimal.valueOf(result).stripTrailingZeros().scale() > 1) {
+      throw new ValidationException("Weight must have at most 1 decimal place");
+    }
+    return result;
   }
 
   private static Double positiveMeasurement(Double value, String fieldName) {
@@ -173,10 +233,6 @@ public final class PatientService {
       throw new ValidationException(fieldName + " is required");
     }
     return value.trim();
-  }
-
-  private static String optional(String value) {
-    return value == null ? "" : value.trim();
   }
 
   private static SQLException translateDuplicate(SQLException exception) {
