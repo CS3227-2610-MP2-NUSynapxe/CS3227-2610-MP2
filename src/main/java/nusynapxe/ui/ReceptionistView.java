@@ -145,13 +145,16 @@ public final class ReceptionistView {
         });
 
     searchPatients.setOnAction(
-        event ->
-            refreshPatients(
-                services, session, patientList, selection, feedback, patientSearch.getText()));
+        event -> {
+          refreshPatients(
+              services, session, patientList, selection, feedback, patientSearch.getText());
+          patientList.getSelectionModel().clearSelection();
+        });
     clearPatientSearch.setOnAction(
         event -> {
           patientSearch.clear();
           refreshPatients(services, session, patientList, selection, feedback, "");
+          patientList.getSelectionModel().clearSelection();
         });
 
     book.setOnAction(
