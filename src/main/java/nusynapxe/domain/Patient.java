@@ -52,8 +52,10 @@ public record Patient(
 
   /** Returns the complete telephone number for display and compatibility. */
   public String phone() {
-    return (phoneCountryCode == null ? "" : phoneCountryCode)
-        + (phoneNumber == null ? "" : phoneNumber);
+    String number = phoneNumber == null ? "" : phoneNumber;
+    return phoneCountryCode == null || phoneCountryCode.isBlank()
+        ? number
+        : "+" + phoneCountryCode + number;
   }
 
   /** Returns the human-readable form of the generated Patient ID. */

@@ -158,9 +158,11 @@ final class ReceptionistViewTest extends ApplicationTest {
 
     selectCombo("#reception-register-identity-type", IdentityType.FIN);
     assertEquals("SG", countryCombo().getValue().code());
+    assertTrue(countryCombo().isDisabled());
     selectCombo("#reception-register-identity-type", IdentityType.PASSPORT);
+    assertFalse(countryCombo().isDisabled());
     selectCombo("#reception-register-issuing-country", country("GB"));
-    assertEquals("+44", text("#reception-register-phone-country-code"));
+    assertEquals("44", text("#reception-register-phone-country-code"));
     selectCombo("#reception-register-sex", Sex.FEMALE);
     setText("#reception-register-identity-number", " abforeign9 ");
     setText("#reception-register-first-name", "Foreign");
@@ -188,7 +190,7 @@ final class ReceptionistViewTest extends ApplicationTest {
     assertEquals(1, patientList().getItems().size());
     selectFirstPatient();
     assertEquals("ABFOREIGN9", text("#reception-patient-identity-number"));
-    setText("#reception-patient-phone-country-code", "+33");
+    setText("#reception-patient-phone-country-code", "33");
     setText("#reception-patient-phone-number", "123456789");
     fire("#reception-patient-update");
     verifyThat("#reception-feedback", hasText("Patient changes saved"));

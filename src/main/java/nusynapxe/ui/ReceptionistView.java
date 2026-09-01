@@ -396,7 +396,7 @@ public final class ReceptionistView {
     ComboBox<CountryOption> issuingCountry =
         new ComboBox<>(FXCollections.observableArrayList(CountryOption.allCountries()));
     issuingCountry.setId(prefix + "-issuing-country");
-    TextField phoneCountryCode = field(prefix + "-phone-country-code", "+65");
+    TextField phoneCountryCode = field(prefix + "-phone-country-code", "65");
     issuingCountry
         .valueProperty()
         .addListener(
@@ -409,10 +409,13 @@ public final class ReceptionistView {
         .valueProperty()
         .addListener(
             (observable, previous, selected) -> {
-              if (selected == IdentityType.NRIC || selected == IdentityType.FIN) {
+              boolean singaporeIdentity =
+                  selected == IdentityType.NRIC || selected == IdentityType.FIN;
+              if (singaporeIdentity) {
                 CountryOption.fromCode("SG")
                     .ifPresent(country -> issuingCountry.getSelectionModel().select(country));
               }
+              issuingCountry.setDisable(singaporeIdentity);
             });
     identityType.getSelectionModel().select(IdentityType.NRIC);
     ComboBox<Sex> sex = new ComboBox<>(FXCollections.observableArrayList(Sex.values()));
@@ -515,7 +518,9 @@ public final class ReceptionistView {
     }
     form.identityType().setValue(patient.identityType());
     form.identityNumber().setText(valueOrEmpty(patient.identityNumber()));
-    form.issuingCountry().setValue(CountryOption.fromCode(patient.issuingCountry()).orElse(null));
+    if (patient.identityType() != IdentityType.NRIC && patient.identityType() != IdentityType.FIN) {
+      form.issuingCountry().setValue(CountryOption.fromCode(patient.issuingCountry()).orElse(null));
+    }
     form.firstName().setText(valueOrEmpty(patient.firstName()));
     form.lastName().setText(valueOrEmpty(patient.lastName()));
     form.dateOfBirth()

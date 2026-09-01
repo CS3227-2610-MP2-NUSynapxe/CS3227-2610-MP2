@@ -31,7 +31,7 @@ public final class PatientRepository {
           + "OR identity_number LIKE ? ESCAPE '\\' OR issuing_country LIKE ? ESCAPE '\\' "
           + "OR first_name LIKE ? ESCAPE '\\' OR last_name LIKE ? ESCAPE '\\' "
           + "OR phone_country_code LIKE ? ESCAPE '\\' OR phone_number LIKE ? ESCAPE '\\' "
-          + "OR (phone_country_code || phone_number) LIKE ? ESCAPE '\\' "
+          + "OR ('+' || phone_country_code || phone_number) LIKE ? ESCAPE '\\' "
           + "OR email LIKE ? ESCAPE '\\' "
           + "OR (? IS NOT NULL AND id = ?))"
           + PATIENT_ORDER;

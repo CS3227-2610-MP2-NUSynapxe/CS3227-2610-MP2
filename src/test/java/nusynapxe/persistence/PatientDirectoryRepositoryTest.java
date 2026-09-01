@@ -150,7 +150,7 @@ final class PatientDirectoryRepositoryTest {
         "Patient",
         "1990-01-01",
         Sex.FEMALE,
-        "+44",
+        "44",
         "1234",
         firstName.toLowerCase() + "@example.test",
         "Address",

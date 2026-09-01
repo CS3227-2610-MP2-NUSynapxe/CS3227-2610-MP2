@@ -126,6 +126,14 @@ final class PatientServiceTest {
       assertInvalid(
           fixture, withIdentityNumber(validPatient(), " "), "Identity number is required");
       assertInvalid(fixture, withCountry(validPatient(), ""), "Issuing country is required");
+      assertInvalid(
+          fixture,
+          withCountry(withIdentity(IdentityType.NRIC, "S1234567D"), "GB"),
+          "Issuing country must be Singapore for NRIC and FIN");
+      assertInvalid(
+          fixture,
+          withCountry(withIdentity(IdentityType.FIN, "G1234567A"), "GB"),
+          "Issuing country must be Singapore for NRIC and FIN");
       assertInvalid(fixture, withSex(validPatient(), null), "Sex is required");
       assertInvalid(fixture, withDate(validPatient(), "01/09/1990"), "Date of birth must use");
       assertInvalid(
@@ -139,6 +147,7 @@ final class PatientServiceTest {
       assertInvalid(
           fixture, withIdentity(IdentityType.FIN, "A1234567Z"), "FIN must start with F, G or M");
       assertInvalid(fixture, withPhoneCountryCode(validPatient(), "+"), "Phone country code");
+      assertInvalid(fixture, withPhoneCountryCode(validPatient(), "+65"), "digits only");
       assertInvalid(fixture, withPhone(validPatient(), "12-34"), "Phone number");
       assertInvalid(fixture, withPhone(validPatient(), "1+234"), "Phone number");
       assertInvalid(fixture, withIdentityNumber(validPatient(), "AB-123"), "Passport number must");
@@ -229,8 +238,9 @@ final class PatientServiceTest {
 
   private static Patient patient(
       long id, IdentityType type, String identityNumber, String country, String phone) {
-    String countryCode = phone.startsWith("+44") ? "+44" : phone.startsWith("+1") ? "+1" : "+65";
-    String number = phone.startsWith(countryCode) ? phone.substring(countryCode.length()) : phone;
+    String countryCode = phone.startsWith("+44") ? "44" : phone.startsWith("+1") ? "1" : "65";
+    String prefix = "+" + countryCode;
+    String number = phone.startsWith(prefix) ? phone.substring(prefix.length()) : phone;
     return new Patient(
         id,
         type,
@@ -250,8 +260,9 @@ final class PatientServiceTest {
   }
 
   private static Patient withPhone(Patient patient, String phone) {
-    String countryCode = phone.startsWith("+44") ? "+44" : patient.phoneCountryCode();
-    String number = phone.startsWith(countryCode) ? phone.substring(countryCode.length()) : phone;
+    String countryCode = phone.startsWith("+44") ? "44" : patient.phoneCountryCode();
+    String prefix = "+" + countryCode;
+    String number = phone.startsWith(prefix) ? phone.substring(prefix.length()) : phone;
     return new Patient(
         patient.id(),
         patient.identityType(),

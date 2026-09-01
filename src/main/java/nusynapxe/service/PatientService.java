@@ -26,7 +26,7 @@ public final class PatientService {
   public static final String DUPLICATE_IDENTITY_MESSAGE =
       "A patient with this identity document already exists";
 
-  private static final Pattern PHONE_COUNTRY_CODE_PATTERN = Pattern.compile("^\\+[1-9][0-9]{0,2}$");
+  private static final Pattern PHONE_COUNTRY_CODE_PATTERN = Pattern.compile("^[1-9][0-9]{0,2}$");
   private static final Pattern PHONE_NUMBER_PATTERN = Pattern.compile("^[0-9]+$");
   private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\\s]+@[^@\\s]+$");
   private static final Pattern NRIC_PATTERN = Pattern.compile("^[ST][0-9]{7}[A-Z]$");
@@ -136,6 +136,11 @@ public final class PatientService {
     }
     String identityNumber = normalizedRequired(patient.identityNumber(), "Identity number");
     validateIdentityNumber(patient.identityType(), identityNumber);
+    String issuingCountry = normalizedRequired(patient.issuingCountry(), "Issuing country");
+    if ((patient.identityType() == IdentityType.NRIC || patient.identityType() == IdentityType.FIN)
+        && !"SG".equals(issuingCountry)) {
+      throw new ValidationException("Issuing country must be Singapore for NRIC and FIN");
+    }
     String dateOfBirth = required(patient.dateOfBirth(), "Date of birth");
     LocalDate birthDate;
     try {
@@ -148,7 +153,7 @@ public final class PatientService {
     }
     String phoneCountryCode = required(patient.phoneCountryCode(), "Phone country code");
     if (!PHONE_COUNTRY_CODE_PATTERN.matcher(phoneCountryCode).matches()) {
-      throw new ValidationException("Phone country code must be + followed by 1 to 3 digits");
+      throw new ValidationException("Phone country code must contain 1 to 3 digits only");
     }
     String phoneNumber = required(patient.phoneNumber(), "Phone number");
     if (!PHONE_NUMBER_PATTERN.matcher(phoneNumber).matches()) {
@@ -164,7 +169,7 @@ public final class PatientService {
         patient.id(),
         patient.identityType(),
         identityNumber,
-        normalizedRequired(patient.issuingCountry(), "Issuing country"),
+        issuingCountry,
         required(patient.firstName(), "First name"),
         required(patient.lastName(), "Last name"),
         dateOfBirth,
