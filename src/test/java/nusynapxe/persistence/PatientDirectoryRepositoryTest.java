@@ -25,16 +25,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 final class PatientDirectoryRepositoryTest {
-  @TempDir
-  private Path temporaryDirectory;
+  @TempDir private Path temporaryDirectory;
 
   @Test
   void persistsLocalForeignAndLegacyAdministrativeProjections() throws SQLException {
     try (SqliteDatabase database = openDatabase("round-trip.db")) {
       PatientRepository patients = new PatientRepository(database);
       Patient local = patients.create(patient(IdentityType.NRIC, " s123 ", " sg ", "Local"));
-      Patient foreign = patients.create(patient(IdentityType.PASSPORT, " ab-12 ", " gb ", "Foreign"));
-      Patient legacy = patients.create(new Patient(0, "Legacy", "Patient", "1990-01-01", "123", "", ""));
+      Patient foreign =
+          patients.create(patient(IdentityType.PASSPORT, " ab-12 ", " gb ", "Foreign"));
+      Patient legacy =
+          patients.create(new Patient(0, "Legacy", "Patient", "1990-01-01", "123", "", ""));
 
       assertEquals("S123", local.identityNumber());
       assertEquals("SG", local.issuingCountry());
@@ -94,7 +95,8 @@ final class PatientDirectoryRepositoryTest {
       CountDownLatch start = new CountDownLatch(1);
       try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
         Future<Boolean> firstResult = executor.submit(() -> attemptCreate(first, start, "First"));
-        Future<Boolean> secondResult = executor.submit(() -> attemptCreate(second, start, "Second"));
+        Future<Boolean> secondResult =
+            executor.submit(() -> attemptCreate(second, start, "Second"));
         start.countDown();
         int successes = (firstResult.get() ? 1 : 0) + (secondResult.get() ? 1 : 0);
 
@@ -109,16 +111,18 @@ final class PatientDirectoryRepositoryTest {
     try (SqliteDatabase database = openDatabase("deactivate.db")) {
       PatientRepository patients = new PatientRepository(database);
       Patient patient = patients.create(patient(IdentityType.OTHER, "X1", "ZZ", "History"));
-      Account doctor = new AccountRepository(database)
-          .create("doctor", "Doctor", Role.DOCTOR, new byte[] { 1 }, new byte[] { 2 });
-      long appointmentId = new AppointmentRepository(database)
-          .create(
-              patient.id(),
-              doctor.id(),
-              LocalDateTime.of(2026, 9, 2, 9, 0),
-              LocalDateTime.of(2026, 9, 2, 9, 30),
-              AppointmentStatus.PENDING)
-          .id();
+      Account doctor =
+          new AccountRepository(database)
+              .create("doctor", "Doctor", Role.DOCTOR, new byte[] {1}, new byte[] {2});
+      long appointmentId =
+          new AppointmentRepository(database)
+              .create(
+                  patient.id(),
+                  doctor.id(),
+                  LocalDateTime.of(2026, 9, 2, 9, 0),
+                  LocalDateTime.of(2026, 9, 2, 9, 30),
+                  AppointmentStatus.PENDING)
+              .id();
 
       Patient inactive = patients.deactivate(patient.id());
       Patient activeAgain = patients.activate(patient.id());
