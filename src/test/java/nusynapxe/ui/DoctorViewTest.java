@@ -48,7 +48,7 @@ final class DoctorViewTest extends ApplicationTest {
                 adminSession, "doctor", "Dr. Ada", Role.DOCTOR, "doctor-pass".toCharArray());
     Patient patient =
         new PatientRepository(database)
-            .create(new Patient(0, "Pat", "Lee", "", "555-0100", "", "", ""));
+            .create(new Patient(0, "Pat", "Lee", "", "555-0100", "", ""));
     LocalDateTime start = LocalDateTime.now().minusMinutes(10).withSecond(0).withNano(0);
     new AppointmentRepository(database)
         .create(

@@ -18,8 +18,7 @@ public final class PatientRepository {
   private static final int EXPECTED_UPDATE_COUNT = 1;
   private static final String PATIENT_COLUMNS =
       "id, identity_type, identity_number, issuing_country, first_name, last_name, "
-          + "date_of_birth, sex, phone, email, address, billing_information, height_cm, "
-          + "weight_kg, active";
+          + "date_of_birth, sex, phone, email, address, height_cm, weight_kg, active";
   private static final String PATIENT_ORDER = " ORDER BY last_name, first_name, id";
   private static final String SELECT_PATIENTS = "SELECT " + PATIENT_COLUMNS + " FROM patients";
   private static final String SELECT_PATIENT_BY_ID = SELECT_PATIENTS + " WHERE id = ?";
@@ -51,16 +50,16 @@ public final class PatientRepository {
               """
               INSERT INTO patients(
                   identity_type, identity_number, issuing_country, first_name, last_name,
-                  date_of_birth, sex, phone, email, address, billing_information, height_cm,
-                  weight_kg, active, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  date_of_birth, sex, phone, email, address, height_cm, weight_kg, active,
+                  created_at, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               """;
           try (PreparedStatement statement =
               connection.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
             bindPatient(statement, patient);
             String timestamp = SqliteQueries.formatTimestamp(LocalDateTime.now());
+            statement.setString(14, timestamp);
             statement.setString(15, timestamp);
-            statement.setString(16, timestamp);
             statement.executeUpdate();
             try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
               if (!generatedKeys.next()) {
@@ -84,14 +83,14 @@ public final class PatientRepository {
               UPDATE patients SET
                   identity_type = ?, identity_number = ?, issuing_country = ?,
                   first_name = ?, last_name = ?, date_of_birth = ?, sex = ?, phone = ?,
-                  email = ?, address = ?, billing_information = ?, height_cm = ?,
-                  weight_kg = ?, active = ?, updated_at = ?
+                  email = ?, address = ?, height_cm = ?, weight_kg = ?, active = ?,
+                  updated_at = ?
               WHERE id = ?
               """;
           try (PreparedStatement statement = connection.prepareStatement(sql)) {
             bindPatient(statement, patient);
-            statement.setString(15, SqliteQueries.formatTimestamp(LocalDateTime.now()));
-            statement.setLong(16, patient.id());
+            statement.setString(14, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+            statement.setLong(15, patient.id());
             if (statement.executeUpdate() != EXPECTED_UPDATE_COUNT) {
               throw new SQLException("Patient does not exist: " + patient.id());
             }
@@ -224,10 +223,9 @@ public final class PatientRepository {
     statement.setString(8, patient.phone());
     statement.setString(9, patient.email());
     statement.setString(10, patient.address());
-    statement.setString(11, patient.billingInformation());
-    setNullableDouble(statement, 12, patient.heightCm());
-    setNullableDouble(statement, 13, patient.weightKg());
-    statement.setInt(14, patient.active() ? 1 : 0);
+    setNullableDouble(statement, 11, patient.heightCm());
+    setNullableDouble(statement, 12, patient.weightKg());
+    statement.setInt(13, patient.active() ? 1 : 0);
   }
 
   private static void setEnum(PreparedStatement statement, int index, Enum<?> value)
@@ -270,7 +268,6 @@ public final class PatientRepository {
         resultSet.getString("phone"),
         resultSet.getString("email"),
         resultSet.getString("address"),
-        resultSet.getString("billing_information"),
         nullableDouble(resultSet, "height_cm"),
         nullableDouble(resultSet, "weight_kg"),
         resultSet.getInt("active") == 1);
@@ -298,7 +295,6 @@ public final class PatientRepository {
         patient.phone(),
         patient.email(),
         patient.address(),
-        patient.billingInformation(),
         patient.heightCm(),
         patient.weightKg(),
         patient.active());
@@ -325,7 +321,6 @@ public final class PatientRepository {
         patient.phone(),
         patient.email(),
         patient.address(),
-        patient.billingInformation(),
         patient.heightCm(),
         patient.weightKg(),
         patient.active());
@@ -344,7 +339,6 @@ public final class PatientRepository {
         patient.phone(),
         patient.email(),
         patient.address(),
-        patient.billingInformation(),
         patient.heightCm(),
         patient.weightKg(),
         active);

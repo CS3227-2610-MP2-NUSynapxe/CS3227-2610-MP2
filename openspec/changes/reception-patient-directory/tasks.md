@@ -36,3 +36,10 @@
 - [x] 6.1 Run focused domain, migration, repository, service, authorization, integration, and Receptionist TestFX tests; verify every scenario in `specs/reception-patient-directory/spec.md` is covered by an automated test or an explicitly documented manual check.
 - [x] 6.2 Run `gradlew.bat spotlessApply` followed by `gradlew.bat check javadoc --no-daemon --console=plain`; inspect generated Checkstyle, PMD, SpotBugs, TestFX, and JaCoCo results and resolve all failures attributable to this change.
 - [x] 6.3 Run `openspec validate reception-patient-directory --type change --strict`, inspect the feature diff for accidental clinical-data exposure or unrelated files, and verify the implementation and documentation match all approved artifacts before requesting review.
+
+## 7. Revised patient data and tabbed Receptionist workflow
+
+- [x] 7.1 Remove patient billing information from the domain, repository, service, fresh schema, fixtures, and documentation; add transactional schema version 3 that removes the legacy patient column without changing payment or checkout history, clears unsupported legacy sex values, and verify version-1/version-2 migration and rollback tests.
+- [x] 7.2 Restrict patient sex to Female or Male and add a reusable ISO-country selector with English country names, Singapore first, normalized country-code persistence, and automatic Singapore selection for NRIC and FIN; verify service and focused UI behavior.
+- [x] 7.3 Split the Receptionist patient area into independent `Register new patient` and `Search and manage patients` tabs, keep edit/deactivate with search results, preserve appointment patient selection, and verify semantic IDs, state separation, registration, search, edit, and deactivation with TestFX.
+- [x] 7.4 Update the User Guide, Developer Guide, and interaction summary for the revised workflow, then run Spotless, the full Gradle quality gate, strict OpenSpec validation, and final privacy/diff review.

@@ -28,7 +28,7 @@ final class SchemaMigrationTest {
     try (SqliteDatabase database = new SqliteDatabase(path)) {
       database.open();
 
-      assertEquals("2", scalar(database.connection(), "SELECT value FROM app_metadata"));
+      assertEquals("3", scalar(database.connection(), "SELECT value FROM app_metadata"));
       assertEquals("1", scalar(database.connection(), "SELECT id FROM patients"));
       assertEquals("1", scalar(database.connection(), "SELECT patient_id FROM appointments"));
       assertEquals("1", scalar(database.connection(), "SELECT patient_id FROM clinical_records"));
@@ -49,6 +49,40 @@ final class SchemaMigrationTest {
         assertNull(patient.getObject("weight_kg"));
         assertEquals(1, patient.getInt("active"));
       }
+      assertFalse(columnNames(database.connection(), "patients").contains("billing_information"));
+    }
+  }
+
+  @Test
+  void migratesVersionTwoByRemovingBillingAndUnsupportedSex() throws SQLException {
+    Path path = temporaryDirectory.resolve("version-two.db");
+    try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + path);
+        Statement statement = connection.createStatement()) {
+      statement.executeUpdate(
+          "CREATE TABLE app_metadata(key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)");
+      statement.executeUpdate("INSERT INTO app_metadata VALUES ('schema_version', '2')");
+      statement.executeUpdate(
+          """
+          CREATE TABLE patients (
+              id INTEGER PRIMARY KEY AUTOINCREMENT, identity_type TEXT,
+              identity_number TEXT, issuing_country TEXT, first_name TEXT NOT NULL,
+              last_name TEXT NOT NULL, date_of_birth TEXT NOT NULL, sex TEXT,
+              phone TEXT NOT NULL, email TEXT NOT NULL, address TEXT NOT NULL,
+              billing_information TEXT NOT NULL, height_cm REAL, weight_kg REAL,
+              active INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+          )
+          """);
+      statement.executeUpdate(
+          "INSERT INTO patients VALUES (1, 'PASSPORT', 'DOC', 'GB', 'Legacy', 'Patient', "
+              + "'1990-01-01', 'UNDISCLOSED', '123', '', '', 'remove me', NULL, NULL, 1, "
+              + "'now', 'now')");
+    }
+
+    try (SqliteDatabase database = new SqliteDatabase(path)) {
+      database.open();
+      assertEquals("3", scalar(database.connection(), "SELECT value FROM app_metadata"));
+      assertNull(scalar(database.connection(), "SELECT sex FROM patients WHERE id = 1"));
+      assertFalse(columnNames(database.connection(), "patients").contains("billing_information"));
     }
   }
 
@@ -80,6 +114,28 @@ final class SchemaMigrationTest {
       assertThrows(SQLException.class, () -> SchemaInitializer.initialize(connection));
       assertEquals("1", scalar(connection, "SELECT value FROM app_metadata"));
       assertFalse(columnNames(connection, "patients").contains("identity_type"));
+    }
+  }
+
+  @Test
+  void rollsBackVersionThreeWhenBillingColumnCannotBeRemoved() throws SQLException {
+    Path path = temporaryDirectory.resolve("broken-version-two.db");
+    try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + path);
+        Statement statement = connection.createStatement()) {
+      statement.executeUpdate(
+          "CREATE TABLE app_metadata(key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)");
+      statement.executeUpdate("INSERT INTO app_metadata VALUES ('schema_version', '2')");
+      statement.executeUpdate(
+          """
+          CREATE TABLE patients (
+              id INTEGER PRIMARY KEY AUTOINCREMENT, sex TEXT, first_name TEXT NOT NULL
+          )
+          """);
+      statement.executeUpdate("INSERT INTO patients VALUES (1, 'OTHER', 'Legacy')");
+
+      assertThrows(SQLException.class, () -> SchemaInitializer.initialize(connection));
+      assertEquals("2", scalar(connection, "SELECT value FROM app_metadata"));
+      assertEquals("OTHER", scalar(connection, "SELECT sex FROM patients WHERE id = 1"));
     }
   }
 

@@ -13,7 +13,6 @@ public record Patient(
     String phone,
     String email,
     String address,
-    String billingInformation,
     Double heightCm,
     Double weightKg,
     boolean active) {
@@ -31,8 +30,7 @@ public record Patient(
       String dateOfBirth,
       String phone,
       String email,
-      String address,
-      String billingInformation) {
+      String address) {
     this(
         id,
         null,
@@ -45,7 +43,6 @@ public record Patient(
         phone,
         email,
         address,
-        billingInformation,
         null,
         null,
         true);

@@ -126,8 +126,7 @@ final class ClinicalServiceTest {
                     "1906-12-09",
                     "555-0100",
                     "grace@example.test",
-                    "Address",
-                    "Billing"));
+                    "Address"));
     Appointment appointment =
         new AppointmentRepository(database)
             .create(

@@ -67,7 +67,6 @@ final class ClinicWorkflowIntegrationTest {
                       "+655550100",
                       "grace@example.test",
                       "Address",
-                      "Billing",
                       170.0,
                       65.0,
                       true));
@@ -143,7 +142,6 @@ final class ClinicWorkflowIntegrationTest {
                       "+442071234567",
                       patient.email(),
                       patient.address(),
-                      "Updated billing",
                       patient.heightCm(),
                       patient.weightKg(),
                       true));

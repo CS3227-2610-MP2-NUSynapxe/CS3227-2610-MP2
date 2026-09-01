@@ -34,7 +34,7 @@ final class PatientDirectoryRepositoryTest {
       Patient foreign =
           patients.create(patient(IdentityType.PASSPORT, " ab-12 ", " gb ", "Foreign"));
       Patient legacy =
-          patients.create(new Patient(0, "Legacy", "Patient", "1990-01-01", "123", "", "", ""));
+          patients.create(new Patient(0, "Legacy", "Patient", "1990-01-01", "123", "", ""));
 
       assertEquals("S123", local.identityNumber());
       assertEquals("SG", local.issuingCountry());
@@ -149,11 +149,10 @@ final class PatientDirectoryRepositoryTest {
         firstName,
         "Patient",
         "1990-01-01",
-        Sex.UNDISCLOSED,
+        Sex.FEMALE,
         "+441234",
         firstName.toLowerCase() + "@example.test",
         "Address",
-        "Billing",
         170.5,
         65.5,
         true);
@@ -172,7 +171,6 @@ final class PatientDirectoryRepositoryTest {
         patient.phone(),
         patient.email(),
         patient.address(),
-        patient.billingInformation(),
         patient.heightCm(),
         patient.weightKg(),
         patient.active());

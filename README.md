@@ -28,11 +28,11 @@ accounts used to access the application.
 | Role | Responsibilities |
 | --- | --- |
 | System Admin | Create enabled Doctor and Receptionist accounts. |
-| Receptionist | Register patients, maintain contact and billing information, book/cancel/reschedule appointments for any Doctor, check patients in, record checkout payments, and view daily revenue. |
+| Receptionist | Register patients, maintain administrative contact information, book/cancel/reschedule appointments for any Doctor, check patients in, record checkout payments, and view daily revenue. |
 | Doctor | View and manage the Doctor's own schedule, accept or reschedule appointments, block time off, record diagnoses/consultation/follow-up notes and prescriptions, and complete consultations. |
 
 Patient administration and clinical information are separate by design.
-Receptionists can access contact and billing information but never receive or
+Receptionists can access administrative patient information but never receive or
 modify medical notes, diagnoses, follow-up notes, or prescriptions. The same
 boundary is enforced in the service layer, not only by hiding JavaFX controls.
 

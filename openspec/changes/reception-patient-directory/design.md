@@ -15,6 +15,8 @@ The change crosses the domain, persistence, service, UI, tests, and documentatio
 - Keep legacy databases readable without fabricating identity or measurement values.
 - Keep search and editing within administrative projections that cannot contain clinical fields.
 - Provide deterministic, testable search and atomic administrative updates.
+- Separate registration from search/editing in the interface and keep patient deactivation in the search workflow.
+- Remove patient billing information without changing appointment checkout or payment records.
 
 **Non-Goals:**
 
@@ -51,7 +53,7 @@ Generating placeholder documents such as `LEGACY-<id>` was rejected because they
 
 ### Use an administrative projection for every directory query
 
-The patient model and repository projection contain only Patient ID, document identity, demographics, measurements, contact, address, and billing fields. Search SQL explicitly selects those columns and never joins clinical tables. Search uses parameterized statements, escaped wildcard input, case-insensitive matching for text fields, exact matching for a numeric ID, recognition of a displayed `P`-prefixed ID, and deterministic ordering by name followed by ID.
+The patient model and repository projection contain only Patient ID, document identity, demographics, measurements, contact, and address fields. Search SQL explicitly selects those columns and never joins clinical tables. Search uses parameterized statements, escaped wildcard input, case-insensitive matching for text fields, exact matching for a numeric ID, recognition of a displayed `P`-prefixed ID, and deterministic ordering by name followed by ID.
 
 A single trimmed query is matched against identity type, number, issuing country, first name, last name, phone, and email; a numeric or valid displayed-ID query also checks exact Patient ID. A blank query returns the full administrative directory. This keeps the initial interface simple while satisfying all required lookup paths.
 
@@ -73,15 +75,25 @@ Allowing `+` anywhere was rejected because it does not represent a valid interna
 
 Receptionist “delete” behavior sets an active flag rather than physically removing the patient. Patient IDs are never reused, and appointments, billing, and clinical history remain referentially intact. Physical deletion was rejected because it would destroy audit and medical history and conflict with existing foreign keys.
 
-### Extend the Receptionist workspace with a directory interaction
+### Use constrained country and sex choices
 
-The Receptionist view gains a formatted read-only Patient ID, identity-type selector, document number, issuing country, sex, optional height/weight, search controls, a result list, populated basic-data fields for the selected patient, and distinct register, save-update, and deactivate actions with stable semantic IDs for TestFX. Clearing search shows the directory; selecting a result populates all permitted fields. Successful writes refresh the list while retaining the affected patient selection when possible.
+Issuing country is selected from the Java runtime's ISO 3166 country list. The interface displays English country names, stores normalized two-letter codes, and orders Singapore first followed by all other countries alphabetically. Selecting NRIC or FIN automatically selects Singapore; Passport and Other allow any listed country. This avoids free-text country variants without adding a runtime dependency.
+
+Sex is limited to `FEMALE` or `MALE` in the domain, service, and interface. When a version-2 database contains `OTHER` or `UNDISCLOSED`, the version-3 migration clears that value so staff must choose one of the supported options on the next save.
+
+### Remove patient billing information in schema version 3
+
+Patient-level billing information is removed from the domain, repository, service, interface, and fresh schema. The version-3 migration drops `patients.billing_information`; it does not change the separate `payments` table, checkout workflow, or revenue reporting. A version-1 database applies version 2 and then version 3 in order within the same transaction.
+
+### Split the Receptionist patient workflow into tabs
+
+The Receptionist view uses a `Register new patient` tab with its own blank form and register action, and a `Search and manage patients` tab with search controls, results, selected-patient edit form, and deactivation action. Each tab has distinct stable semantic IDs for TestFX. Clearing search shows the directory; selecting a result populates only the edit form. Successful edits and deactivation refresh the result list while retaining the affected selection when possible. Registration stays independent of the search/edit form.
 
 Duplicate feedback states that a patient with the identity document already exists but does not display its full number. UI visibility remains only a convenience; services enforce authorization independently.
 
 ### Test each enforcement boundary
 
-Persistence tests cover migration, composite normalized uniqueness, concurrent duplicate resistance, parameterized search, deterministic order, atomic updates, deactivation, and administrative projections. Service tests cover document normalization without format validation, international phone syntax, measurements, authorization, duplicate error mapping, legacy identity completion, and clinical preservation. TestFX covers registration for local and foreign documents, search, selection, editing, duplicate feedback, deactivation, refresh behavior, and stable control IDs. Integration tests confirm that basic-data edits do not change clinical records.
+Persistence tests cover migration through version 3, billing-column removal, composite normalized uniqueness, concurrent duplicate resistance, parameterized search, deterministic order, atomic updates, deactivation, and administrative projections. Service tests cover document normalization without format validation, international phone syntax, measurements, binary sex, authorization, duplicate error mapping, legacy identity completion, and clinical preservation. TestFX covers separate registration/search tabs, all-country selection, Singapore autofill for NRIC/FIN, local and foreign registration, search, selection, editing, duplicate feedback, deactivation placement, refresh behavior, and stable control IDs. Integration tests confirm that basic-data edits do not change clinical records or payment history.
 
 No new runtime dependency is required.
 
@@ -96,8 +108,8 @@ No new runtime dependency is required.
 ## Migration Plan
 
 1. Back up or copy representative schema-version-1 databases for migration tests.
-2. In one transaction, add nullable document identity, sex, height, weight, and active columns, add a unique index for complete non-null document tuples, and update `app_metadata.schema_version` to 2 only after all statements succeed.
+2. In one transaction, apply version 2 by adding nullable document identity, sex, height, weight, and active columns plus the unique document index, then apply version 3 by clearing unsupported sex values and dropping patient billing information.
 3. Preserve every existing patient and related foreign-key row unchanged; do not synthesize identifiers.
 4. Require a complete normalized unique document identity and other required basic fields for every new registration and whenever a legacy patient is saved.
-5. Verify fresh-database initialization, version-1 migration, repeated startup, and rollback after an injected migration failure.
-6. Roll back a failed deployment by restoring the pre-migration database backup and the prior application release; version-2 databases are not expected to be opened by the older release.
+5. Verify fresh-database initialization, version-1 and version-2 migration, repeated startup, and rollback after an injected migration failure.
+6. Roll back a failed deployment by restoring the pre-migration database backup and the prior application release; version-3 databases are not expected to be opened by an older release.

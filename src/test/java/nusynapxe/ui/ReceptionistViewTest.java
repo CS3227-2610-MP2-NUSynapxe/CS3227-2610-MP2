@@ -15,11 +15,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ListView;
+import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
 import javafx.stage.Stage;
 import nusynapxe.domain.Account;
@@ -86,14 +88,16 @@ final class ReceptionistViewTest extends ApplicationTest {
     verifyThat("#receptionist-workspace", isVisible());
     verifyThat("#reception-book", isVisible());
 
-    setText("#reception-patient-first-name", "Pat");
-    setText("#reception-patient-last-name", "Lee");
-    setText("#reception-patient-identity-number", "S123UNKNOWN");
-    setText("#reception-patient-issuing-country", "SG");
-    setText("#reception-patient-date-of-birth", "1990-01-01");
-    setText("#reception-patient-phone", "5550100");
+    selectCombo("#reception-register-sex", Sex.FEMALE);
+    setText("#reception-register-first-name", "Pat");
+    setText("#reception-register-last-name", "Lee");
+    setText("#reception-register-identity-number", "S123UNKNOWN");
+    setText("#reception-register-date-of-birth", "1990-01-01");
+    setText("#reception-register-phone", "5550100");
     fire("#reception-patient-register");
     verifyThat("#reception-feedback", hasText("Patient registered"));
+    selectPatientManagementTab();
+    selectFirstPatient();
 
     LocalDateTime start = LocalDateTime.now().minusMinutes(5).withSecond(0).withNano(0);
     LocalDateTime end = start.plusMinutes(30);
@@ -132,34 +136,49 @@ final class ReceptionistViewTest extends ApplicationTest {
   @Test
   void receptionistSearchesEditsDeactivatesAndRejectsDuplicateIdentity() throws SQLException {
     loginAsReceptionist();
+    assertTrue(lookup("#reception-patient-tabs").tryQuery().isPresent());
+    assertTrue(lookup("#reception-patient-register-tab").tryQuery().isPresent());
+    assertTrue(lookup("#reception-patient-manage-tab").tryQuery().isPresent());
+    assertFalse(lookup("#reception-register-billing").tryQuery().isPresent());
+    assertFalse(lookup("#reception-patient-billing").tryQuery().isPresent());
+    assertEquals(2, combo("#reception-register-sex").getItems().size());
+    assertEquals(Locale.getISOCountries().length, countryCombo().getItems().size());
+    assertEquals("SG", countryCombo().getItems().get(0).code());
+
+    selectCombo("#reception-register-identity-type", IdentityType.FIN);
+    assertEquals("SG", countryCombo().getValue().code());
+    selectCombo("#reception-register-identity-type", IdentityType.PASSPORT);
+    selectCombo("#reception-register-issuing-country", country("GB"));
+    selectCombo("#reception-register-sex", Sex.FEMALE);
+    setText("#reception-register-identity-number", " ab/foreign-9 ");
+    setText("#reception-register-first-name", "Foreign");
+    setText("#reception-register-last-name", "Patient");
+    setText("#reception-register-date-of-birth", "1991-02-03");
+    setText("#reception-register-phone", "+442071234567");
+    setText("#reception-register-height", "172.5");
+    setText("#reception-register-weight", "68.25");
+    fire("#reception-patient-register");
+
+    verifyThat("#reception-feedback", hasText("Patient registered"));
+    assertEquals("P000001", text("#reception-register-id"));
+    assertEquals("AB/FOREIGN-9", text("#reception-register-identity-number"));
+
+    selectPatientManagementTab();
     assertTrue(lookup("#reception-patient-id").tryQuery().isPresent());
     assertTrue(lookup("#reception-patient-search").tryQuery().isPresent());
     assertTrue(lookup("#reception-patient-update").tryQuery().isPresent());
     assertTrue(lookup("#reception-patient-deactivate").tryQuery().isPresent());
 
-    selectCombo("#reception-patient-identity-type", IdentityType.PASSPORT);
-    selectCombo("#reception-patient-sex", Sex.FEMALE);
-    setText("#reception-patient-identity-number", " ab/foreign-9 ");
-    setText("#reception-patient-issuing-country", " gb ");
-    setText("#reception-patient-first-name", "Foreign");
-    setText("#reception-patient-last-name", "Patient");
-    setText("#reception-patient-date-of-birth", "1991-02-03");
-    setText("#reception-patient-phone", "+442071234567");
-    setText("#reception-patient-height", "172.5");
-    setText("#reception-patient-weight", "68.25");
-    fire("#reception-patient-register");
-
-    verifyThat("#reception-feedback", hasText("Patient registered"));
-    assertEquals("P000001", text("#reception-patient-id"));
-    assertEquals("AB/FOREIGN-9", text("#reception-patient-identity-number"));
-
     setText("#reception-patient-search", "p000001");
     fire("#reception-patient-search-submit");
     assertEquals(1, patientList().getItems().size());
+    selectFirstPatient();
+    assertEquals("AB/FOREIGN-9", text("#reception-patient-identity-number"));
     setText("#reception-patient-phone", "+33123456789");
     fire("#reception-patient-update");
     verifyThat("#reception-feedback", hasText("Patient changes saved"));
 
+    selectRegistrationTab();
     fire("#reception-patient-register");
     verifyThat(
         "#reception-feedback", hasText("A patient with this identity document already exists"));
@@ -168,11 +187,13 @@ final class ReceptionistViewTest extends ApplicationTest {
         "+33123456789",
         services.patientService().getAdministrative(receptionistSession(), 1).phone());
 
+    selectPatientManagementTab();
     setText("#reception-patient-search", "does-not-exist");
     fire("#reception-patient-search-submit");
     assertTrue(patientList().getItems().isEmpty());
     fire("#reception-patient-search-clear");
     assertEquals(1, patientList().getItems().size());
+    selectFirstPatient();
     fire("#reception-patient-deactivate");
     verifyThat("#reception-feedback", hasText("Patient deactivated"));
     assertFalse(services.patientService().getAdministrative(receptionistSession(), 1).active());
@@ -189,6 +210,35 @@ final class ReceptionistViewTest extends ApplicationTest {
   @SuppressWarnings("unchecked")
   private <T> void selectCombo(String selector, T value) {
     interact(() -> lookup(selector).queryAs(ComboBox.class).setValue(value));
+  }
+
+  @SuppressWarnings("unchecked")
+  private <T> ComboBox<T> combo(String selector) {
+    return lookup(selector).queryAs(ComboBox.class);
+  }
+
+  private ComboBox<CountryOption> countryCombo() {
+    return combo("#reception-register-issuing-country");
+  }
+
+  private static CountryOption country(String code) {
+    return CountryOption.fromCode(code).orElseThrow();
+  }
+
+  private void selectRegistrationTab() {
+    interact(
+        () ->
+            lookup("#reception-patient-tabs").queryAs(TabPane.class).getSelectionModel().select(0));
+  }
+
+  private void selectPatientManagementTab() {
+    interact(
+        () ->
+            lookup("#reception-patient-tabs").queryAs(TabPane.class).getSelectionModel().select(1));
+  }
+
+  private void selectFirstPatient() {
+    interact(() -> patientList().getSelectionModel().selectFirst());
   }
 
   @SuppressWarnings("unchecked")

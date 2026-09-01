@@ -149,7 +149,6 @@ public final class PatientService {
         phone,
         optional(patient.email()),
         optional(patient.address()),
-        optional(patient.billingInformation()),
         height,
         weight,
         registration || patient.active());

@@ -10,7 +10,9 @@ Receptionists need a reliable way to find and maintain basic patient records wit
 - Completely reject a duplicate normalized combination of identity type, issuing country, and identity number, and show a clear duplicate-identity error rather than a warning.
 - Accept international phone numbers containing an optional leading `+` followed by digits, without Singapore-specific length validation.
 - Add Receptionist patient search by generated Patient ID, identity document, name, phone, and email.
-- Add a Receptionist basic patient-data view and editing workflow for identity, name, date of birth, sex, contact details, address, billing information, height, and weight.
+- Add separate Receptionist tabs for new-patient registration and patient search/editing, with deactivation located alongside search results.
+- Use an ISO country dropdown with Singapore first, automatically select Singapore for NRIC and FIN, and restrict sex to Male or Female.
+- Add a Receptionist basic patient-data view and editing workflow for identity, name, date of birth, sex, contact details, address, height, and weight; remove patient billing information while retaining appointment payment/checkout records.
 - Enforce Receptionist authorization and the clinical-confidentiality boundary in the service and persistence layers, not only in the JavaFX interface.
 - Add repository, service, authorization, and TestFX coverage for search, editing, duplicate rejection, validation, and clinical-data isolation.
 - Update the User Guide and Developer Guide to describe the patient-directory workflow, generated Patient IDs, flexible identity documents, phone handling, privacy boundary, schema change, and verification approach.
@@ -28,10 +30,10 @@ None. There are no archived main OpenSpec capabilities in this repository to mod
 
 ## Impact
 
-- `src/main/java/nusynapxe/domain/Patient.java`: represent generated Patient ID, flexible identity-document details, sex, height, and weight in the basic patient model.
+- `src/main/java/nusynapxe/domain/Patient.java`: represent generated Patient ID, flexible identity-document details, binary sex, height, and weight in the basic patient model without patient billing information.
 - `src/main/java/nusynapxe/persistence/SchemaInitializer.java` and `PatientRepository.java`: migrate and enforce composite identity-document uniqueness and provide basic-data search/update operations.
 - `src/main/java/nusynapxe/service/PatientService.java`: normalize document identity, validate international phone syntax and measurements, reject duplicate identities, authorize directory operations, and preserve the confidentiality boundary.
 - `src/main/java/nusynapxe/ui/ReceptionistView.java`: provide directory search, patient selection, detail viewing, editing, and user-facing errors.
 - `src/test/java/nusynapxe/`: expand persistence, service, authorization, integration, and TestFX coverage.
 - `docs/UserGuide.md` and `docs/DeveloperGuide.md`: document behavior, identity flexibility, privacy constraints, schema evolution, and tests.
-- Existing databases require a versioned migration because current patient rows do not contain identity-document type/number/country, sex, height, or weight; the migration and rollout policy will be resolved in the design.
+- Existing databases require versioned migrations for the identity fields and later removal of patient billing information and unsupported sex values; the migration and rollout policy is resolved in the design.

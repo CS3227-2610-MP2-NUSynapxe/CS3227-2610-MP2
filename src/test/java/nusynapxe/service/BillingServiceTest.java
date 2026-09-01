@@ -131,8 +131,7 @@ final class BillingServiceTest {
                     "1906-12-09",
                     "555-0100",
                     "grace@example.test",
-                    "Address",
-                    "Billing"));
+                    "Address"));
     AppointmentRepository repository = new AppointmentRepository(database);
     Appointment appointment =
         repository.create(

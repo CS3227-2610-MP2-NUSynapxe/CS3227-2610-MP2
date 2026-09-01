@@ -70,8 +70,11 @@ payments              checkout amount in integer minor units and method
 ```
 
 Schema version 2 adds nullable identity type/number/country, sex, height,
-weight, and active columns for backward compatibility. Version-1 databases
-are migrated in one transaction. Existing rows keep their generated numeric
+weight, and active columns for backward compatibility. Schema version 3
+removes `patients.billing_information` and clears legacy sex values other than
+`FEMALE` and `MALE`; it does not alter the separate `payments` table. Version-1
+databases apply both migrations in order within one transaction, while
+version-2 databases apply only version 3. Existing rows keep their generated numeric
 Patient IDs and related records; no identity or measurement values are
 invented. New registrations require complete identity and sex values, and a
 legacy row requires complete identity fields on its next basic-data save.
@@ -89,6 +92,8 @@ pre-check and maps uniqueness races to a non-sensitive duplicate message.
 Document numbers have no country-specific syntax, length, or checksum rule.
 Phone follows `^\+?[0-9]+$`, with no fixed national length. Height and weight
 are optional positive finite decimal values in centimetres and kilograms.
+Patient sex is limited to `FEMALE` or `MALE`. Patient-level billing information
+is not stored; appointment payments remain in `payments`.
 Patient removal sets `active = 0`; it never reuses the Patient ID or deletes
 appointment, payment, or clinical history.
 
@@ -144,8 +149,14 @@ stores integer minor units and aggregates successful payments by local date.
 
 `ApplicationRouter` opens Login or first-run Setup and routes an authenticated
 session to one of the role workspaces. Views are built programmatically so
-semantic ids remain easy to assert. Important ids include `login-submit`,
-`setup-submit`, `admin-account-submit`, `reception-patient-id`,
+semantic ids remain easy to assert. The patient area has independent
+`Register new patient` and `Search and manage patients` tabs. Country options
+come from `Locale.getISOCountries()`, use English display names, persist ISO
+two-letter codes, and order Singapore first. NRIC and FIN selection chooses
+Singapore automatically. Important ids include `login-submit`, `setup-submit`,
+`admin-account-submit`, `reception-patient-tabs`, `reception-register-id`,
+`reception-register-identity-type`, `reception-register-issuing-country`,
+`reception-patient-id`,
 `reception-patient-identity-type`, `reception-patient-identity-number`,
 `reception-patient-issuing-country`, `reception-patient-search`,
 `reception-patient-search-submit`, `reception-patient-update`,

@@ -150,7 +150,7 @@ final class PatientServiceTest {
       Fixture fixture = fixture(database);
       Patient legacy =
           new PatientRepository(database)
-              .create(new Patient(0, "Legacy", "Patient", "1990-01-01", "123", "", "", ""));
+              .create(new Patient(0, "Legacy", "Patient", "1990-01-01", "123", "", ""));
       Patient completed = patient(legacy.id(), IdentityType.FIN, "G123", "SG", "+6588888888");
 
       assertThrows(
@@ -228,7 +228,6 @@ final class PatientServiceTest {
         phone,
         "grace@example.test",
         "Address",
-        "Billing",
         170.5,
         65.5,
         true);
@@ -373,7 +372,6 @@ final class PatientServiceTest {
         phone,
         patient.email(),
         patient.address(),
-        patient.billingInformation(),
         height,
         weight,
         patient.active());

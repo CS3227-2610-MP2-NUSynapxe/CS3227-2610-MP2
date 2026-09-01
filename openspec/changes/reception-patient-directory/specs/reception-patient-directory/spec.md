@@ -90,12 +90,12 @@ The system SHALL allow an authenticated Receptionist to search basic patient rec
 
 ### Requirement: Receptionists can create, view, and edit basic patient data
 
-The system SHALL allow an authenticated Receptionist to register, select, view, and edit a patient's identity type, identity number, issuing country, name, date of birth, sex, phone, email, address, billing information, height, and weight. An update SHALL either persist all validated changes or leave the existing patient unchanged. Patient removal SHALL deactivate rather than physically delete a patient with retained history.
+The system SHALL allow an authenticated Receptionist to register, select, view, and edit a patient's identity type, identity number, issuing country, name, date of birth, sex, phone, email, address, height, and weight. Sex SHALL be either `FEMALE` or `MALE`. Patient billing information SHALL not be collected or stored; appointment payment and checkout records remain separate. An update SHALL either persist all validated changes or leave the existing patient unchanged. Patient removal SHALL deactivate rather than physically delete a patient with retained history.
 
 #### Scenario: View an administrative patient record
 
 - **WHEN** an authenticated Receptionist selects a patient from the directory
-- **THEN** the system displays that patient's generated Patient ID and permitted identity, demographic, measurement, contact, address, and billing information
+- **THEN** the system displays that patient's generated Patient ID and permitted identity, demographic, measurement, contact, and address information
 
 #### Scenario: Save valid administrative changes
 
@@ -139,6 +139,42 @@ The system SHALL allow an authenticated Receptionist to register, select, view, 
 - **WHEN** an authenticated Receptionist removes a patient who has retained clinic history
 - **THEN** the system marks the patient inactive instead of physically deleting the patient or related records
 
+#### Scenario: Restrict sex choices
+
+- **WHEN** a Receptionist registers or edits a patient
+- **THEN** the interface offers only Male and Female
+- **AND** the service rejects any other or missing sex value
+
+### Requirement: Registration and patient management use separate tabs
+
+The Receptionist workspace SHALL place new-patient registration in a `Register new patient` tab and search, selection, editing, and deactivation in a separate `Search and manage patients` tab. The registration and edit forms SHALL use independent controls and state.
+
+#### Scenario: Open the registration tab
+
+- **WHEN** a Receptionist opens `Register new patient`
+- **THEN** the system displays a blank registration form and register action without search results, save-changes, or deactivation controls
+
+#### Scenario: Open the search and manage tab
+
+- **WHEN** a Receptionist opens `Search and manage patients`
+- **THEN** the system displays search controls, patient results, the selected-patient edit form, save-changes, and deactivation together
+- **AND** no new-patient register action appears in that tab
+
+### Requirement: Issuing country uses a complete constrained selector
+
+The Receptionist registration and edit forms SHALL use an issuing-country dropdown containing the Java runtime's complete ISO 3166 country list, displaying English country names and storing normalized two-letter country codes. Singapore SHALL appear first and all remaining countries SHALL follow alphabetically.
+
+#### Scenario: Select NRIC or FIN
+
+- **WHEN** a Receptionist selects identity type `NRIC` or `FIN`
+- **THEN** the issuing-country selector automatically selects Singapore
+
+#### Scenario: Select a foreign country
+
+- **WHEN** a Receptionist selects `PASSPORT` or `OTHER`
+- **THEN** the Receptionist can select any country in the country dropdown
+- **AND** the selected normalized country code is used for identity uniqueness
+
 ### Requirement: Patient-directory access is authorized below the user interface
 
 The system SHALL require an active Receptionist session for patient-directory search, administrative viewing, registration, and editing, regardless of whether controls are visible in the user interface.
@@ -165,7 +201,7 @@ Patient-directory queries and results SHALL exclude diagnoses, consultation note
 #### Scenario: Receptionist searches or views a patient
 
 - **WHEN** an authenticated Receptionist searches for or views a patient
-- **THEN** the returned data contains only permitted identity, contact, address, and billing information
+- **THEN** the returned data contains only permitted identity, contact, and address information
 - **AND** no clinical information is queried or returned
 
 #### Scenario: Receptionist updates administrative information
@@ -180,7 +216,7 @@ Patient-directory queries and results SHALL exclude diagnoses, consultation note
 
 ### Requirement: Existing patient data remains usable after schema migration
 
-The system SHALL migrate an existing supported database without deleting patients, appointments, payments, or clinical information. A legacy patient without document details SHALL remain searchable by generated Patient ID and existing basic fields, but SHALL require a complete unique identity type, identity number, and issuing country when the Receptionist next saves that patient's basic record. Newly introduced sex, height, and weight values SHALL remain unset until supplied rather than being fabricated during migration.
+The system SHALL migrate an existing supported database without deleting patients, appointments, payments, or clinical information. Patient billing information SHALL be removed during schema-version-3 migration without altering payment history. A legacy patient without document details SHALL remain searchable by generated Patient ID and existing basic fields, but SHALL require a complete unique identity type, identity number, and issuing country when the Receptionist next saves that patient's basic record. Newly introduced sex, height, and weight values SHALL remain unset until supplied rather than being fabricated during migration; unsupported legacy sex values SHALL also become unset.
 
 #### Scenario: Open a database containing legacy patients
 

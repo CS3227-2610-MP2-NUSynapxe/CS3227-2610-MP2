@@ -35,6 +35,14 @@ leading plus followed by digits, without a Singapore-specific minimum or
 maximum length. Receptionists and Doctors may share basic patient data, but
 Receptionists must not receive clinical notes or prescriptions.
 
+After the initial implementation, the user requested separate registration
+and search/manage tabs, removal of patient billing information, automatic
+Singapore selection for NRIC and FIN, a complete country dropdown with
+Singapore first, Female/Male-only sex choices, and deactivation beside patient
+search. The accepted revision uses Java's ISO country dataset, stores country
+codes, advances the schema to version 3, and leaves appointment payment and
+checkout records intact.
+
 Accepted suggestions included a formatted display ID such as `P000042`, a
 transactional schema-version-2 migration, explicit administrative repository
 projections, soft deactivation, positive optional height and weight values,
@@ -55,15 +63,21 @@ service validation and authorization, workflow-level clinical preservation,
 and Receptionist TestFX interactions.
 
 Focused persistence, migration, repository, service, authorization,
-integration, and Receptionist TestFX suites passed. The final Gradle run
-completed 52 tests and passed Spotless, Checkstyle, PMD, SpotBugs with
+integration, and Receptionist TestFX suites passed. The revised final Gradle run
+completed 54 tests and passed Spotless, Checkstyle, PMD, SpotBugs with
 FindSecBugs, JaCoCo report generation, and Javadoc. Existing missing-tag
 Javadoc warnings remain non-failing. Test-only text entry was moved onto the
 JavaFX application thread to avoid intermittent Windows TestFX robot input
 loss; production behavior was not changed by that stabilization.
 
+Revision-focused tests cover version-1 and version-2 migration to version 3,
+migration rollback, removal of the patient billing column, clearing unsupported
+legacy sex values, country ordering and NRIC/FIN autofill, two sex choices,
+tab state separation, registration, search, edit, appointment selection, and
+search-tab deactivation.
+
 `openspec validate reception-patient-directory --type change --strict`
-passed. The final diff contained only feature implementation, documentation,
+passed again after the revision. The final diff contained only feature implementation, documentation,
 tests, the OpenSpec task checklist, this summary, and narrow TestFX input
 stabilization. A production-source scan confirmed that the Patient domain,
 repository, service, and Receptionist view contain no diagnosis, consultation

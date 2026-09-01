@@ -8,7 +8,9 @@ import java.util.List;
 
 /** Creates and versions the SQLite schema used by the clinic application. */
 final class SchemaInitializer {
-  static final int CURRENT_VERSION = 2;
+  private static final int FIRST_VERSION = 1;
+  private static final int SECOND_VERSION = 2;
+  static final int CURRENT_VERSION = 3;
 
   private static final String SCHEMA_VERSION_KEY = "schema_version";
   private static final String CREATE_METADATA =
@@ -44,12 +46,11 @@ final class SchemaInitializer {
               last_name TEXT NOT NULL,
               date_of_birth TEXT NOT NULL,
               sex TEXT CHECK (
-                  sex IS NULL OR sex IN ('FEMALE', 'MALE', 'OTHER', 'UNDISCLOSED')
+                  sex IS NULL OR sex IN ('FEMALE', 'MALE')
               ),
               phone TEXT NOT NULL,
               email TEXT NOT NULL,
               address TEXT NOT NULL,
-              billing_information TEXT NOT NULL,
               height_cm REAL CHECK (height_cm IS NULL OR height_cm > 0),
               weight_kg REAL CHECK (weight_kg IS NULL OR weight_kg > 0),
               active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
@@ -151,6 +152,10 @@ final class SchemaInitializer {
                 AND issuing_country IS NOT NULL
                 AND identity_number IS NOT NULL
           """);
+  private static final List<String> VERSION_THREE_MIGRATION =
+      List.of(
+          "UPDATE patients SET sex = NULL WHERE sex NOT IN ('FEMALE', 'MALE')",
+          "ALTER TABLE patients DROP COLUMN billing_information");
 
   private SchemaInitializer() {
     throw new AssertionError("Utility class");
@@ -163,11 +168,19 @@ final class SchemaInitializer {
       connection.setAutoCommit(false);
       execute(connection, CREATE_METADATA);
       Integer existingVersion = readVersion(connection);
-      if (existingVersion != null && (existingVersion < 1 || existingVersion > CURRENT_VERSION)) {
+      if (existingVersion != null
+          && (existingVersion < FIRST_VERSION || existingVersion > CURRENT_VERSION)) {
         throw new SQLException("Unsupported schema version: " + existingVersion);
       }
-      if (Integer.valueOf(1).equals(existingVersion)) {
-        executeAll(connection, VERSION_TWO_MIGRATION);
+      if (existingVersion != null) {
+        int version = existingVersion;
+        if (version < SECOND_VERSION) {
+          executeAll(connection, VERSION_TWO_MIGRATION);
+          version = SECOND_VERSION;
+        }
+        if (version < CURRENT_VERSION) {
+          executeAll(connection, VERSION_THREE_MIGRATION);
+        }
       }
       executeAll(connection, SCHEMA_STATEMENTS);
       writeVersion(connection, CURRENT_VERSION);
