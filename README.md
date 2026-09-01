@@ -5,11 +5,70 @@ slug: /
 sidebar_label: Overview
 ---
 
-# NUSynapxe
+# NUSynapxe Clinic Appointment & Records System
 
-NUSynapxe is a Java 25 desktop application built with JavaFX. This repository
-contains the initial application scaffold, local SQLite storage, automated
-tests, code-quality checks, and a Docusaurus documentation site.
+NUSynapxe is a Java 25 JavaFX desktop application for coordinating clinic
+appointments, patient administration, consultations, prescriptions, and
+checkout. It uses a local SQLite database and has three controlled staff
+roles: Doctor, Receptionist, and System Admin.
+
+The shared workflow is:
+
+```text
+book -> accept -> check in -> consult -> complete -> checkout
+```
+
+Receptionists coordinate the administrative and scheduling steps across the
+clinic. Doctors manage their own schedules and the clinical information for
+their assigned appointments. System Admins create the Doctor and Receptionist
+accounts used to access the application.
+
+## Roles and confidentiality
+
+| Role | Responsibilities |
+| --- | --- |
+| System Admin | Create enabled Doctor and Receptionist accounts. |
+| Receptionist | Register patients, maintain contact and billing information, book/cancel/reschedule appointments for any Doctor, check patients in, record checkout payments, and view daily revenue. |
+| Doctor | View and manage the Doctor's own schedule, accept or reschedule appointments, block time off, record diagnoses/consultation/follow-up notes and prescriptions, and complete consultations. |
+
+Patient administration and clinical information are separate by design.
+Receptionists can access contact and billing information but never receive or
+modify medical notes, diagnoses, follow-up notes, or prescriptions. The same
+boundary is enforced in the service layer, not only by hiding JavaFX controls.
+
+## First launch and login
+
+Run the desktop application from the repository root:
+
+```powershell
+.\gradlew.bat run
+```
+
+If the local database contains no accounts, the first window is the one-time
+System Admin setup form. Create a username and a password with at least eight
+non-blank characters. The application then routes to Login. Log in as the
+System Admin and create the Doctor and Receptionist accounts from the admin
+workspace. Subsequent launches show Login directly; no session is persisted
+when the application closes, and Log out returns to Login immediately.
+
+## Local database
+
+The default database is stored per user at:
+
+```text
+Windows: %USERPROFILE%\.nusynapxe\nusynapxe.db
+macOS/Linux: ~/.nusynapxe/nusynapxe.db
+```
+
+For an isolated development database, set the `nusynapxe.database` Java
+system property to another path. The application creates the parent directory
+and initializes the versioned schema when it opens the database. The database
+contains account credentials as salted PBKDF2 verifiers, not plaintext
+passwords. Do not commit the database file or copy it into an issue or log.
+
+The complete operating instructions are in the [User Guide](docs/UserGuide.md).
+The package, persistence, security, testing, and CI details are in the
+[Developer Guide](docs/DeveloperGuide.md).
 
 ## Toolchain
 
@@ -34,29 +93,16 @@ Versions are pinned for reproducible builds as of 31 August 2026.
 | JaCoCo | 0.8.14 |
 | Docusaurus | 3.10.2 |
 
-## Run the desktop app
-
-Install a JDK 25 distribution, then run:
-
-```powershell
-.\gradlew.bat run
-```
-
-The application creates its local database at
-`%USERPROFILE%\.nusynapxe\nusynapxe.db`. The location can be overridden for a
-development run with the `nusynapxe.database` system property when launching
-the application directly.
-
 ## Verify the project
 
 ```powershell
 .\gradlew.bat spotlessApply
-.\gradlew.bat check --no-daemon --console=plain
-.\gradlew.bat jacocoTestReport --no-daemon --console=plain
+.\gradlew.bat check javadoc --no-daemon --console=plain
 ```
 
-`check` runs the JUnit suite, Checkstyle, PMD, and SpotBugs with FindSecBugs.
-JaCoCo writes HTML and XML reports under `build/reports/jacoco/test/`.
+`check` runs JUnit (including TestFX), Checkstyle, PMD, SpotBugs with
+FindSecBugs, and JaCoCo. Reports are written below `build/reports/`, including
+the HTML coverage report at `build/reports/jacoco/test/html/index.html`.
 
 ## Build the documentation site
 
@@ -66,8 +112,6 @@ npm ci
 npm run start
 ```
 
-Use `npm run build` for a production documentation build. The site uses this
-README as its overview page and keeps developer and user guides separate.
-
-More detail is available in the [Developer Guide](docs/developer-guide.md) and
-[User Guide](docs/user-guide.md).
+Use `npm run build` for a production documentation build with broken links
+treated as errors. The Docusaurus site uses this README as its overview page
+and exposes the developer and user guides as separate navigation entries.
