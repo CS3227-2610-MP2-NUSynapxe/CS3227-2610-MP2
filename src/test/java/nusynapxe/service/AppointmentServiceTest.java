@@ -191,8 +191,7 @@ final class AppointmentServiceTest {
                     "1906-12-09",
                     "555-0100",
                     "grace@example.test",
-                    "Address",
-                    "Billing"));
+                    "Address"));
     return new Accounts(
         doctor,
         otherDoctor,

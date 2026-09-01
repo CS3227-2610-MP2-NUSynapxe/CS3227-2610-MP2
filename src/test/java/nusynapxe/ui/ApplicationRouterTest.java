@@ -9,6 +9,7 @@ import java.sql.SQLException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import javafx.scene.control.Button;
+import javafx.scene.control.TextInputControl;
 import javafx.stage.Stage;
 import nusynapxe.persistence.SqliteDatabase;
 import org.junit.jupiter.api.AfterEach;
@@ -39,9 +40,7 @@ final class ApplicationRouterTest extends ApplicationTest {
   @Test
   void firstLaunchCreatesAdminAndRoutesToLogin() {
     verifyThat("#setup-view", isVisible());
-    clickOn("#setup-username").write("admin");
-    clickOn("#setup-password").write("secure-pass");
-    clickOn("#setup-confirm-password").write("secure-pass");
+    enterSetupCredentials();
     fire("#setup-submit");
     waitForNode("#login-view");
 
@@ -51,18 +50,17 @@ final class ApplicationRouterTest extends ApplicationTest {
 
   @Test
   void invalidLoginShowsGenericFeedbackAndValidLoginRoutesToWorkspace() {
-    clickOn("#setup-username").write("admin");
-    clickOn("#setup-password").write("secure-pass");
-    clickOn("#setup-confirm-password").write("secure-pass");
+    verifyThat("#setup-view", isVisible());
+    enterSetupCredentials();
     fire("#setup-submit");
     waitForNode("#login-view");
 
-    clickOn("#login-username").write("admin");
-    clickOn("#login-password").write("wrong-pass");
+    setText("#login-username", "admin");
+    setText("#login-password", "wrong-pass");
     fire("#login-submit");
     verifyThat("#login-feedback", hasText("Invalid username or password"));
 
-    clickOn("#login-password").eraseText(10).write("secure-pass");
+    setText("#login-password", "secure-pass");
     fire("#login-submit");
     waitForNode("#system-admin-workspace");
     verifyThat("#system-admin-workspace", isVisible());
@@ -83,5 +81,18 @@ final class ApplicationRouterTest extends ApplicationTest {
 
   private void fire(String selector) {
     interact(() -> lookup(selector).queryAs(Button.class).fire());
+  }
+
+  private void enterSetupCredentials() {
+    interact(
+        () -> {
+          lookup("#setup-username").queryAs(TextInputControl.class).setText("admin");
+          lookup("#setup-password").queryAs(TextInputControl.class).setText("secure-pass");
+          lookup("#setup-confirm-password").queryAs(TextInputControl.class).setText("secure-pass");
+        });
+  }
+
+  private void setText(String selector, String value) {
+    interact(() -> lookup(selector).queryAs(TextInputControl.class).setText(value));
   }
 }

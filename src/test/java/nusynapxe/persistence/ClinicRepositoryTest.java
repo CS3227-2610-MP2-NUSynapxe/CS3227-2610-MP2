@@ -43,8 +43,7 @@ final class ClinicRepositoryTest {
                   "1906-12-09",
                   "555-0100",
                   "grace@example.test",
-                  "1 Main Street",
-                  "Corporate"));
+                  "1 Main Street"));
       Appointment appointment =
           new AppointmentRepository(database)
               .create(
@@ -100,8 +99,7 @@ final class ClinicRepositoryTest {
                       "1906-12-09",
                       "555-0100",
                       "grace@example.test",
-                      "1 Main Street",
-                      "Corporate"));
+                      "1 Main Street"));
       Appointment appointment =
           new AppointmentRepository(database)
               .create(
