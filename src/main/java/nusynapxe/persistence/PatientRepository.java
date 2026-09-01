@@ -106,6 +106,15 @@ public final class PatientRepository {
 
   /** Deactivates a patient while preserving the Patient ID and all related history. */
   public Patient deactivate(long patientId) throws SQLException {
+    return setActive(patientId, false);
+  }
+
+  /** Reactivates a patient while preserving the Patient ID and all related history. */
+  public Patient activate(long patientId) throws SQLException {
+    return setActive(patientId, true);
+  }
+
+  private Patient setActive(long patientId, boolean active) throws SQLException {
     return SqliteTransactions.execute(
         database,
         connection -> {
@@ -121,14 +130,15 @@ public final class PatientRepository {
           }
           try (PreparedStatement update =
               connection.prepareStatement(
-                  "UPDATE patients SET active = 0, updated_at = ? WHERE id = ?")) {
-            update.setString(1, SqliteQueries.formatTimestamp(LocalDateTime.now()));
-            update.setLong(2, patientId);
+                  "UPDATE patients SET active = ?, updated_at = ? WHERE id = ?")) {
+            update.setInt(1, active ? 1 : 0);
+            update.setString(2, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+            update.setLong(3, patientId);
             if (update.executeUpdate() != EXPECTED_UPDATE_COUNT) {
               throw new SQLException("Patient does not exist: " + patientId);
             }
           }
-          return withActive(patient, false);
+          return withActive(patient, active);
         });
   }
 

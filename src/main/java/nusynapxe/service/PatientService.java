@@ -26,6 +26,7 @@ public final class PatientService {
   public static final String DUPLICATE_IDENTITY_MESSAGE =
       "A patient with this identity document already exists";
 
+  private static final String PATIENT_NOT_FOUND_MESSAGE = "Patient does not exist";
   private static final Pattern PHONE_COUNTRY_CODE_PATTERN = Pattern.compile("^[1-9][0-9]{0,2}$");
   private static final Pattern PHONE_NUMBER_PATTERN = Pattern.compile("^[0-9]+$");
   private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\\s]+@[^@\\s]+$");
@@ -64,7 +65,7 @@ public final class PatientService {
     Authorization.requireRole(actor, Role.RECEPTIONIST);
     Objects.requireNonNull(requestedPatient, "patient");
     if (requestedPatient.id() <= 0 || patients.findById(requestedPatient.id()).isEmpty()) {
-      throw new ValidationException("Patient does not exist");
+      throw new ValidationException(PATIENT_NOT_FOUND_MESSAGE);
     }
     Patient patient = validate(requestedPatient, false);
     requireUniqueIdentity(patient, patient.id());
@@ -79,9 +80,18 @@ public final class PatientService {
   public Patient deactivateAdministrative(Session actor, long patientId) throws SQLException {
     Authorization.requireRole(actor, Role.RECEPTIONIST);
     if (patientId <= 0 || patients.findById(patientId).isEmpty()) {
-      throw new ValidationException("Patient does not exist");
+      throw new ValidationException(PATIENT_NOT_FOUND_MESSAGE);
     }
     return patients.deactivate(patientId);
+  }
+
+  /** Reactivates a patient without changing the Patient ID or retained history. */
+  public Patient activateAdministrative(Session actor, long patientId) throws SQLException {
+    Authorization.requireRole(actor, Role.RECEPTIONIST);
+    if (patientId <= 0 || patients.findById(patientId).isEmpty()) {
+      throw new ValidationException(PATIENT_NOT_FOUND_MESSAGE);
+    }
+    return patients.activate(patientId);
   }
 
   /** Searches non-clinical patient information for a Receptionist. */
@@ -100,7 +110,7 @@ public final class PatientService {
     Authorization.requireRole(actor, Role.RECEPTIONIST);
     return patients
         .findById(patientId)
-        .orElseThrow(() -> new ValidationException("Patient does not exist"));
+        .orElseThrow(() -> new ValidationException(PATIENT_NOT_FOUND_MESSAGE));
   }
 
   /** Returns the clinical record for an appointment owned by the Doctor. */
