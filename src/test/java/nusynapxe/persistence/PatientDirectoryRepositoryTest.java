@@ -124,9 +124,11 @@ final class PatientDirectoryRepositoryTest {
               .id();
 
       Patient inactive = patients.deactivate(patient.id());
+      Patient activeAgain = patients.activate(patient.id());
 
       assertFalse(inactive.active());
-      assertFalse(patients.findById(patient.id()).orElseThrow().active());
+      assertTrue(activeAgain.active());
+      assertTrue(patients.findById(patient.id()).orElseThrow().active());
       assertEquals(
           patient.id(),
           new AppointmentRepository(database).findById(appointmentId).orElseThrow().patientId());

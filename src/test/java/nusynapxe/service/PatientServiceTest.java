@@ -62,11 +62,14 @@ final class PatientServiceTest {
               fixture.receptionistSession, withPhone(patient, "+442071234567"));
       Patient inactive =
           fixture.service.deactivateAdministrative(fixture.receptionistSession, patient.id());
+      Patient activeAgain =
+          fixture.service.activateAdministrative(fixture.receptionistSession, patient.id());
 
       assertEquals("S1234567D", updated.identityNumber());
       assertEquals("SG", updated.issuingCountry());
       assertEquals("+442071234567", updated.phone());
       assertFalse(inactive.active());
+      assertTrue(activeAgain.active());
       assertEquals(
           record,
           new ClinicalRecordRepository(database).findByAppointment(appointment.id()).orElseThrow());
@@ -196,6 +199,9 @@ final class PatientServiceTest {
       assertThrows(
           AuthorizationException.class,
           () -> fixture.service.deactivateAdministrative(fixture.doctorSession, completed.id()));
+      assertThrows(
+          AuthorizationException.class,
+          () -> fixture.service.activateAdministrative(fixture.doctorSession, completed.id()));
       assertThrows(
           AuthorizationException.class, () -> fixture.service.searchAdministrative(null, ""));
     }
