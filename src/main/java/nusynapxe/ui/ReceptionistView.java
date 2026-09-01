@@ -5,13 +5,16 @@ import java.math.RoundingMode;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.time.Period;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.scene.Parent;
+import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
@@ -27,6 +30,8 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
 import javafx.util.StringConverter;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
@@ -56,11 +61,7 @@ public final class ReceptionistView {
   /** Creates the Receptionist workspace. */
   public static Parent create(ClinicServices services, Session session, Runnable onLogout) {
     PatientForm registerForm = patientForm("reception-register", false);
-    PatientForm editForm = patientForm("reception-patient", true);
-    clearPatientForm(editForm);
     Button register = button("Register patient", "reception-patient-register");
-    Button updatePatient = button("Save patient changes", "reception-patient-update");
-    Button deactivatePatient = button("Deactivate patient", "reception-patient-deactivate");
     TextField patientSearch = field("reception-patient-search", "Patient ID, document, or details");
     Button searchPatients = button("Search patients", "reception-patient-search-submit");
     Button clearPatientSearch = button("Clear search", "reception-patient-search-clear");
@@ -102,10 +103,17 @@ public final class ReceptionistView {
         .addListener(
             (observable, previous, selected) -> {
               selection.patientId = selected == null ? 0 : selected.id();
-              if (selected == null) {
-                clearPatientForm(editForm);
-              } else {
-                populatePatientForm(selected, editForm);
+              if (selected != null) {
+                showPatientDetails(
+                    services,
+                    session,
+                    selected,
+                    patientList,
+                    selection,
+                    feedback,
+                    patientSearch,
+                    appointmentPatient);
+                patientList.getSelectionModel().clearSelection();
               }
             });
     appointmentList
@@ -136,44 +144,6 @@ public final class ReceptionistView {
             feedback.setText(exception.getMessage());
           } catch (SQLException exception) {
             feedback.setText("Patient registration is temporarily unavailable");
-          }
-        });
-
-    updatePatient.setOnAction(
-        event -> {
-          try {
-            requireSelection(selection.patientId, "Select a patient first");
-            Patient selected = patientList.getSelectionModel().getSelectedItem();
-            Patient updated =
-                services
-                    .patientService()
-                    .updateAdministrative(
-                        session,
-                        patientFromForm(
-                            editForm, selection.patientId, selected == null || selected.active()));
-            selection.patientId = updated.id();
-            feedback.setText("Patient changes saved");
-            refreshPatients(
-                services, session, patientList, selection, feedback, patientSearch.getText());
-          } catch (ValidationException | AuthorizationException exception) {
-            feedback.setText(exception.getMessage());
-          } catch (SQLException exception) {
-            feedback.setText("Patient update is temporarily unavailable");
-          }
-        });
-
-    deactivatePatient.setOnAction(
-        event -> {
-          try {
-            requireSelection(selection.patientId, "Select a patient first");
-            services.patientService().deactivateAdministrative(session, selection.patientId);
-            feedback.setText("Patient deactivated");
-            refreshPatients(
-                services, session, patientList, selection, feedback, patientSearch.getText());
-          } catch (ValidationException | AuthorizationException exception) {
-            feedback.setText(exception.getMessage());
-          } catch (SQLException exception) {
-            feedback.setText("Patient deactivation is temporarily unavailable");
           }
         });
 
@@ -315,9 +285,7 @@ public final class ReceptionistView {
     registerTab.setClosable(false);
 
     HBox patientSearchBar = new HBox(8, patientSearch, searchPatients, clearPatientSearch);
-    HBox editActions = new HBox(8, updatePatient, deactivatePatient);
-    VBox manageContent =
-        new VBox(10, patientSearchBar, patientList, patientGrid(editForm, true), editActions);
+    VBox manageContent = new VBox(10, patientSearchBar, patientList);
     manageContent.setId("reception-patient-manage-tab");
     Tab manageTab = new Tab("Search and manage patients", manageContent);
     manageTab.setClosable(false);
@@ -385,6 +353,100 @@ public final class ReceptionistView {
     return root;
   }
 
+  private static void showPatientDetails(
+      ClinicServices services,
+      Session session,
+      Patient selected,
+      ListView<Patient> patientList,
+      SelectionState selection,
+      Label workspaceFeedback,
+      TextField patientSearch,
+      ComboBox<Patient> appointmentPatient) {
+    PatientForm form = patientForm("reception-patient", true);
+    populatePatientForm(selected, form);
+    Patient[] current = {selected};
+    Label feedback = new Label();
+    feedback.setId("reception-patient-details-feedback");
+    Button update = button("Save patient changes", "reception-patient-update");
+    Button status = button(patientStatusButtonText(selected), "reception-patient-deactivate");
+
+    update.setOnAction(
+        event -> {
+          try {
+            Patient updated =
+                services
+                    .patientService()
+                    .updateAdministrative(
+                        session, patientFromForm(form, current[0].id(), current[0].active()));
+            current[0] = updated;
+            populatePatientForm(updated, form);
+            feedback.setText("Patient changes saved");
+            workspaceFeedback.setText("Patient changes saved");
+            selection.patientId = 0;
+            refreshPatients(
+                services,
+                session,
+                patientList,
+                selection,
+                workspaceFeedback,
+                patientSearch.getText());
+            refreshAppointmentPatients(
+                services, session, appointmentPatient, workspaceFeedback, updated.id());
+          } catch (ValidationException | AuthorizationException exception) {
+            feedback.setText(exception.getMessage());
+          } catch (SQLException exception) {
+            feedback.setText("Patient update is temporarily unavailable");
+          }
+        });
+
+    status.setOnAction(
+        event -> {
+          try {
+            Patient updated =
+                current[0].active()
+                    ? services.patientService().deactivateAdministrative(session, current[0].id())
+                    : services.patientService().activateAdministrative(session, current[0].id());
+            current[0] = updated;
+            populatePatientForm(updated, form);
+            status.setText(patientStatusButtonText(updated));
+            String message = updated.active() ? "Patient activated" : "Patient deactivated";
+            feedback.setText(message);
+            workspaceFeedback.setText(message);
+            selection.patientId = 0;
+            refreshPatients(
+                services,
+                session,
+                patientList,
+                selection,
+                workspaceFeedback,
+                patientSearch.getText());
+            refreshAppointmentPatients(
+                services, session, appointmentPatient, workspaceFeedback, updated.id());
+          } catch (ValidationException | AuthorizationException exception) {
+            feedback.setText(exception.getMessage());
+          } catch (SQLException exception) {
+            feedback.setText("Patient status update is temporarily unavailable");
+          }
+        });
+
+    HBox actions = new HBox(8, update, status);
+    VBox content = new VBox(10, patientGrid(form, true), actions, feedback);
+    content.setPadding(new Insets(18));
+    ScrollPane scroll = new ScrollPane(content);
+    scroll.setFitToWidth(true);
+    scroll.setId("reception-patient-details-window");
+    Stage details = new Stage();
+    details.setTitle("Patient details - " + selected.displayedId());
+    details.initOwner(patientList.getScene().getWindow());
+    details.initModality(Modality.WINDOW_MODAL);
+    details.setScene(new Scene(scroll, 920, 520));
+    details.show();
+  }
+
+  private static String patientStatusButtonText(Patient patient) {
+    return patient.active() ? "Deactivate patient" : "Activate patient";
+  }
+
   private static PatientForm patientForm(String prefix, boolean includePatientId) {
     TextField patientId = includePatientId ? field(prefix + "-id", "Generated Patient ID") : null;
     if (patientId != null) {
@@ -418,16 +480,60 @@ public final class ReceptionistView {
               issuingCountry.setDisable(singaporeIdentity);
             });
     identityType.getSelectionModel().select(IdentityType.NRIC);
-    ComboBox<Sex> sex = new ComboBox<>(FXCollections.observableArrayList(Sex.values()));
+    ComboBox<Sex> sex = new ComboBox<>(FXCollections.observableArrayList(Sex.MALE, Sex.FEMALE));
     sex.setId(prefix + "-sex");
     DatePicker dateOfBirth = new DatePicker();
     dateOfBirth.setId(prefix + "-date-of-birth");
     dateOfBirth.setPromptText("Select date of birth");
-    TextField age = field(prefix + "-age", "Calculated automatically");
+    ComboBox<Month> birthMonth = new ComboBox<>(FXCollections.observableArrayList(Month.values()));
+    birthMonth.setId(prefix + "-date-of-birth-month");
+    birthMonth.setPromptText("Month");
+    ComboBox<Integer> birthYear = new ComboBox<>();
+    birthYear.setId(prefix + "-date-of-birth-year");
+    birthYear.setPromptText("Year");
+    int currentYear = LocalDate.now(SINGAPORE_ZONE).getYear();
+    for (int year = currentYear; year >= 1900; year--) {
+      birthYear.getItems().add(year);
+    }
+    TextField age = field(prefix + "-age", "");
     age.setEditable(false);
+    boolean[] synchronizingDate = {false};
     dateOfBirth
         .valueProperty()
-        .addListener((observable, previous, selected) -> age.setText(calculateAgeText(selected)));
+        .addListener(
+            (observable, previous, selected) -> {
+              age.setText(calculateAgeText(selected));
+              if (!synchronizingDate[0]) {
+                synchronizingDate[0] = true;
+                birthMonth.setValue(selected == null ? null : selected.getMonth());
+                birthYear.setValue(selected == null ? null : selected.getYear());
+                synchronizingDate[0] = false;
+              }
+            });
+    Runnable updateDateFromSelectors =
+        () -> {
+          if (synchronizingDate[0]
+              || birthMonth.getValue() == null
+              || birthYear.getValue() == null) {
+            return;
+          }
+          LocalDate existing = dateOfBirth.getValue();
+          YearMonth selectedMonth = YearMonth.of(birthYear.getValue(), birthMonth.getValue());
+          int day =
+              existing == null
+                  ? 1
+                  : Math.min(existing.getDayOfMonth(), selectedMonth.lengthOfMonth());
+          synchronizingDate[0] = true;
+          dateOfBirth.setValue(selectedMonth.atDay(day));
+          age.setText(calculateAgeText(dateOfBirth.getValue()));
+          synchronizingDate[0] = false;
+        };
+    birthMonth
+        .valueProperty()
+        .addListener((observable, previous, selected) -> updateDateFromSelectors.run());
+    birthYear
+        .valueProperty()
+        .addListener((observable, previous, selected) -> updateDateFromSelectors.run());
     return new PatientForm(
         patientId,
         identityType,
@@ -436,6 +542,8 @@ public final class ReceptionistView {
         field(prefix + "-first-name", "First name"),
         field(prefix + "-last-name", "Last name"),
         dateOfBirth,
+        birthMonth,
+        birthYear,
         age,
         sex,
         phoneCountryCode,
@@ -471,15 +579,19 @@ public final class ReceptionistView {
         requiredLabel("Last name"),
         form.lastName());
     row++;
+    HBox dateOfBirthControls = new HBox(6, form.dateOfBirth(), form.birthMonth(), form.birthYear());
     grid.addRow(
-        row, requiredLabel("Date of birth"), form.dateOfBirth(), new Label("Age"), form.age());
+        row, requiredLabel("Date of birth"), dateOfBirthControls, new Label("Age"), form.age());
     row++;
     grid.addRow(row, requiredLabel("Sex"), form.sex());
     row++;
+    Label phonePlus = new Label("+");
+    phonePlus.setId(form.phoneCountryCode().getId().replace("country-code", "plus"));
+    HBox phoneCountryCode = new HBox(4, phonePlus, form.phoneCountryCode());
     grid.addRow(
         row,
         requiredLabel("Phone country code"),
-        form.phoneCountryCode(),
+        phoneCountryCode,
         requiredLabel("Phone number"),
         form.phoneNumber());
     row++;
@@ -790,6 +902,8 @@ public final class ReceptionistView {
       TextField firstName,
       TextField lastName,
       DatePicker dateOfBirth,
+      ComboBox<Month> birthMonth,
+      ComboBox<Integer> birthYear,
       TextField age,
       ComboBox<Sex> sex,
       TextField phoneCountryCode,
