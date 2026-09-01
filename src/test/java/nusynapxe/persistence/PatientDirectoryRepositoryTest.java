@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -24,17 +25,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 final class PatientDirectoryRepositoryTest {
-  @TempDir private Path temporaryDirectory;
+  @TempDir
+  private Path temporaryDirectory;
 
   @Test
   void persistsLocalForeignAndLegacyAdministrativeProjections() throws SQLException {
     try (SqliteDatabase database = openDatabase("round-trip.db")) {
       PatientRepository patients = new PatientRepository(database);
       Patient local = patients.create(patient(IdentityType.NRIC, " s123 ", " sg ", "Local"));
-      Patient foreign =
-          patients.create(patient(IdentityType.PASSPORT, " ab-12 ", " gb ", "Foreign"));
-      Patient legacy =
-          patients.create(new Patient(0, "Legacy", "Patient", "1990-01-01", "123", "", ""));
+      Patient foreign = patients.create(patient(IdentityType.PASSPORT, " ab-12 ", " gb ", "Foreign"));
+      Patient legacy = patients.create(new Patient(0, "Legacy", "Patient", "1990-01-01", "123", "", ""));
 
       assertEquals("S123", local.identityNumber());
       assertEquals("SG", local.issuingCountry());
@@ -94,8 +94,7 @@ final class PatientDirectoryRepositoryTest {
       CountDownLatch start = new CountDownLatch(1);
       try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
         Future<Boolean> firstResult = executor.submit(() -> attemptCreate(first, start, "First"));
-        Future<Boolean> secondResult =
-            executor.submit(() -> attemptCreate(second, start, "Second"));
+        Future<Boolean> secondResult = executor.submit(() -> attemptCreate(second, start, "Second"));
         start.countDown();
         int successes = (firstResult.get() ? 1 : 0) + (secondResult.get() ? 1 : 0);
 
@@ -110,18 +109,16 @@ final class PatientDirectoryRepositoryTest {
     try (SqliteDatabase database = openDatabase("deactivate.db")) {
       PatientRepository patients = new PatientRepository(database);
       Patient patient = patients.create(patient(IdentityType.OTHER, "X1", "ZZ", "History"));
-      Account doctor =
-          new AccountRepository(database)
-              .create("doctor", "Doctor", Role.DOCTOR, new byte[] {1}, new byte[] {2});
-      long appointmentId =
-          new AppointmentRepository(database)
-              .create(
-                  patient.id(),
-                  doctor.id(),
-                  LocalDateTime.of(2026, 9, 2, 9, 0),
-                  LocalDateTime.of(2026, 9, 2, 9, 30),
-                  AppointmentStatus.PENDING)
-              .id();
+      Account doctor = new AccountRepository(database)
+          .create("doctor", "Doctor", Role.DOCTOR, new byte[] { 1 }, new byte[] { 2 });
+      long appointmentId = new AppointmentRepository(database)
+          .create(
+              patient.id(),
+              doctor.id(),
+              LocalDateTime.of(2026, 9, 2, 9, 0),
+              LocalDateTime.of(2026, 9, 2, 9, 30),
+              AppointmentStatus.PENDING)
+          .id();
 
       Patient inactive = patients.deactivate(patient.id());
       Patient activeAgain = patients.activate(patient.id());
@@ -154,7 +151,7 @@ final class PatientDirectoryRepositoryTest {
         Sex.FEMALE,
         "44",
         "1234",
-        firstName.toLowerCase() + "@example.test",
+        firstName.toLowerCase(Locale.ROOT) + "@example.test",
         "Address",
         170.5,
         65.5,
