@@ -18,7 +18,7 @@ An authenticated Receptionist SHALL see appointments across all Doctors with Pat
 
 ### Requirement: The dashboard SHALL support Receptionist appointment coordination
 
-A Receptionist SHALL be able to choose a patient and any Doctor, enter a valid date and interval, and book an appointment. For pending or accepted appointments, the Receptionist SHALL be able to reschedule or cancel; for accepted appointments at or after their start time, the Receptionist SHALL be able to check in. Existing service-layer lifecycle and Doctor-conflict rules SHALL remain authoritative.
+A Receptionist SHALL be able to choose a patient and any Doctor, enter a valid date and interval, and book an appointment. Booking SHALL be presented separately from appointment search and management controls. For pending or accepted appointments, the Receptionist SHALL be able to reschedule or cancel; for accepted appointments at or after their start time, the Receptionist SHALL be able to check in. Existing service-layer lifecycle and Doctor-conflict rules SHALL remain authoritative.
 
 #### Scenario: Receptionist books an available appointment
 - **WHEN** valid patient, Doctor, date, start, and end values identify an available interval
@@ -43,7 +43,8 @@ The dashboard SHALL provide calendar-based date selection and validated time inp
 ### Requirement: Appointment selectors and times SHALL support rapid entry
 
 Patient and Doctor selectors SHALL be editable searchable dropdowns. Appointment start and end
-times SHALL be selectable in 30-minute increments from `00:00` through `23:30`, while validation
+times SHALL use separate hour (`00`–`23`) and minute (`00` or `30`) dropdowns, representing
+30-minute increments from `00:00` through `23:30`, while validation
 continues to enforce a valid interval.
 
 #### Scenario: Receptionist searches a selector

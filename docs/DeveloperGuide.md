@@ -144,8 +144,8 @@ The Receptionist scheduling dashboard uses `AppointmentRepository.search` and
 status filters. It derives summary counts from the same filtered result set.
 The repository joins only the administrative patient projection, and the UI
 formats rows with Patient ID/name, Doctor ID, interval, and status. Booking
-rejects inactive patients at the service boundary. Date/time parsing accepts
-calendar date plus `HH:mm` for both booking and rescheduling (as well as the legacy complete timestamp form), and
+rejects inactive patients at the service boundary. Booking and rescheduling use
+a calendar date plus separate hour (`00`–`23`) and minute (`00`/`30`) selectors, and
 all conflict and lifecycle checks remain transactional service/repository
 rules.
 Patient and Doctor appointment selectors are editable searchable ComboBoxes.

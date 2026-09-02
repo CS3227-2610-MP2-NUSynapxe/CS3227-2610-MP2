@@ -14,9 +14,10 @@
 ## 4. Scheduling input refinement
 
 - [x] 4.1 Make patient and Doctor appointment selectors searchable editable dropdowns.
-- [x] 4.2 Replace appointment start/end entry with 30-minute time dropdowns from `00:00` through `23:30`.
+- [x] 4.2 Replace appointment start/end entry with separate hour (`00`–`23`) and minute (`00`/`30`) dropdowns.
 - [x] 4.3 Move rescheduling and appointment cancellation into a patient-context popup with administrative details and automatic dashboard refresh.
 - [x] 4.4 Update tests and guides, run quality gates, and commit the refinement locally without pushing.
+- [x] 4.5 Separate booking from appointment search/management into dedicated tabs and remove the standalone check-in button from the dashboard.
 
 ## 3. Documentation and quality
 

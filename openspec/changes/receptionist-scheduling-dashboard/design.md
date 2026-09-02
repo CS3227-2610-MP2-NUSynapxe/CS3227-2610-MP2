@@ -17,7 +17,7 @@ Add a service/repository read path that accepts optional date, Doctor, patient-q
 ### Controls and actions
 
 Use editable searchable JavaFX `ComboBox` controls for patient and Doctor selection. Use a `DatePicker`
-and editable half-hour `ComboBox<String>` controls for appointment date/start/end values. Rescheduling
+and separate hour/minute `ComboBox` controls for appointment date/start/end values. Rescheduling
 opens an owned modal Stage with patient context, administrative detail, date/time controls, and both
 reschedule and cancellation actions. Keep stable IDs for filters, summary labels, schedule list,
 booking controls, popup controls, cancel, and check-in. Selecting a row sets the action target;
@@ -29,7 +29,7 @@ The booking patient selector should exclude inactive patients, and the service m
 
 ### Refresh and feedback
 
-Use one refresh function driven by the current filter state after successful writes and filter changes. No manual refresh button is added. Validation, authorization, conflict, and SQL failures map to existing non-sensitive feedback patterns.
+Use one refresh function driven by the current filter state after successful writes and filter changes. No manual refresh button is added. Keep booking in its own tab and place schedule filters plus reschedule/cancel controls in a separate appointment-management tab; do not show a standalone “check in selected” button on that dashboard. Validation, authorization, conflict, and SQL failures map to existing non-sensitive feedback patterns.
 
 ## Testing Strategy
 
