@@ -113,6 +113,10 @@ the list; changing a filter reloads the list automatically. Selecting a patient
 for a new booking only offers active patients. Existing appointments remain
 available for historical viewing if a patient is later deactivated.
 
+Patient and Doctor booking fields are searchable dropdowns: click the field and
+type part of the name or identifier instead of scrolling through the full list.
+Start and end times use half-hour choices from `00:00` through `23:30`.
+
 1. Choose a patient and a Doctor.
 2. Select the appointment date with the calendar and enter start/end times as
    `HH:mm` (the full `yyyy-MM-dd HH:mm` form remains accepted). Select **Book
@@ -121,9 +125,11 @@ available for historical viewing if a patient is later deactivated.
 3. The scheduler covers every Doctor, but overlapping appointments and Doctor
    time-off are rejected. Adjacent appointments are allowed.
 
-To change an existing pending or accepted visit, select it, enter the new
-date with the calendar plus new start and end times, and choose **Reschedule selected**. Choose **Cancel
-selected** to cancel it before completion.
+To change an existing pending or accepted visit, select it and choose
+**Reschedule selected**. A popup shows the patient information and provides a
+new date, start time, end time, **Reschedule appointment**, and **Cancel
+appointment** actions. Successful actions close the popup and refresh the
+dashboard.
 
 ### Check in, checkout, and revenue
 

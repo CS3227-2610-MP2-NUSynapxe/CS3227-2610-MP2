@@ -40,6 +40,35 @@ The dashboard SHALL provide calendar-based date selection and validated time inp
 - **WHEN** the end is equal to or earlier than the start, or a date/time cannot be parsed
 - **THEN** the dashboard reports the invalid input and does not call a mutating appointment operation
 
+### Requirement: Appointment selectors and times SHALL support rapid entry
+
+Patient and Doctor selectors SHALL be editable searchable dropdowns. Appointment start and end
+times SHALL be selectable in 30-minute increments from `00:00` through `23:30`, while validation
+continues to enforce a valid interval.
+
+#### Scenario: Receptionist searches a selector
+- **WHEN** a Receptionist types a patient or Doctor name or identifier in its dropdown
+- **THEN** the selector accepts the search text without requiring manual scrolling through every option
+
+#### Scenario: Receptionist chooses a half-hour time
+- **WHEN** a Receptionist opens a start or end time dropdown
+- **THEN** options are available at each half-hour from midnight through 23:30
+
+### Requirement: Rescheduling SHALL use a patient-context popup
+
+Selecting reschedule for an eligible appointment SHALL open a separate popup containing a patient
+selector, the selected patient's permitted administrative details, new date/start/end controls, a
+reschedule action, and a cancel-appointment action. Successful actions SHALL close the popup and
+refresh the dashboard.
+
+#### Scenario: Receptionist opens rescheduling popup
+- **WHEN** a pending or accepted appointment is selected and reschedule is chosen
+- **THEN** a popup shows the appointment patient and permitted administrative details
+
+#### Scenario: Receptionist cancels from popup
+- **WHEN** cancel appointment is selected in the popup
+- **THEN** the appointment becomes cancelled, the popup closes, and the dashboard refreshes
+
 ### Requirement: Dashboard updates SHALL be automatic and non-clinical
 
 After a successful booking, reschedule, cancellation, check-in, or filter change, the dashboard SHALL reload affected data automatically. Receptionist results SHALL contain only administrative patient information and appointment coordination fields; diagnoses, consultation notes, follow-up notes, and prescriptions SHALL never be returned or displayed.

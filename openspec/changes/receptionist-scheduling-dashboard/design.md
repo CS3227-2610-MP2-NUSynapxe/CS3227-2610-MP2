@@ -16,7 +16,12 @@ Add a service/repository read path that accepts optional date, Doctor, patient-q
 
 ### Controls and actions
 
-Use a JavaFX `DatePicker` for the appointment date and validated text or selector controls for start/end times. Keep stable IDs for filters, summary labels, schedule list, booking controls, reschedule controls, cancel, and check-in. Selecting a row sets the action target; actions remain enabled only for valid lifecycle states, while the service rechecks every rule.
+Use editable searchable JavaFX `ComboBox` controls for patient and Doctor selection. Use a `DatePicker`
+and editable half-hour `ComboBox<String>` controls for appointment date/start/end values. Rescheduling
+opens an owned modal Stage with patient context, administrative detail, date/time controls, and both
+reschedule and cancellation actions. Keep stable IDs for filters, summary labels, schedule list,
+booking controls, popup controls, cancel, and check-in. Selecting a row sets the action target;
+actions remain enabled only for valid lifecycle states, while the service rechecks every rule.
 
 ### Active patients and confidentiality
 

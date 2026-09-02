@@ -11,6 +11,13 @@
 - [x] 2.3 Add selection-based booking, rescheduling, cancellation, and check-in actions with lifecycle-aware labels/enabled state and automatic refresh after writes or filter changes.
 - [x] 2.4 Add TestFX coverage for dashboard rendering, filtering, empty results, booking, conflict feedback, rescheduling, cancellation, check-in, and automatic refresh.
 
+## 4. Scheduling input refinement
+
+- [x] 4.1 Make patient and Doctor appointment selectors searchable editable dropdowns.
+- [x] 4.2 Replace appointment start/end entry with 30-minute time dropdowns from `00:00` through `23:30`.
+- [x] 4.3 Move rescheduling and appointment cancellation into a patient-context popup with administrative details and automatic dashboard refresh.
+- [x] 4.4 Update tests and guides, run quality gates, and commit the refinement locally without pushing.
+
 ## 3. Documentation and quality
 
 - [x] 3.1 Update User Guide and Developer Guide with the dashboard workflow, filters, statuses, validation, conflict handling, inactive-patient rule, and confidentiality boundary.

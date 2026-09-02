@@ -148,6 +148,11 @@ rejects inactive patients at the service boundary. Date/time parsing accepts
 calendar date plus `HH:mm` for both booking and rescheduling (as well as the legacy complete timestamp form), and
 all conflict and lifecycle checks remain transactional service/repository
 rules.
+Patient and Doctor appointment selectors are editable searchable ComboBoxes.
+Appointment times are generated in 30-minute increments from `00:00` through
+`23:30`. Rescheduling is handled in an owned modal Stage that displays the
+selected patient's administrative projection and exposes reschedule/cancel
+actions; successful completion refreshes the dashboard.
 
 The lifecycle policy is:
 
