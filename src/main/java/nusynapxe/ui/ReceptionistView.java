@@ -42,6 +42,7 @@ import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.PaymentMethod;
+import nusynapxe.domain.Receipt;
 import nusynapxe.domain.RevenueSummary;
 import nusynapxe.domain.Session;
 import nusynapxe.domain.Sex;
@@ -57,6 +58,9 @@ public final class ReceptionistView {
   private static final String QUEUE_WAITING = "Waiting";
   private static final String QUEUE_CHECKED_IN = "Checked in";
   private static final String QUEUE_ALL = "All";
+  private static final String ALL_DOCTORS = "All Doctors";
+  private static final String PATIENT_NAME_ID = "Patient name or ID";
+  private static final String PATIENT_LABEL = "Patient";
   private static final String DATE_TIME_PATTERN = "yyyy-MM-dd HH:mm";
   private static final DateTimeFormatter DATE_TIME_FORMAT =
       DateTimeFormatter.ofPattern(DATE_TIME_PATTERN);
@@ -90,7 +94,7 @@ public final class ReceptionistView {
     scheduleDate.setPromptText("Any date");
     ComboBox<Account> scheduleDoctor = doctorSelector();
     scheduleDoctor.setId("reception-schedule-doctor");
-    scheduleDoctor.setPromptText("All Doctors");
+    scheduleDoctor.setPromptText(ALL_DOCTORS);
     ComboBox<AppointmentStatus> scheduleStatus =
         new ComboBox<>(FXCollections.observableArrayList(AppointmentStatus.values()));
     scheduleStatus.setId("reception-schedule-status");
@@ -104,8 +108,8 @@ public final class ReceptionistView {
     queueDate.setId("reception-check-in-queue-date");
     ComboBox<Account> queueDoctor = doctorSelector();
     queueDoctor.setId("reception-check-in-queue-doctor");
-    queueDoctor.setPromptText("All Doctors");
-    TextField queuePatient = field("reception-check-in-queue-patient", "Patient name or ID");
+    queueDoctor.setPromptText(ALL_DOCTORS);
+    TextField queuePatient = field("reception-check-in-queue-patient", PATIENT_NAME_ID);
     ComboBox<String> queueStatus =
         new ComboBox<>(
             FXCollections.observableArrayList(QUEUE_WAITING, QUEUE_CHECKED_IN, QUEUE_ALL));
@@ -119,14 +123,28 @@ public final class ReceptionistView {
     appointmentPatient.setId("reception-appointment-patient");
     makePatientSearchable(appointmentPatient);
     Button checkIn = button("Check in selected", "reception-check-in");
-    TextField charge = field("reception-charge", "Amount");
-    ComboBox<PaymentMethod> method =
-        new ComboBox<>(FXCollections.observableArrayList(PaymentMethod.values()));
-    method.setId("reception-method");
-    method.getSelectionModel().select(PaymentMethod.CASH);
-    Button checkout = button("Complete checkout", "reception-checkout");
     ListView<Appointment> checkoutAppointmentList = new ListView<>();
     checkoutAppointmentList.setId("reception-checkout-appointment-list");
+    boolean[] checkoutMouseSelection = {false};
+    boolean[] checkoutTabActive = {false};
+    TextField checkoutPatient = field("reception-checkout-patient", PATIENT_NAME_ID);
+    DatePicker checkoutDate = new DatePicker();
+    checkoutDate.setId("reception-checkout-date");
+    ComboBox<Account> checkoutDoctor = doctorSelector();
+    checkoutDoctor.setId("reception-checkout-doctor");
+    checkoutDoctor.setPromptText(ALL_DOCTORS);
+    Button checkoutSearch = button("Search checkout", "reception-checkout-search");
+    TextField receiptPatient = field("reception-receipt-patient", PATIENT_NAME_ID);
+    DatePicker receiptDate = new DatePicker();
+    receiptDate.setId("reception-receipt-date");
+    ComboBox<Account> receiptDoctor = doctorSelector();
+    receiptDoctor.setId("reception-receipt-doctor");
+    receiptDoctor.setPromptText(ALL_DOCTORS);
+    ListView<Receipt> receiptHistoryList = new ListView<>();
+    receiptHistoryList.setId("reception-receipt-history-list");
+    Button receiptSearch = button("Search receipts", "reception-receipt-search");
+    Label receiptPreview = new Label();
+    receiptPreview.setId("reception-receipt-preview");
     TextField revenueDate = field("reception-revenue-date", "yyyy-MM-dd");
     Button revenueButton = button("Show revenue", "reception-revenue-submit");
     Label revenue = new Label();
@@ -310,8 +328,138 @@ public final class ReceptionistView {
         .getSelectionModel()
         .selectedItemProperty()
         .addListener(
+            (observable, previous, selected) -> {
+              selection.appointmentId = selected == null ? 0 : selected.id();
+              if (selected != null && checkoutTabActive[0] && !checkoutMouseSelection[0]) {
+                showCheckoutDetailsDialog(
+                    services,
+                    session,
+                    selected.id(),
+                    feedback,
+                    receiptPreview,
+                    () -> {
+                      refreshCheckoutReady(
+                          services,
+                          session,
+                          checkoutAppointmentList,
+                          feedback,
+                          checkoutPatient.getText(),
+                          checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
+                          checkoutDate.getValue());
+                      refreshReceiptHistory(
+                          services,
+                          session,
+                          receiptHistoryList,
+                          receiptPreview,
+                          receiptPatient.getText(),
+                          receiptDoctor.getValue() == null ? null : receiptDoctor.getValue().id(),
+                          receiptDate.getValue(),
+                          feedback);
+                    });
+              }
+            });
+    checkoutAppointmentList.setOnMousePressed(event -> checkoutMouseSelection[0] = true);
+    checkoutAppointmentList.setOnMouseClicked(
+        event -> {
+          Appointment selected = checkoutAppointmentList.getSelectionModel().getSelectedItem();
+          if (selected != null) {
+            showCheckoutDetailsDialog(
+                services,
+                session,
+                selected.id(),
+                feedback,
+                receiptPreview,
+                () -> {
+                  refreshCheckoutReady(
+                      services,
+                      session,
+                      checkoutAppointmentList,
+                      feedback,
+                      checkoutPatient.getText(),
+                      checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
+                      checkoutDate.getValue());
+                  refreshReceiptHistory(
+                      services,
+                      session,
+                      receiptHistoryList,
+                      receiptPreview,
+                      receiptPatient.getText(),
+                      receiptDoctor.getValue() == null ? null : receiptDoctor.getValue().id(),
+                      receiptDate.getValue(),
+                      feedback);
+                });
+          }
+          checkoutMouseSelection[0] = false;
+        });
+    receiptHistoryList
+        .getSelectionModel()
+        .selectedItemProperty()
+        .addListener(
+            (observable, previous, selected) -> {
+              if (selected != null) {
+                receiptPreview.setText(formatReceipt(selected));
+              }
+            });
+    receiptSearch.setOnAction(
+        event ->
+            refreshReceiptHistory(
+                services,
+                session,
+                receiptHistoryList,
+                receiptPreview,
+                receiptPatient.getText(),
+                receiptDoctor.getValue() == null ? null : receiptDoctor.getValue().id(),
+                receiptDate.getValue(),
+                feedback));
+    checkoutSearch.setOnAction(
+        event ->
+            refreshCheckoutReady(
+                services,
+                session,
+                checkoutAppointmentList,
+                feedback,
+                checkoutPatient.getText(),
+                checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
+                checkoutDate.getValue()));
+    checkoutPatient
+        .textProperty()
+        .addListener(
             (observable, previous, selected) ->
-                selection.appointmentId = selected == null ? 0 : selected.id());
+                refreshReceiptHistory(
+                    services,
+                    session,
+                    receiptHistoryList,
+                    receiptPreview,
+                    selected,
+                    checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
+                    checkoutDate.getValue(),
+                    feedback));
+    checkoutDoctor
+        .valueProperty()
+        .addListener(
+            (observable, previous, selected) ->
+                refreshReceiptHistory(
+                    services,
+                    session,
+                    receiptHistoryList,
+                    receiptPreview,
+                    checkoutPatient.getText(),
+                    selected == null ? null : selected.id(),
+                    checkoutDate.getValue(),
+                    feedback));
+    checkoutDate
+        .valueProperty()
+        .addListener(
+            (observable, previous, selected) ->
+                refreshReceiptHistory(
+                    services,
+                    session,
+                    receiptHistoryList,
+                    receiptPreview,
+                    checkoutPatient.getText(),
+                    checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
+                    selected,
+                    feedback));
 
     register.setOnAction(
         event -> {
@@ -372,7 +520,14 @@ public final class ReceptionistView {
                 schedulePatient.getText(),
                 scheduleStatus.getValue(),
                 scheduleSummary);
-            refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
+            refreshCheckoutReady(
+                services,
+                session,
+                checkoutAppointmentList,
+                feedback,
+                checkoutPatient.getText(),
+                checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
+                checkoutDate.getValue());
           } catch (ValidationException
               | AuthorizationException
               | IllegalArgumentException exception) {
@@ -425,7 +580,14 @@ public final class ReceptionistView {
                 schedulePatient.getText(),
                 scheduleStatus.getValue(),
                 scheduleSummary);
-            refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
+            refreshCheckoutReady(
+                services,
+                session,
+                checkoutAppointmentList,
+                feedback,
+                checkoutPatient.getText(),
+                checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
+                checkoutDate.getValue());
           } catch (ValidationException | AuthorizationException exception) {
             feedback.setText(exception.getMessage());
           } catch (SQLException exception) {
@@ -450,32 +612,18 @@ public final class ReceptionistView {
                 schedulePatient.getText(),
                 scheduleStatus.getValue(),
                 scheduleSummary);
-            refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
+            refreshCheckoutReady(
+                services,
+                session,
+                checkoutAppointmentList,
+                feedback,
+                checkoutPatient.getText(),
+                checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
+                checkoutDate.getValue());
           } catch (ValidationException | AuthorizationException exception) {
             feedback.setText(exception.getMessage());
           } catch (SQLException exception) {
             feedback.setText("Check-in is temporarily unavailable");
-          }
-        });
-
-    checkout.setOnAction(
-        event -> {
-          try {
-            requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
-            services
-                .billingService()
-                .checkout(
-                    session,
-                    selection.appointmentId,
-                    parseMinor(charge.getText()),
-                    method.getValue());
-            feedback.setText("Checkout completed");
-            refreshAppointments(services, session, appointmentList, selection, feedback);
-            refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
-          } catch (ValidationException | AuthorizationException exception) {
-            feedback.setText(exception.getMessage());
-          } catch (SQLException exception) {
-            feedback.setText("Checkout is temporarily unavailable");
           }
         });
 
@@ -519,15 +667,11 @@ public final class ReceptionistView {
     GridPane appointmentForm = new GridPane();
     appointmentForm.setHgap(8);
     appointmentForm.setVgap(8);
-    appointmentForm.addRow(0, new Label("Patient"), appointmentPatient);
+    appointmentForm.addRow(0, new Label(PATIENT_LABEL), appointmentPatient);
     appointmentForm.addRow(1, new Label("Doctor"), doctor);
     appointmentForm.addRow(2, new Label(DATE_LABEL), appointmentDate);
     appointmentForm.addRow(3, new Label("Starts"), startsAt.view, new Label("Ends"), endsAt.view);
     appointmentForm.addRow(4, book);
-    GridPane checkoutForm = new GridPane();
-    checkoutForm.setHgap(8);
-    checkoutForm.setVgap(8);
-    checkoutForm.addRow(0, new Label("Amount"), charge, new Label("Method"), method, checkout);
     GridPane revenueForm = new GridPane();
     revenueForm.setHgap(8);
     revenueForm.setVgap(8);
@@ -555,7 +699,40 @@ public final class ReceptionistView {
     HBox queueFilters =
         new HBox(8, new Label(DATE_LABEL), queueDate, queueDoctor, queueStatus, queuePatient);
     VBox queueContent = new VBox(12, queueFilters, queueSummary, queueList);
-    VBox checkoutContent = new VBox(12, checkoutAppointmentList, checkoutForm);
+    HBox checkoutFilters =
+        new HBox(
+            8,
+            new Label(PATIENT_LABEL),
+            checkoutPatient,
+            new Label("Doctor"),
+            checkoutDoctor,
+            new Label("Date"),
+            checkoutDate,
+            checkoutSearch);
+    HBox receiptFilters =
+        new HBox(
+            8,
+            new Label(PATIENT_LABEL),
+            receiptPatient,
+            new Label("Doctor"),
+            receiptDoctor,
+            new Label("Date"),
+            receiptDate,
+            receiptSearch);
+    VBox readyForCheckoutContent =
+        new VBox(12, new Label("Ready for checkout"), checkoutFilters, checkoutAppointmentList);
+    readyForCheckoutContent.setId("reception-checkout-ready-tab");
+    VBox receiptHistoryContent =
+        new VBox(
+            12, new Label("Receipt history"), receiptFilters, receiptHistoryList, receiptPreview);
+    receiptHistoryContent.setId("reception-receipts-tab");
+    Tab readyForCheckoutTab = new Tab("Checkout", readyForCheckoutContent);
+    readyForCheckoutTab.setClosable(false);
+    Tab receiptHistoryTab = new Tab("Receipts", receiptHistoryContent);
+    receiptHistoryTab.setClosable(false);
+    TabPane checkoutTabs = new TabPane(readyForCheckoutTab, receiptHistoryTab);
+    checkoutTabs.setId("reception-checkout-tabs");
+    VBox checkoutContent = new VBox(12, checkoutTabs);
     VBox revenueContent = new VBox(12, revenueForm);
     Tab patientFeature = featureTab("Patient directory and basic data", patientContent);
     Tab appointmentFeature = featureTab("Appointments across all Doctors", appointmentContent);
@@ -571,6 +748,7 @@ public final class ReceptionistView {
         .selectedItemProperty()
         .addListener(
             (observable, previous, selected) -> {
+              checkoutTabActive[0] = selected == checkoutFeature;
               if (selected == patientFeature) {
                 refreshPatients(
                     services, session, patientList, selection, feedback, patientSearch.getText());
@@ -605,8 +783,23 @@ public final class ReceptionistView {
                     queueStatus.getValue(),
                     queueSummary);
               } else if (selected == checkoutFeature) {
-                refreshAppointments(
-                    services, session, checkoutAppointmentList, selection, feedback);
+                refreshCheckoutReady(
+                    services,
+                    session,
+                    checkoutAppointmentList,
+                    feedback,
+                    checkoutPatient.getText(),
+                    checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
+                    checkoutDate.getValue());
+                refreshReceiptHistory(
+                    services,
+                    session,
+                    receiptHistoryList,
+                    receiptPreview,
+                    receiptPatient.getText(),
+                    receiptDoctor.getValue() == null ? null : receiptDoctor.getValue().id(),
+                    receiptDate.getValue(),
+                    feedback);
               } else if (selected == revenueFeature && !revenueDate.getText().isBlank()) {
                 revenueButton.fire();
               }
@@ -642,7 +835,14 @@ public final class ReceptionistView {
         queuePatient.getText(),
         queueStatus.getValue(),
         queueSummary);
-    refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
+    refreshCheckoutReady(
+        services,
+        session,
+        checkoutAppointmentList,
+        feedback,
+        checkoutPatient.getText(),
+        checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
+        checkoutDate.getValue());
     return root;
   }
 
@@ -1130,22 +1330,80 @@ public final class ReceptionistView {
     }
   }
 
-  private static void refreshAppointments(
+  private static void refreshCheckoutReady(
       ClinicServices services,
       Session session,
-      ListView<Appointment> appointmentList,
-      SelectionState selection,
+      ListView<Appointment> list,
+      Label feedback,
+      String patientQuery,
+      Long doctorId,
+      LocalDate date) {
+    try {
+      List<Appointment> appointments =
+          services
+              .appointmentService()
+              .searchAppointments(
+                  session, date, doctorId, patientQuery, AppointmentStatus.COMPLETED);
+      list.setItems(FXCollections.observableArrayList(appointments));
+      list.setCellFactory(
+          view ->
+              new javafx.scene.control.ListCell<>() {
+                @Override
+                protected void updateItem(Appointment item, boolean empty) {
+                  super.updateItem(item, empty);
+                  setText(
+                      empty || item == null ? null : formatAppointment(services, session, item));
+                }
+              });
+    } catch (SQLException exception) {
+      feedback.setText("Checkout appointments are temporarily unavailable");
+    }
+  }
+
+  private static void refreshReceiptHistory(
+      ClinicServices services,
+      Session session,
+      ListView<Receipt> history,
+      Label preview,
+      String patientQuery,
+      Long doctorId,
+      LocalDate date,
       Label feedback) {
     try {
-      long selectedAppointmentId = selection.appointmentId;
-      appointmentList.setItems(
-          FXCollections.observableArrayList(
-              services.appointmentService().allAppointments(session)));
-      selection.appointmentId = selectedAppointmentId;
-      selectAppointment(appointmentList, selection.appointmentId);
-    } catch (SQLException exception) {
-      feedback.setText("Appointments are temporarily unavailable");
+      List<Receipt> receipts =
+          services.billingService().receiptHistory(session, patientQuery, doctorId, date);
+      history.setItems(FXCollections.observableArrayList(receipts));
+      history.setCellFactory(
+          list ->
+              new javafx.scene.control.ListCell<>() {
+                @Override
+                protected void updateItem(Receipt item, boolean empty) {
+                  super.updateItem(item, empty);
+                  setText(empty || item == null ? null : formatReceiptRow(item));
+                }
+              });
+      preview.setText("");
+    } catch (SQLException | ValidationException | AuthorizationException exception) {
+      feedback.setText("Receipt history is temporarily unavailable");
     }
+  }
+
+  private static String formatReceiptRow(Receipt receipt) {
+    return String.format(
+        Locale.ROOT,
+        "Receipt %s-%04d | Date: %s | Patient: %s (%s) | Doctor: %s | Amount: %s | Method: %s",
+        receipt.receiptDate(),
+        receipt.sequenceNumber(),
+        receipt.recordedAt().format(DATE_TIME_FORMAT),
+        receipt.patientName(),
+        receipt.patientId(),
+        receipt.doctorName(),
+        formatMinor(receipt.amountMinor()),
+        receipt.method());
+  }
+
+  private static String formatReceipt(Receipt receipt) {
+    return formatReceiptRow(receipt) + "\nRecorded: " + receipt.recordedAt() + "\nStatus: PAID";
   }
 
   private static void refreshSchedule(
@@ -1347,7 +1605,7 @@ public final class ReceptionistView {
       VBox content =
           new VBox(
               10,
-              new Label("Patient"),
+              new Label(PATIENT_LABEL),
               patients,
               details,
               new Label("New date"),
@@ -1426,6 +1684,84 @@ public final class ReceptionistView {
       dialog.initModality(Modality.WINDOW_MODAL);
       dialog.setTitle("Check-in details");
       dialog.setScene(new Scene(content, 500, 300));
+      dialog.show();
+    } catch (SQLException | ValidationException | AuthorizationException exception) {
+      workspaceFeedback.setText(exception.getMessage());
+    }
+  }
+
+  private static void showCheckoutDetailsDialog(
+      ClinicServices services,
+      Session session,
+      long appointmentId,
+      Label workspaceFeedback,
+      Label receiptPreview,
+      Runnable onUpdated) {
+    try {
+      Appointment appointment = services.appointmentService().get(appointmentId);
+      Patient patient =
+          services.patientService().getAdministrative(session, appointment.patientId());
+      Label details =
+          new Label(
+              patient.displayedId()
+                  + DETAIL_SEPARATOR
+                  + valueOrEmpty(patient.firstName())
+                  + " "
+                  + valueOrEmpty(patient.lastName())
+                  + "\nEmail: "
+                  + valueOrEmpty(patient.email())
+                  + "\nPhone: "
+                  + valueOrEmpty(patient.phone())
+                  + "\nDoctor ID: "
+                  + appointment.doctorId()
+                  + "\nScheduled: "
+                  + appointment.startsAt().format(DATE_TIME_FORMAT)
+                  + " - "
+                  + appointment.endsAt().toLocalTime()
+                  + "\nStatus: "
+                  + appointment.status());
+      details.setId("reception-checkout-details");
+      TextField charge = field("reception-charge", "Amount");
+      ComboBox<PaymentMethod> method =
+          new ComboBox<>(FXCollections.observableArrayList(PaymentMethod.values()));
+      method.setId("reception-method");
+      method.getSelectionModel().select(PaymentMethod.CASH);
+      Button checkout = button("Complete checkout", "reception-checkout");
+      Label feedback = new Label();
+      feedback.setId("reception-checkout-feedback");
+      GridPane paymentForm = new GridPane();
+      paymentForm.setHgap(8);
+      paymentForm.setVgap(8);
+      paymentForm.addRow(0, new Label("Amount"), charge);
+      paymentForm.addRow(1, new Label("Method"), method);
+      Stage dialog = new Stage();
+      checkout.setOnAction(
+          event -> {
+            try {
+              services
+                  .billingService()
+                  .checkout(
+                      session, appointmentId, parseMinor(charge.getText()), method.getValue());
+              services.billingService().receiptHistory(session, "", null, null).stream()
+                  .filter(receipt -> receipt.appointmentId() == appointmentId)
+                  .findFirst()
+                  .ifPresent(receipt -> receiptPreview.setText(formatReceipt(receipt)));
+              workspaceFeedback.setText("Checkout completed");
+              onUpdated.run();
+              dialog.close();
+            } catch (ValidationException | AuthorizationException exception) {
+              feedback.setText(exception.getMessage());
+            } catch (SQLException exception) {
+              feedback.setText("Checkout is temporarily unavailable");
+            }
+          });
+      VBox content =
+          new VBox(12, new Label("Checkout appointment"), details, paymentForm, checkout, feedback);
+      content.setPadding(new Insets(18));
+      dialog.initOwner(workspaceFeedback.getScene().getWindow());
+      dialog.initModality(Modality.WINDOW_MODAL);
+      dialog.setTitle("Checkout details");
+      dialog.setScene(new Scene(content, 500, 400));
       dialog.show();
     } catch (SQLException | ValidationException | AuthorizationException exception) {
       workspaceFeedback.setText(exception.getMessage());
