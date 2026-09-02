@@ -1197,7 +1197,7 @@ public final class ReceptionistView {
     fields.minutes.setValue(String.format(Locale.ROOT, "%02d", time.getMinute() < 30 ? 0 : 30));
   }
 
-  private record TimeFields(ComboBox<String> hours, ComboBox<String> minutes, HBox view) {}
+  private record TimeFields(ComboBox<String> hours, ComboBox<String> minutes, HBox view) { }
 
   private static String formatAppointment(
       ClinicServices services, Session session, Appointment appointment) {
