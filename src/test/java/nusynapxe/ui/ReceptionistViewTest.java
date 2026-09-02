@@ -14,7 +14,6 @@ import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Month;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
@@ -42,9 +41,6 @@ import org.testfx.framework.junit5.ApplicationTest;
 import org.testfx.util.WaitForAsyncUtils;
 
 final class ReceptionistViewTest extends ApplicationTest {
-  private static final DateTimeFormatter DATE_TIME_FORMAT =
-      DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-
   @TempDir private Path temporaryDirectory;
   private SqliteDatabase database;
   private ClinicServices services;
@@ -110,9 +106,8 @@ final class ReceptionistViewTest extends ApplicationTest {
     verifyThat("#reception-book", isVisible());
 
     LocalDateTime start = LocalDateTime.now().minusMinutes(5).withSecond(0).withNano(0);
-    LocalDateTime end = start.plusMinutes(30);
-    setText("#reception-start", start.format(DATE_TIME_FORMAT));
-    setText("#reception-end", end.format(DATE_TIME_FORMAT));
+    selectCombo("#reception-start", start.toLocalTime().withMinute(0).toString());
+    selectCombo("#reception-end", start.toLocalTime().withMinute(30).toString());
     fire("#reception-book");
     verifyThat("#reception-feedback", hasText("Appointment booked and awaiting Doctor acceptance"));
     assertTrue(textLabel("#reception-schedule-summary").contains("Pending: 1"));
