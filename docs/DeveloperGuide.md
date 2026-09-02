@@ -175,6 +175,13 @@ clinical record per consultation, add prescriptions, and complete checked-in
 appointments. Invalid transitions leave persistence unchanged. Billing
 stores integer minor units and aggregates successful payments by local date.
 
+Revenue Reports are built from persisted successful-payment receipts. The
+Receptionist-only service accepts an inclusive Singapore-local date range and
+optional patient, Doctor, and payment-method filters, then returns receipt
+detail rows plus total and breakdown projections. The UI renders an explicit
+empty state and exports the current projection as CSV or JSON; exporting never
+creates or mutates a payment or receipt.
+
 ## UI and TestFX conventions
 
 `ApplicationRouter` opens Login or first-run Setup and routes an authenticated
