@@ -12,6 +12,12 @@ import nusynapxe.domain.Receipt;
 
 /** Persists and retrieves checkout receipts. */
 public final class ReceiptRepository {
+  private static final String RECEIPT_QUERY =
+      "SELECT r.id, r.payment_id, r.appointment_id, r.patient_id, p.first_name || ' ' || p.last_name patient_name, u.display_name doctor_name, r.amount_minor, r.method, r.receipt_date, r.sequence_number, r.recorded_at FROM receipts r JOIN patients p ON p.id = r.patient_id JOIN appointments a ON a.id = r.appointment_id JOIN users u ON u.id = a.doctor_id";
+  private static final String FIND_BY_ID_QUERY = RECEIPT_QUERY + " WHERE r.id = ?";
+  private static final String FIND_ALL_QUERY =
+      RECEIPT_QUERY
+          + " WHERE (? IS NULL OR ? = '' OR CAST(p.id AS TEXT) LIKE lower(?) OR lower(p.first_name || ' ' || p.last_name) LIKE lower(?) OR lower(p.email) LIKE lower(?)) AND (? IS NULL OR a.doctor_id = ?) AND (? IS NULL OR r.receipt_date = ?) ORDER BY r.receipt_date DESC, r.sequence_number DESC";
   private final SqliteDatabase database;
 
   public ReceiptRepository(SqliteDatabase database) {
@@ -75,8 +81,7 @@ public final class ReceiptRepository {
   }
 
   public Receipt findById(long id) throws SQLException {
-    try (PreparedStatement statement =
-        database.connection().prepareStatement(query() + " WHERE r.id = ?")) {
+    try (PreparedStatement statement = database.connection().prepareStatement(FIND_BY_ID_QUERY)) {
       statement.setLong(1, id);
       try (ResultSet result = statement.executeQuery()) {
         if (!result.next()) {
@@ -89,14 +94,7 @@ public final class ReceiptRepository {
 
   public List<Receipt> findAll(String patientQuery, Long doctorId, LocalDate date)
       throws SQLException {
-    String sql =
-        query()
-            + " WHERE (? IS NULL OR ? = '' OR CAST(p.id AS TEXT) LIKE lower(?) "
-            + "OR lower(p.first_name || ' ' || p.last_name) LIKE lower(?) OR lower(p.email) LIKE lower(?))"
-            + " AND (? IS NULL OR a.doctor_id = ?)"
-            + " AND (? IS NULL OR r.receipt_date = ?)"
-            + " ORDER BY r.receipt_date DESC, r.sequence_number DESC";
-    try (PreparedStatement statement = database.connection().prepareStatement(sql)) {
+    try (PreparedStatement statement = database.connection().prepareStatement(FIND_ALL_QUERY)) {
       String query = patientQuery == null ? "" : patientQuery.trim();
       String pattern = "%" + query + "%";
       statement.setString(1, patientQuery == null ? null : query);
@@ -121,10 +119,6 @@ public final class ReceiptRepository {
         return receipts;
       }
     }
-  }
-
-  private static String query() {
-    return "SELECT r.id, r.payment_id, r.appointment_id, r.patient_id, p.first_name || ' ' || p.last_name patient_name, u.display_name doctor_name, r.amount_minor, r.method, r.receipt_date, r.sequence_number, r.recorded_at FROM receipts r JOIN patients p ON p.id = r.patient_id JOIN appointments a ON a.id = r.appointment_id JOIN users u ON u.id = a.doctor_id";
   }
 
   private static Receipt read(ResultSet result) throws SQLException {
