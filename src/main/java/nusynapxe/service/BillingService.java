@@ -81,7 +81,12 @@ public final class BillingService {
 
   /** Returns a receipt-backed report for an inclusive local date range. */
   public RevenueReport revenueReport(
-      Session actor, LocalDate from, LocalDate to, String patientQuery, Long doctorId)
+      Session actor,
+      LocalDate from,
+      LocalDate to,
+      String patientQuery,
+      Long doctorId,
+      PaymentMethod method)
       throws SQLException {
     Authorization.requireRole(actor, Role.RECEPTIONIST);
     if (from == null || to == null) {
@@ -92,7 +97,9 @@ public final class BillingService {
     }
     List<Receipt> result = new ArrayList<>();
     for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
-      result.addAll(receipts.findAll(patientQuery, doctorId, date));
+      receipts.findAll(patientQuery, doctorId, date).stream()
+          .filter(receipt -> method == null || receipt.method() == method)
+          .forEach(result::add);
     }
     return new RevenueReport(result);
   }
