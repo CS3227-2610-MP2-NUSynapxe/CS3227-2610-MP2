@@ -122,6 +122,20 @@ final class SchemaInitializer {
           )
           """,
           """
+          CREATE TABLE IF NOT EXISTS receipts (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              payment_id INTEGER NOT NULL UNIQUE REFERENCES payments(id),
+              appointment_id INTEGER NOT NULL REFERENCES appointments(id),
+              patient_id INTEGER NOT NULL REFERENCES patients(id),
+              amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
+              method TEXT NOT NULL CHECK (method IN ('CASH', 'CARD', 'TRANSFER', 'OTHER')),
+              receipt_date TEXT NOT NULL,
+              sequence_number INTEGER NOT NULL CHECK (sequence_number > 0),
+              recorded_at TEXT NOT NULL,
+              UNIQUE(receipt_date, sequence_number)
+          )
+          """,
+          """
           CREATE UNIQUE INDEX IF NOT EXISTS idx_patients_document_identity
               ON patients(identity_type, issuing_country, identity_number)
               WHERE identity_type IS NOT NULL
@@ -131,7 +145,8 @@ final class SchemaInitializer {
           "CREATE INDEX IF NOT EXISTS idx_appointments_doctor_time ON appointments(doctor_id, starts_at)",
           "CREATE INDEX IF NOT EXISTS idx_appointments_patient_time ON appointments(patient_id, starts_at)",
           "CREATE INDEX IF NOT EXISTS idx_time_off_doctor_time ON doctor_time_off(doctor_id, starts_at)",
-          "CREATE INDEX IF NOT EXISTS idx_payments_recorded_status ON payments(recorded_at, status)");
+          "CREATE INDEX IF NOT EXISTS idx_payments_recorded_status ON payments(recorded_at, status)",
+          "CREATE INDEX IF NOT EXISTS idx_receipts_date_sequence ON receipts(receipt_date, sequence_number)");
   private static final List<String> VERSION_TWO_MIGRATION =
       List.of(
           "ALTER TABLE patients ADD COLUMN identity_type TEXT COLLATE NOCASE "

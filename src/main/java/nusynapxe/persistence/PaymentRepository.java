@@ -6,6 +6,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Objects;
 import java.util.Optional;
 import nusynapxe.domain.Payment;
@@ -19,10 +20,17 @@ public final class PaymentRepository {
   private static final String PAYMENT_COLUMNS =
       "id, appointment_id, patient_id, receptionist_id, amount_minor, method, status, recorded_at";
   private final SqliteDatabase database;
+  private final ReceiptRepository receipts;
 
   /** Creates a payment repository backed by an opened database. */
   public PaymentRepository(SqliteDatabase database) {
     this.database = Objects.requireNonNull(database, "database");
+    this.receipts = new ReceiptRepository(database);
+  }
+
+  /** Returns the backing database for related billing projections. */
+  public SqliteDatabase backingDatabase() {
+    return database;
   }
 
   /** Records a payment attempt and returns its assigned identifier. */
@@ -48,6 +56,15 @@ public final class PaymentRepository {
               throw new SQLException("Appointment is not ready for checkout");
             }
           }
+          receipts.create(
+              connection,
+              stored.id(),
+              payment.appointmentId(),
+              payment.patientId(),
+              payment.amountMinor(),
+              payment.method(),
+              payment.recordedAt().atZone(ZoneId.of("Asia/Singapore")).toLocalDate(),
+              payment.recordedAt());
           return stored;
         });
   }
