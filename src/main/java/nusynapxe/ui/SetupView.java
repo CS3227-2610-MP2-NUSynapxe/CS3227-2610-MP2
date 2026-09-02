@@ -2,12 +2,12 @@ package nusynapxe.ui;
 
 import java.sql.SQLException;
 import javafx.geometry.Insets;
-import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import nusynapxe.service.AccountService;
 import nusynapxe.service.ValidationException;
@@ -29,10 +29,8 @@ public final class SetupView {
     PasswordField confirmation = new PasswordField();
     confirmation.setId("setup-confirm-password");
     confirmation.setPromptText("Confirm password");
-    Label feedback = new Label();
-    feedback.setId("setup-feedback");
-    Button submit = new Button("Create System Admin");
-    submit.setId("setup-submit");
+    Label feedback = UiComponents.feedback("setup-feedback");
+    Button submit = UiComponents.primaryButton("Create System Admin", "setup-submit");
     submit.setDefaultButton(true);
     submit.setOnAction(
         event -> {
@@ -51,20 +49,30 @@ public final class SetupView {
           }
         });
 
-    VBox root =
-        new VBox(
-            10,
-            new Label("NUSynapxe"),
-            new Label("Create the first System Admin account"),
-            username,
-            password,
-            confirmation,
-            submit,
+    Label brand = new Label("NUSynapxe");
+    brand.setId("app-brand");
+    brand.getStyleClass().add("brand-name");
+    Label tagline = new Label("Create the first System Admin account");
+    tagline.getStyleClass().add("brand-tagline");
+    VBox identity = new VBox(6, brand, tagline);
+    identity.getStyleClass().add("auth-brand");
+    VBox form =
+        UiComponents.card(
+            "setup-form-card",
+            UiComponents.pageTitle("Set up NUSynapxe"),
+            UiComponents.supportingText(
+                "Create the administrator account for this clinic installation."),
+            UiComponents.fieldGroup("Admin username", username),
+            UiComponents.fieldGroup("Password", password),
+            UiComponents.fieldGroup("Confirm password", confirmation),
+            UiComponents.actionBar(submit),
             feedback);
+    VBox content = new VBox(24, identity, form);
+    content.getStyleClass().add("auth-content");
+    StackPane root = new StackPane(content);
     root.setId("setup-view");
-    root.setAlignment(Pos.CENTER);
+    root.getStyleClass().add("auth-screen");
     root.setPadding(new Insets(32));
-    root.setMaxWidth(420);
     return root;
   }
 

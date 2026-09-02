@@ -3,6 +3,24 @@
 NUSynapxe supports clinic staff through one shared visit workflow while
 keeping administrative and medical information separate.
 
+## Interface overview
+
+All screens use the same calm clinical visual language: a light workspace
+background, white content cards, clear section headings, teal primary actions,
+and text labels for every workflow status. The desktop window opens maximized so
+it uses the available monitor work area while retaining normal window controls.
+When restored, it uses a compact `1200 x 760` scene and can be resized down to the
+supported minimum of `980 x 640`; longer forms and result lists scroll inside
+their content area.
+
+Authenticated screens show the NUSynapxe name, the current role, the signed-in
+username, and **Log out** in a shared header. Receptionists use the dark
+left-hand navigation rail to switch between **Patients**, **Appointments**,
+**Checkout**, and **Revenue**. The active page heading provides the fuller
+description of the selected work area.
+The registration/search tabs and appointment booking/management tabs remain
+independent inside their respective areas.
+
 ## First launch
 
 From the repository root, start the desktop application:
@@ -31,8 +49,9 @@ requires a new login.
 1. Log in with the account created during first-run setup.
 2. In **SYSTEM ADMIN workspace**, enter a unique username, display name,
    initial password, and select **Doctor** or **Receptionist**.
-3. Select **Create account**. A successful account appears in the account
-   list and can log in immediately.
+3. Select **Create account**. A successful account appears in the Current
+   staff accounts table, with its username, display name, role, and status,
+   and can log in immediately.
 
 System Admin is an account-administration role. It cannot read or edit patient
 medical records through the protected services.
@@ -104,12 +123,14 @@ changes do not alter them.
 
 ### Book and manage a visit
 
-Open the separate **Appointments across all Doctors** feature tab. Use the
+Open **Appointments** in the left navigation. Use the
 **Book appointment** sub-tab for new bookings and **Search and manage
 appointments** for filters and existing appointments.
 
 The scheduling dashboard shows a chronological all-Doctor list and summary
-counts for Pending, Accepted, Checked in, and Completed appointments. Use the
+counts for Pending, Accepted, Checked in, and Completed appointments. Each row
+shows the Patient ID/name, Doctor ID, date/time, and a written status label.
+Use the
 optional date, Doctor, status, and patient name/Patient ID filters to narrow
 the list; changing a filter reloads the list automatically. Selecting a patient
 for a new booking only offers active patients. Existing appointments remain
@@ -183,7 +204,9 @@ opening a feature tab reloads information that another workflow may have changed
 ## Doctor workflow
 
 1. Log in with a Doctor account. The workspace shows only that Doctor's
-   appointment schedule.
+   appointment schedule in the left side of a schedule/detail layout. Select a
+   visit to reveal its consultation context on the right; until a visit is
+   selected, the detail area explains what to do.
 2. Select a pending appointment and choose **Accept selected**, or enter new
    times and choose **Reschedule selected** for a pending or accepted visit.
 3. Enter a non-overlapping `yyyy-MM-dd HH:mm` interval and select **Block time

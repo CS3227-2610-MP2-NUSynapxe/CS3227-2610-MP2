@@ -1,7 +1,7 @@
 ## 1. Dependabot configuration
 
 - [x] 1.1 Add `.github/dependabot.yml` with independent weekly `gradle` updates at `/`, `npm` updates at `/website`, and `github-actions` updates at `/`; verify the configuration covers the root build and wrapper, `website/package.json` and lockfile, and every workflow action reference.
-- [ ] 1.2 Review the first generated dependency-update proposals and verify each proposal passes the existing Java and documentation CI checks before merging; verify no automatic merge behavior is enabled.
+- [x] 1.2 Review the first generated dependency-update proposals and verify each proposal passes the existing Java and documentation CI checks before merging; verify no automatic merge behavior is enabled.
 
 ## 2. Test-source PMD quality gate
 
@@ -15,10 +15,10 @@
 - [x] 3.2 Add a reporting job that downloads only the report artifact, is limited to same-repository non-Dependabot pull requests, and has only the permissions required for checks and pull-request comments; verify push, manual, fork, and Dependabot events do not enter the comment path.
 - [x] 3.3 Configure `madrapps/jacoco-report@v1.8.0` in summary-only mode for `build/reports/jacoco/test/jacocoTestReport.xml`, then pass its coverage outputs into `mikepenz/action-junit-report@v6` with detailed summaries and sticky comment updates; verify the workflow defines one combined comment path rather than separate coverage and test comments.
 - [x] 3.4 Make report steps handle missing or partial report files without converting unavailable coverage into a passing result or masking the verification failure; verify JUnit totals, coverage values, and unavailable-report states are represented accurately in generated workflow output.
-- [ ] 3.5 Validate the reporting behavior on a same-repository pull request by checking that the combined comment is created and updated on a rerun; verify fork and Dependabot paths skip comment writes while retaining any available artifacts.
+- [x] 3.5 Validate the reporting behavior on a same-repository pull request by checking that the combined comment is created and updated on a rerun; verify fork and Dependabot paths skip comment writes while retaining any available artifacts.
 
 ## 4. Documentation and integration validation
 
 - [x] 4.1 Update the Developer Guide and high-level README quality-gate text with the test PMD command and policy, report paths, weekly dependency sources, combined-comment behavior, and fork/Dependabot limitation; verify links and statements match the committed configuration.
-- [ ] 4.2 Run the complete Java quality gate, documentation build, and report-generation checks; verify tests, Checkstyle, production and test PMD, SpotBugs, JaCoCo, Javadoc, Spotless, and Docusaurus validation pass and generated reports exist at the documented paths.
+- [x] 4.2 Run the complete Java quality gate, documentation build, and report-generation checks; verify tests, Checkstyle, production and test PMD, SpotBugs, JaCoCo, Javadoc, Spotless, and Docusaurus validation pass and generated reports exist at the documented paths.
 - [x] 4.3 Run `openspec validate --strict` and inspect the final diff for whitespace and unintended runtime or persisted-data changes; verify all change requirements have corresponding implementation evidence.

@@ -1,5 +1,6 @@
 package nusynapxe.ui;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.testfx.api.FxAssert.verifyThat;
 import static org.testfx.matcher.base.NodeMatchers.isVisible;
 import static org.testfx.matcher.control.LabeledMatchers.hasText;
@@ -72,9 +73,13 @@ final class DoctorViewTest extends ApplicationTest {
     waitForNode("#doctor-workspace");
 
     verifyThat("#doctor-workspace", isVisible());
+    verifyThat("#doctor-master-detail", isVisible());
+    assertTrue(lookup("#doctor-detail-scroll").tryQuery().isPresent());
+    assertTrue(lookup("#doctor-no-selection").tryQuery().isPresent());
     verifyThat("#doctor-accept", isVisible());
     verifyThat("#doctor-timeoff-submit", isVisible());
     selectFirst("#doctor-appointment-list");
+    verifyThat("#doctor-selected-appointment", isVisible());
 
     setText("#doctor-diagnosis", "Seasonal allergies");
     setText("#doctor-consultation-notes", "Discussed symptoms and treatment options");

@@ -4,6 +4,7 @@ import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.Locale;
 import java.util.Optional;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
@@ -13,10 +14,10 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.SplitPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import nusynapxe.domain.Appointment;
@@ -35,6 +36,8 @@ public final class DoctorView {
   private static final String FIELD_SEPARATOR = " | ";
   private static final DateTimeFormatter DATE_TIME_FORMAT =
       DateTimeFormatter.ofPattern(DATE_TIME_PATTERN);
+  private static final DateTimeFormatter SHORT_DATE_TIME_FORMAT =
+      DateTimeFormatter.ofPattern("MMM d HH:mm");
 
   private DoctorView() {
     throw new AssertionError("Utility class");
@@ -44,6 +47,9 @@ public final class DoctorView {
   public static Parent create(ClinicServices services, Session session, Runnable onLogout) {
     ListView<Appointment> appointments = new ListView<>();
     appointments.setId("doctor-appointment-list");
+    appointments.setPlaceholder(
+        UiComponents.emptyState(
+            "doctor-appointment-empty", "No appointments are assigned to you."));
     appointments.setCellFactory(
         view ->
             new ListCell<>() {
@@ -53,47 +59,50 @@ public final class DoctorView {
                 setText(
                     empty || appointment == null
                         ? null
-                        : "Patient #"
-                            + appointment.patientId()
-                            + FIELD_SEPARATOR
-                            + appointment.startsAt().format(DATE_TIME_FORMAT)
-                            + " - "
-                            + appointment.endsAt().format(DATE_TIME_FORMAT)
-                            + FIELD_SEPARATOR
-                            + appointment.status());
+                        : String.format(
+                            Locale.ROOT,
+                            "P%06d  •  %s%n%s",
+                            appointment.patientId(),
+                            appointment.startsAt().format(SHORT_DATE_TIME_FORMAT),
+                            displayStatus(appointment.status().name())));
+                setWrapText(true);
+                setMaxWidth(Double.MAX_VALUE);
+                if (empty || appointment == null) {
+                  clearRecordStatus(this);
+                } else {
+                  applyRecordStatus(this, appointment.status().name());
+                }
               }
             });
     SelectionState selection = new SelectionState();
 
     TextField rescheduleStart = field("doctor-reschedule-start", DATE_TIME_PATTERN);
     TextField rescheduleEnd = field("doctor-reschedule-end", DATE_TIME_PATTERN);
-    Button accept = new Button("Accept selected");
-    accept.setId("doctor-accept");
-    Button reschedule = new Button("Reschedule selected");
-    reschedule.setId("doctor-reschedule");
-    Button refresh = new Button("Refresh schedule");
-    refresh.setId("doctor-refresh");
+    Button accept = UiComponents.primaryButton("Accept selected", "doctor-accept");
+    Button reschedule = UiComponents.secondaryButton("Reschedule selected", "doctor-reschedule");
+    Button refresh = UiComponents.secondaryButton("Refresh schedule", "doctor-refresh");
 
     TextField timeOffStart = field("doctor-timeoff-start", DATE_TIME_PATTERN);
     TextField timeOffEnd = field("doctor-timeoff-end", DATE_TIME_PATTERN);
-    Button blockTimeOff = new Button("Block time off");
-    blockTimeOff.setId("doctor-timeoff-submit");
+    Button blockTimeOff = UiComponents.secondaryButton("Block time off", "doctor-timeoff-submit");
 
     TextField diagnosis = field("doctor-diagnosis", "Diagnosis");
     TextArea consultationNotes = textArea("doctor-consultation-notes", "Consultation notes");
     TextArea followUpNotes = textArea("doctor-follow-up", "Follow-up notes");
-    Button saveConsultation = new Button("Save consultation");
-    saveConsultation.setId("doctor-consultation-save");
+    Button saveConsultation =
+        UiComponents.primaryButton("Save consultation", "doctor-consultation-save");
 
     TextField medication = field("doctor-medication", "Medication");
     TextField dosage = field("doctor-dosage", "Dosage");
     TextField frequency = field("doctor-frequency", "Frequency");
     TextField duration = field("doctor-duration", "Duration");
     TextField instructions = field("doctor-instructions", "Instructions");
-    Button addPrescription = new Button("Add prescription");
-    addPrescription.setId("doctor-prescription-submit");
+    Button addPrescription =
+        UiComponents.primaryButton("Add prescription", "doctor-prescription-submit");
     ListView<Prescription> prescriptions = new ListView<>();
     prescriptions.setId("doctor-prescription-list");
+    prescriptions.setPlaceholder(
+        UiComponents.emptyState("doctor-prescription-empty", "No prescriptions have been added."));
     prescriptions.setCellFactory(
         view ->
             new ListCell<>() {
@@ -109,13 +118,21 @@ public final class DoctorView {
                             + FIELD_SEPARATOR
                             + prescription.frequency()
                             + FIELD_SEPARATOR
-                            + prescription.duration());
+                            + prescription.duration()
+                            + FIELD_SEPARATOR
+                            + prescription.instructions());
               }
             });
-    Button complete = new Button("Mark consultation completed");
-    complete.setId("doctor-complete");
-    Label feedback = new Label();
-    feedback.setId("doctor-feedback");
+    Button complete = UiComponents.primaryButton("Mark consultation completed", "doctor-complete");
+    Label feedback = UiComponents.feedback("doctor-feedback");
+    Label selectionSummary = new Label();
+    selectionSummary.setId("doctor-selected-appointment");
+    selectionSummary.getStyleClass().add("selection-summary");
+    selectionSummary.setWrapText(true);
+    Label noSelection =
+        UiComponents.emptyState(
+            "doctor-no-selection",
+            "Select an appointment from the schedule to edit its consultation.");
 
     appointments
         .getSelectionModel()
@@ -123,6 +140,16 @@ public final class DoctorView {
         .addListener(
             (observable, previous, selected) -> {
               selection.appointmentId = selected == null ? 0 : selected.id();
+              updateSelectionState(
+                  selection,
+                  selectionSummary,
+                  noSelection,
+                  selected,
+                  accept,
+                  reschedule,
+                  saveConsultation,
+                  addPrescription,
+                  complete);
               loadClinical(
                   services,
                   session,
@@ -133,6 +160,17 @@ public final class DoctorView {
                   prescriptions,
                   feedback);
             });
+
+    updateSelectionState(
+        selection,
+        selectionSummary,
+        noSelection,
+        null,
+        accept,
+        reschedule,
+        saveConsultation,
+        addPrescription,
+        complete);
 
     refresh.setOnAction(
         event ->
@@ -290,55 +328,95 @@ public final class DoctorView {
     Button logout = new Button("Log out");
     logout.setId("logout-button");
     logout.setOnAction(event -> onLogout.run());
-    HBox header = new HBox(12, new Label("DOCTOR workspace"), refresh, logout);
+    HBox header = UiComponents.workspaceHeader("DOCTOR workspace", session.username(), logout);
 
-    GridPane scheduleActions = new GridPane();
-    scheduleActions.setHgap(8);
-    scheduleActions.setVgap(8);
-    scheduleActions.addRow(0, accept);
-    scheduleActions.addRow(1, new Label("Start"), rescheduleStart, new Label("End"), rescheduleEnd);
-    scheduleActions.addRow(2, reschedule);
-
-    GridPane timeOffForm = new GridPane();
-    timeOffForm.setHgap(8);
-    timeOffForm.setVgap(8);
-    timeOffForm.addRow(0, new Label("Start"), timeOffStart, new Label("End"), timeOffEnd);
-    timeOffForm.addRow(1, blockTimeOff);
-
-    GridPane prescriptionForm = new GridPane();
-    prescriptionForm.setHgap(8);
-    prescriptionForm.setVgap(8);
-    prescriptionForm.setVgap(8);
-    prescriptionForm.addRow(0, new Label("Medication"), medication, new Label("Dosage"), dosage);
-    prescriptionForm.addRow(1, new Label("Frequency"), frequency, new Label("Duration"), duration);
-    prescriptionForm.addRow(2, new Label("Instructions"), instructions, addPrescription);
-
-    VBox content =
+    VBox scheduleActions =
         new VBox(
-            12,
-            new Label("My appointment schedule"),
+            10,
+            UiComponents.actionBar(accept),
+            UiComponents.fieldGroup("Reschedule start", rescheduleStart),
+            UiComponents.fieldGroup("Reschedule end", rescheduleEnd),
+            UiComponents.actionBar(reschedule));
+
+    VBox timeOffForm =
+        new VBox(
+            10,
+            UiComponents.fieldGroup("Time-off start", timeOffStart),
+            UiComponents.fieldGroup("Time-off end", timeOffEnd));
+
+    VBox prescriptionForm =
+        new VBox(
+            10,
+            UiComponents.fieldGroup("Medication", medication),
+            UiComponents.fieldGroup("Dosage", dosage),
+            UiComponents.fieldGroup("Frequency", frequency),
+            UiComponents.fieldGroup("Duration", duration),
+            UiComponents.fieldGroup("Instructions", instructions));
+
+    VBox scheduleCard =
+        UiComponents.card(
+            "doctor-schedule-card",
+            UiComponents.pageTitle("My appointment schedule"),
+            UiComponents.supportingText("Select a visit to open its clinical context."),
+            UiComponents.actionBar(refresh),
             appointments,
-            scheduleActions,
-            new Label("Availability"),
+            scheduleActions);
+    appointments.setPrefHeight(420);
+
+    VBox availabilityCard =
+        UiComponents.card(
+            "doctor-availability-card",
+            UiComponents.sectionHeading("Availability"),
+            UiComponents.supportingText("Block a time interval so new bookings cannot overlap it."),
             timeOffForm,
-            new Label("Consultation"),
-            new Label("Diagnosis"),
-            diagnosis,
-            new Label("Consultation notes"),
-            consultationNotes,
-            new Label("Follow-up notes"),
-            followUpNotes,
-            saveConsultation,
+            UiComponents.actionBar(blockTimeOff));
+    VBox consultationCard =
+        UiComponents.card(
+            "doctor-consultation-card",
+            UiComponents.sectionHeading("Consultation"),
+            UiComponents.fieldGroup("Diagnosis", diagnosis),
+            UiComponents.fieldGroup("Consultation notes", consultationNotes),
+            UiComponents.fieldGroup("Follow-up notes", followUpNotes),
+            UiComponents.actionBar(saveConsultation));
+    VBox prescriptionCard =
+        UiComponents.card(
+            "doctor-prescription-card",
+            UiComponents.sectionHeading("Prescriptions"),
             prescriptionForm,
-            prescriptions,
-            complete,
-            feedback);
-    ScrollPane scroll = new ScrollPane(content);
-    scroll.setFitToWidth(true);
-    BorderPane root = new BorderPane(scroll);
+            UiComponents.actionBar(addPrescription),
+            prescriptions);
+    VBox completionCard =
+        UiComponents.card(
+            "doctor-completion-card",
+            UiComponents.sectionHeading("Complete visit"),
+            UiComponents.supportingText(
+                "Complete the consultation when the clinical record is ready."),
+            UiComponents.actionBar(complete));
+    VBox detailContent =
+        new VBox(
+            16,
+            noSelection,
+            selectionSummary,
+            availabilityCard,
+            consultationCard,
+            prescriptionCard,
+            completionCard);
+    detailContent.setId("doctor-detail-pane");
+    ScrollPane scheduleScroll = new ScrollPane(scheduleCard);
+    scheduleScroll.setId("doctor-schedule-scroll");
+    scheduleScroll.setFitToWidth(true);
+    ScrollPane detailScroll = new ScrollPane(detailContent);
+    detailScroll.setId("doctor-detail-scroll");
+    detailScroll.setFitToWidth(true);
+    SplitPane masterDetail = new SplitPane(scheduleScroll, detailScroll);
+    masterDetail.setId("doctor-master-detail");
+    masterDetail.setDividerPositions(0.36);
+    BorderPane root = new BorderPane(masterDetail);
     root.setId("doctor-workspace");
+    root.getStyleClass().add("workspace-shell");
     root.setPadding(new Insets(24));
     root.setTop(header);
+    root.setBottom(feedback);
     refreshSchedule(
         services,
         session,
@@ -365,6 +443,47 @@ public final class DoctorView {
     area.setPromptText(prompt);
     area.setPrefRowCount(3);
     return area;
+  }
+
+  private static void updateSelectionState(
+      SelectionState selection,
+      Label selectionSummary,
+      Label noSelection,
+      Appointment appointment,
+      Button... actions) {
+    boolean selected = appointment != null && selection.appointmentId != 0;
+    for (Button action : actions) {
+      action.setDisable(!selected);
+    }
+    selectionSummary.setVisible(selected);
+    selectionSummary.setManaged(selected);
+    noSelection.setVisible(!selected);
+    noSelection.setManaged(!selected);
+    if (selected) {
+      selectionSummary.setText(
+          "Selected appointment  •  Patient P"
+              + String.format(Locale.ROOT, "%06d", appointment.patientId())
+              + "  •  "
+              + appointment.startsAt().format(DATE_TIME_FORMAT)
+              + "  •  Status: "
+              + displayStatus(appointment.status().name()));
+    }
+  }
+
+  private static void applyRecordStatus(ListCell<?> cell, String status) {
+    clearRecordStatus(cell);
+    cell.getStyleClass()
+        .add(
+            "record-status-"
+                + status.toLowerCase(java.util.Locale.ROOT).replace('_', '-').replace(' ', '-'));
+  }
+
+  private static void clearRecordStatus(ListCell<?> cell) {
+    cell.getStyleClass().removeIf(style -> style.startsWith("record-status-"));
+  }
+
+  private static String displayStatus(String status) {
+    return UiComponents.humanizeStatus(status);
   }
 
   private static void refreshSchedule(
