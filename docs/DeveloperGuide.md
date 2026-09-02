@@ -65,6 +65,10 @@ users                 account identity, role, enabled flag, salt/verifier
 patients              Patient ID, documented identity, basic data, active flag
 appointments          patient/Doctor interval and lifecycle status
 doctor_time_off       blocked Doctor availability intervals
+doctor_calendar_settings
+                      Doctor first-day-of-week Calendar preference
+doctor_working_intervals
+                      Doctor-owned daily display intervals and breaks
 clinical_records      diagnosis and consultation/follow-up notes
 prescriptions         medication and usage instructions
 payments              checkout amount in integer minor units and method
@@ -83,6 +87,13 @@ invented. New registrations require complete identity and sex values, and a
 legacy row requires complete identity fields on its next basic-data save.
 Migration advances `app_metadata.schema_version` only after every statement
 succeeds, so failure rolls back both schema changes and the version marker.
+Schema version 5 adds `doctor_calendar_settings` and
+`doctor_working_intervals`. Existing Doctors receive a Sunday-first default
+with Monday-Friday `08:00`-`18:00` intervals; a missing interval list means a
+disabled day. Intervals are stored as integer minutes through an explicit
+`1440` midnight end and are validated as non-overlapping before an atomic
+whole-profile replacement. Calendar working intervals are display preferences
+only: they do not participate in appointment availability or conflict checks.
 
 `patients.id INTEGER PRIMARY KEY AUTOINCREMENT` is the immutable relational
 Patient ID. The UI formats value `42` as `P000042` without storing another
@@ -198,6 +209,14 @@ detail rows plus total and breakdown projections. The UI renders an explicit
 empty state and exports the current projection as CSV or JSON; exporting never
 creates or mutates a payment or receipt.
 
+The Doctor Calendar uses a separate authorized read path. Its weekly query
+matches appointments with `starts_at < week_end` and `ends_at > week_start`,
+then returns only Patient ID/name, appointment timing, and `AppointmentStatus`;
+it does not load clinical records or prescriptions. Calendar preferences are
+owned by the authenticated Doctor and are persisted transactionally. The
+fixed clinic zone is `Asia/Singapore`; it is shown as informational text and
+is not configurable or stored as a preference.
+
 ## UI and TestFX conventions
 
 `ApplicationRouter` opens Login or first-run Setup and routes an authenticated
@@ -247,6 +266,17 @@ has no manual refresh control. Important ids include `login-submit`, `setup-subm
 `reception-patient-update`, `reception-patient-edit-cancel`,
 `reception-patient-deactivate`, `reception-book`, `reception-checkout`,
 `doctor-consultation-save`, and `logout-button`.
+
+Doctor navigation adds `doctor-nav-calendar`. The Calendar page uses
+`doctor-calendar-today`, `doctor-calendar-previous`, `doctor-calendar-next`,
+`doctor-calendar-week-picker`, and `doctor-calendar-settings`. Its custom
+picker exposes `doctor-calendar-week-picker-popup`, month/week controls, and
+keyboard-accessible labels. The settings page uses
+`doctor-calendar-settings-page`, `doctor-calendar-settings-first-day`,
+`doctor-calendar-settings-working-hours`, and
+`doctor-calendar-settings-save`. Working-interval rows are visual-only and
+support multiple intervals so a break can be represented without changing
+appointment scheduling.
 
 `PatientDirectoryView` is the shared administrative directory embedded by the
 Receptionist and Doctor workspaces. It receives the authenticated session,

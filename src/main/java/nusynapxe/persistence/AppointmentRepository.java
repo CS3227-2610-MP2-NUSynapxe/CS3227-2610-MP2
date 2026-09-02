@@ -11,13 +11,15 @@ import java.util.Objects;
 import java.util.Optional;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
+import nusynapxe.domain.CalendarAppointment;
 import nusynapxe.domain.DoctorTimeOff;
 
 /** Persists appointments and doctor availability intervals. */
 public final class AppointmentRepository {
   private static final String SELECT_PREFIX = "SELECT ";
+  private static final String STATUS_COLUMN = "status";
   private static final String APPOINTMENT_COLUMNS =
-      "id, patient_id, doctor_id, starts_at, ends_at, status";
+      "id, patient_id, doctor_id, starts_at, ends_at, " + STATUS_COLUMN;
   private static final String TIME_OFF_COLUMNS = "id, doctor_id, starts_at, ends_at";
   private final SqliteDatabase database;
 
@@ -35,7 +37,7 @@ public final class AppointmentRepository {
       AppointmentStatus status)
       throws SQLException {
     validateInterval(startsAt, endsAt);
-    Objects.requireNonNull(status, "status");
+    Objects.requireNonNull(status, STATUS_COLUMN);
     return SqliteTransactions.execute(
         database,
         connection -> {
@@ -95,7 +97,7 @@ public final class AppointmentRepository {
 
   /** Changes an appointment's lifecycle status. */
   public Appointment updateStatus(long id, AppointmentStatus status) throws SQLException {
-    Objects.requireNonNull(status, "status");
+    Objects.requireNonNull(status, STATUS_COLUMN);
     return SqliteTransactions.execute(
         database,
         connection -> {
@@ -134,6 +136,26 @@ public final class AppointmentRepository {
                     + " FROM appointments WHERE doctor_id = ? ORDER BY starts_at")) {
       statement.setLong(1, doctorId);
       return SqliteQueries.readAll(statement, AppointmentRepository::readAppointment);
+    }
+  }
+
+  /** Returns a Doctor's non-clinical appointment projections overlapping a time range. */
+  public List<CalendarAppointment> findCalendarByDoctor(
+      long doctorId, LocalDateTime rangeStart, LocalDateTime rangeEnd) throws SQLException {
+    validateInterval(rangeStart, rangeEnd);
+    try (PreparedStatement statement =
+        database
+            .connection()
+            .prepareStatement(
+                "SELECT a.id, a.patient_id, a.starts_at, a.ends_at, a.status, "
+                    + "p.first_name, p.last_name FROM appointments a "
+                    + "JOIN patients p ON p.id = a.patient_id "
+                    + "WHERE a.doctor_id = ? AND a.starts_at < ? AND a.ends_at > ? "
+                    + "ORDER BY a.starts_at, a.id")) {
+      statement.setLong(1, doctorId);
+      SqliteQueries.bindTimestamp(statement, 2, rangeEnd);
+      SqliteQueries.bindTimestamp(statement, 3, rangeStart);
+      return SqliteQueries.readAll(statement, AppointmentRepository::readCalendarAppointment);
     }
   }
 
@@ -307,7 +329,7 @@ public final class AppointmentRepository {
         resultSet.getLong("doctor_id"),
         SqliteQueries.parseTimestamp(resultSet.getString("starts_at")),
         SqliteQueries.parseTimestamp(resultSet.getString("ends_at")),
-        AppointmentStatus.valueOf(resultSet.getString("status")));
+        AppointmentStatus.valueOf(resultSet.getString(STATUS_COLUMN)));
   }
 
   private static DoctorTimeOff readTimeOff(ResultSet resultSet) throws SQLException {
@@ -316,5 +338,24 @@ public final class AppointmentRepository {
         resultSet.getLong("doctor_id"),
         SqliteQueries.parseTimestamp(resultSet.getString("starts_at")),
         SqliteQueries.parseTimestamp(resultSet.getString("ends_at")));
+  }
+
+  private static CalendarAppointment readCalendarAppointment(ResultSet resultSet)
+      throws SQLException {
+    long patientId = resultSet.getLong("patient_id");
+    String patientName =
+        String.format(
+            java.util.Locale.ROOT,
+            "P%06d - %s %s",
+            patientId,
+            resultSet.getString("first_name"),
+            resultSet.getString("last_name"));
+    return new CalendarAppointment(
+        resultSet.getLong("id"),
+        patientId,
+        patientName,
+        SqliteQueries.parseTimestamp(resultSet.getString("starts_at")),
+        SqliteQueries.parseTimestamp(resultSet.getString("ends_at")),
+        AppointmentStatus.valueOf(resultSet.getString(STATUS_COLUMN)));
   }
 }

@@ -241,16 +241,37 @@ opening a feature tab reloads information that another workflow may have changed
    includes inactive patients and contains no diagnosis, consultation,
    follow-up, prescription, or other clinical controls. Return to **Dashboard**
    to resume appointment and clinical work.
-3. Select a pending appointment and choose **Accept selected**, or enter new
+3. Select **Calendar** to open a separate weekly view of your assigned
+   appointments. Use **Today**, the previous/next arrows, or the date-range
+   button to move between weeks. The date-range button opens a custom picker
+   with week numbers, a selected-week highlight, month navigation, a year and
+   month grid, and a **Today** action. The week is ordered using the saved
+   first day of the week.
+4. Calendar blocks show the Patient ID/name, scheduled times, and appointment
+   status. All six statuses remain readable in the block, including cancelled
+   visits, and Calendar does not show diagnoses, notes, follow-up information,
+   or prescriptions. Calendar blocks are read-only; use **Dashboard** for
+   appointment and clinical actions.
+5. Calendar greys dates and periods that have elapsed, disabled days, and time
+   outside the configured working intervals. A red current-time line appears
+   on the current date when that date is in the displayed week. Appointments
+   remain visible even when they fall outside working hours.
+6. Select the Calendar **settings** icon to configure the first day of the
+   week and each day's working intervals. The settings page displays the fixed
+   Singapore timezone and has no work-location setting. Disable a day to make
+   it entirely non-working, or use **Add interval** to split a day around a
+   break such as lunch. Save valid changes or use **Cancel** to discard them.
+   These settings affect shading only and never block or change appointments.
+7. Select a pending appointment and choose **Accept selected**, or enter new
    times and choose **Reschedule selected** for a pending or accepted visit.
-4. Enter a non-overlapping `yyyy-MM-dd HH:mm` interval and select **Block time
+8. Enter a non-overlapping `yyyy-MM-dd HH:mm` interval and select **Block time
    off** to make that period unavailable for future bookings.
-5. After Reception has checked in the patient, select **Refresh schedule** and
+9. After Reception has checked in the patient, select **Refresh schedule** and
    select the appointment. Enter the diagnosis, consultation notes, and
    follow-up notes, then choose **Save consultation**.
-6. Complete all prescription fields—medication, dosage, frequency, duration,
+10. Complete all prescription fields—medication, dosage, frequency, duration,
    and instructions—and choose **Add prescription**.
-7. Select **Mark consultation completed**. This makes the visit available for
+11. Select **Mark consultation completed**. This makes the visit available for
    Receptionist checkout.
 
 Only the assigned Doctor can read or change the clinical record and

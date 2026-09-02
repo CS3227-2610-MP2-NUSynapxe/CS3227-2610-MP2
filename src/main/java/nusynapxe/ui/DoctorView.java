@@ -327,9 +327,16 @@ public final class DoctorView {
                       feedback);
                 }));
 
+    DoctorCalendarView[] calendarHolder = new DoctorCalendarView[1];
     Button logout = new Button("Log out");
     logout.setId("logout-button");
-    logout.setOnAction(event -> onLogout.run());
+    logout.setOnAction(
+        event -> {
+          if (calendarHolder[0] != null) {
+            calendarHolder[0].dispose();
+          }
+          onLogout.run();
+        });
     HBox header = UiComponents.workspaceHeader("DOCTOR workspace", session.username(), logout);
 
     VBox scheduleActions =
@@ -439,22 +446,55 @@ public final class DoctorView {
     pages.setId("doctor-page-content");
     Button dashboardNavigation = UiComponents.secondaryButton("Dashboard", "doctor-nav-dashboard");
     Button patientsNavigation = UiComponents.secondaryButton("Patients", "doctor-nav-patients");
+    Button calendarNavigation = UiComponents.secondaryButton("Calendar", "doctor-nav-calendar");
     dashboardNavigation.getStyleClass().add(ACTIVE_NAVIGATION_STYLE);
-    VBox navigation = new VBox(0, new Label("Navigation"), dashboardNavigation, patientsNavigation);
+    VBox navigation =
+        new VBox(
+            0,
+            new Label("Navigation"),
+            dashboardNavigation,
+            patientsNavigation,
+            calendarNavigation);
     navigation.setId("doctor-navigation");
+    DoctorCalendarSettingsView[] settingsHolder = new DoctorCalendarSettingsView[1];
+    Runnable showCalendar =
+        () -> {
+          calendarHolder[0].show();
+          pages.getChildren().setAll(calendarHolder[0].view());
+          calendarNavigation.getStyleClass().add(ACTIVE_NAVIGATION_STYLE);
+          dashboardNavigation.getStyleClass().remove(ACTIVE_NAVIGATION_STYLE);
+          patientsNavigation.getStyleClass().remove(ACTIVE_NAVIGATION_STYLE);
+        };
+    Runnable showSettings =
+        () -> {
+          calendarHolder[0].hide();
+          settingsHolder[0].reload();
+          pages.getChildren().setAll(settingsHolder[0].view());
+          calendarNavigation.getStyleClass().add(ACTIVE_NAVIGATION_STYLE);
+          dashboardNavigation.getStyleClass().remove(ACTIVE_NAVIGATION_STYLE);
+          patientsNavigation.getStyleClass().remove(ACTIVE_NAVIGATION_STYLE);
+        };
+    calendarHolder[0] = new DoctorCalendarView(services, session, showSettings, feedback);
+    settingsHolder[0] =
+        new DoctorCalendarSettingsView(services, session, showCalendar, showCalendar, feedback);
     dashboardNavigation.setOnAction(
         event -> {
+          calendarHolder[0].hide();
           pages.getChildren().setAll(masterDetail);
           dashboardNavigation.getStyleClass().add(ACTIVE_NAVIGATION_STYLE);
           patientsNavigation.getStyleClass().remove(ACTIVE_NAVIGATION_STYLE);
+          calendarNavigation.getStyleClass().remove(ACTIVE_NAVIGATION_STYLE);
         });
     patientsNavigation.setOnAction(
         event -> {
+          calendarHolder[0].hide();
           patientDirectory.refresh();
           pages.getChildren().setAll(patientsPage);
           patientsNavigation.getStyleClass().add(ACTIVE_NAVIGATION_STYLE);
           dashboardNavigation.getStyleClass().remove(ACTIVE_NAVIGATION_STYLE);
+          calendarNavigation.getStyleClass().remove(ACTIVE_NAVIGATION_STYLE);
         });
+    calendarNavigation.setOnAction(event -> showCalendar.run());
 
     BorderPane root = new BorderPane();
     root.setId("doctor-workspace");
