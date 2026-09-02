@@ -7,8 +7,6 @@ import java.nio.file.Files;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.Month;
-import java.time.Period;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -42,14 +40,12 @@ import javafx.util.StringConverter;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
-import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.PaymentMethod;
 import nusynapxe.domain.Receipt;
 import nusynapxe.domain.RevenueReport;
 import nusynapxe.domain.RevenueSummary;
 import nusynapxe.domain.Session;
-import nusynapxe.domain.Sex;
 import nusynapxe.service.AuthorizationException;
 import nusynapxe.service.ClinicServices;
 import nusynapxe.service.ValidationException;
@@ -76,14 +72,6 @@ public final class ReceptionistView {
 
   /** Creates the Receptionist workspace. */
   public static Parent create(ClinicServices services, Session session, Runnable onLogout) {
-    PatientForm registerForm = patientForm("reception-register", false);
-    Button register = button("Register patient", "reception-patient-register");
-    TextField patientSearch = field("reception-patient-search", "Patient ID, document, or details");
-    Button searchPatients = button("Search patients", "reception-patient-search-submit");
-    Button clearPatientSearch = button("Clear search", "reception-patient-search-clear");
-    ListView<Patient> patientList = new ListView<>();
-    patientList.setId("reception-patient-list");
-
     ComboBox<Account> doctor = doctorSelector();
     TimeFields startsAt = timeSelector("reception-start");
     TimeFields endsAt = timeSelector("reception-end");
@@ -124,7 +112,7 @@ public final class ReceptionistView {
     appointmentDate.setId("reception-appointment-date");
     ComboBox<Patient> appointmentPatient = new ComboBox<>();
     appointmentPatient.setId("reception-appointment-patient");
-    makePatientSearchable(appointmentPatient);
+    PatientDirectoryView.makePatientSearchable(appointmentPatient);
     Button checkIn = button("Check in selected", "reception-check-in");
     ListView<Appointment> checkoutAppointmentList = new ListView<>();
     checkoutAppointmentList.setId("reception-checkout-appointment-list");
@@ -175,25 +163,15 @@ public final class ReceptionistView {
     Label feedback = new Label();
     feedback.setId("reception-feedback");
     SelectionState selection = new SelectionState();
-
-    patientList
-        .getSelectionModel()
-        .selectedItemProperty()
-        .addListener(
-            (observable, previous, selected) -> {
-              selection.patientId = selected == null ? 0 : selected.id();
-              if (selected != null) {
-                showPatientDetails(
-                    services,
-                    session,
-                    selected,
-                    patientList,
-                    selection,
-                    feedback,
-                    patientSearch,
-                    appointmentPatient);
-              }
-            });
+    PatientDirectoryView patientDirectory =
+        PatientDirectoryView.create(
+            services,
+            session,
+            "reception",
+            feedback,
+            patientId ->
+                PatientDirectoryView.refreshAppointmentPatients(
+                    services, session, appointmentPatient, feedback, patientId));
     appointmentList
         .getSelectionModel()
         .selectedItemProperty()
@@ -484,37 +462,6 @@ public final class ReceptionistView {
                     selected,
                     feedback));
 
-    register.setOnAction(
-        event -> {
-          try {
-            Patient patient =
-                services.patientService().register(session, patientFromForm(registerForm, 0, true));
-            clearPatientForm(registerForm);
-            feedback.setText("Patient registered");
-            refreshPatients(
-                services, session, patientList, selection, feedback, patientSearch.getText());
-            refreshAppointmentPatients(
-                services, session, appointmentPatient, feedback, patient.id());
-          } catch (ValidationException | AuthorizationException exception) {
-            feedback.setText(exception.getMessage());
-          } catch (SQLException exception) {
-            feedback.setText("Patient registration is temporarily unavailable");
-          }
-        });
-
-    searchPatients.setOnAction(
-        event -> {
-          refreshPatients(
-              services, session, patientList, selection, feedback, patientSearch.getText());
-          patientList.getSelectionModel().clearSelection();
-        });
-    clearPatientSearch.setOnAction(
-        event -> {
-          patientSearch.clear();
-          refreshPatients(services, session, patientList, selection, feedback, "");
-          patientList.getSelectionModel().clearSelection();
-        });
-
     book.setOnAction(
         event -> {
           try {
@@ -720,19 +667,7 @@ public final class ReceptionistView {
     HBox.setHgrow(headerSpacer, Priority.ALWAYS);
     HBox header = new HBox(12, new Label("RECEPTIONIST workspace"), headerSpacer, logout);
 
-    VBox registerContent = new VBox(10, patientGrid(registerForm, false), register);
-    registerContent.setId("reception-patient-register-tab");
-    Tab registerTab = new Tab("Register new patient", registerContent);
-    registerTab.setClosable(false);
-
-    HBox patientSearchBar = new HBox(8, patientSearch, searchPatients, clearPatientSearch);
-    VBox manageContent = new VBox(10, patientSearchBar, patientList);
-    manageContent.setId("reception-patient-manage-tab");
-    Tab manageTab = new Tab("Search and manage patients", manageContent);
-    manageTab.setClosable(false);
-
-    TabPane patientTabs = new TabPane(registerTab, manageTab);
-    patientTabs.setId("reception-patient-tabs");
+    VBox patientContent = new VBox(12, patientDirectory.view());
     GridPane appointmentForm = new GridPane();
     appointmentForm.setHgap(8);
     appointmentForm.setVgap(8);
@@ -741,7 +676,6 @@ public final class ReceptionistView {
     appointmentForm.addRow(2, new Label(DATE_LABEL), appointmentDate);
     appointmentForm.addRow(3, new Label("Starts"), startsAt.view, new Label("Ends"), endsAt.view);
     appointmentForm.addRow(4, book);
-    VBox patientContent = new VBox(12, patientTabs);
     HBox scheduleFilters =
         new HBox(
             8,
@@ -838,12 +772,15 @@ public final class ReceptionistView {
             (observable, previous, selected) -> {
               checkoutTabActive[0] = selected == checkoutFeature;
               if (selected == patientFeature) {
-                refreshPatients(
-                    services, session, patientList, selection, feedback, patientSearch.getText());
+                patientDirectory.refresh();
               } else if (selected == appointmentFeature) {
                 refreshDoctors(services, session, doctor, feedback);
-                refreshAppointmentPatients(
-                    services, session, appointmentPatient, feedback, selection.patientId);
+                PatientDirectoryView.refreshAppointmentPatients(
+                    services,
+                    session,
+                    appointmentPatient,
+                    feedback,
+                    patientDirectory.selectedPatientId());
                 refreshDoctors(services, session, scheduleDoctor, feedback);
                 scheduleDoctor.getSelectionModel().clearSelection();
                 refreshSchedule(
@@ -900,8 +837,9 @@ public final class ReceptionistView {
     root.setBottom(feedback);
     refreshDoctors(services, session, doctor, feedback);
     refreshDoctors(services, session, reportDoctor, feedback);
-    refreshPatients(services, session, patientList, selection, feedback, "");
-    refreshAppointmentPatients(services, session, appointmentPatient, feedback, 0);
+    patientDirectory.refresh();
+    PatientDirectoryView.refreshAppointmentPatients(
+        services, session, appointmentPatient, feedback, 0);
     refreshSchedule(
         services,
         session,
@@ -934,337 +872,6 @@ public final class ReceptionistView {
         checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
         checkoutDate.getValue());
     return root;
-  }
-
-  private static void showPatientDetails(
-      ClinicServices services,
-      Session session,
-      Patient selected,
-      ListView<Patient> patientList,
-      SelectionState selection,
-      Label workspaceFeedback,
-      TextField patientSearch,
-      ComboBox<Patient> appointmentPatient) {
-    PatientForm form = patientForm("reception-patient", true);
-    populatePatientForm(selected, form);
-    Patient[] current = {selected};
-    Label feedback = new Label();
-    feedback.setId("reception-patient-details-feedback");
-    Button update = button("Save patient changes", "reception-patient-update");
-    Button status = button(patientStatusButtonText(selected), "reception-patient-deactivate");
-
-    update.setOnAction(
-        event -> {
-          try {
-            Patient updated =
-                services
-                    .patientService()
-                    .updateAdministrative(
-                        session, patientFromForm(form, current[0].id(), current[0].active()));
-            current[0] = updated;
-            populatePatientForm(updated, form);
-            feedback.setText("Patient changes saved");
-            workspaceFeedback.setText("Patient changes saved");
-            selection.patientId = 0;
-            refreshPatients(
-                services,
-                session,
-                patientList,
-                selection,
-                workspaceFeedback,
-                patientSearch.getText());
-            refreshAppointmentPatients(
-                services, session, appointmentPatient, workspaceFeedback, updated.id());
-          } catch (ValidationException | AuthorizationException exception) {
-            feedback.setText(exception.getMessage());
-          } catch (SQLException exception) {
-            feedback.setText("Patient update is temporarily unavailable");
-          }
-        });
-
-    status.setOnAction(
-        event -> {
-          try {
-            Patient updated =
-                current[0].active()
-                    ? services.patientService().deactivateAdministrative(session, current[0].id())
-                    : services.patientService().activateAdministrative(session, current[0].id());
-            current[0] = updated;
-            populatePatientForm(updated, form);
-            status.setText(patientStatusButtonText(updated));
-            String message = updated.active() ? "Patient activated" : "Patient deactivated";
-            feedback.setText(message);
-            workspaceFeedback.setText(message);
-            selection.patientId = 0;
-            refreshPatients(
-                services,
-                session,
-                patientList,
-                selection,
-                workspaceFeedback,
-                patientSearch.getText());
-            refreshAppointmentPatients(
-                services, session, appointmentPatient, workspaceFeedback, updated.id());
-          } catch (ValidationException | AuthorizationException exception) {
-            feedback.setText(exception.getMessage());
-          } catch (SQLException exception) {
-            feedback.setText("Patient status update is temporarily unavailable");
-          }
-        });
-
-    HBox actions = new HBox(8, update, status);
-    VBox content = new VBox(10, patientGrid(form, true), actions, feedback);
-    content.setPadding(new Insets(18));
-    ScrollPane scroll = new ScrollPane(content);
-    scroll.setFitToWidth(true);
-    scroll.setId("reception-patient-details-window");
-    Stage details = new Stage();
-    details.setTitle("Patient details - " + selected.displayedId());
-    details.initOwner(patientList.getScene().getWindow());
-    details.initModality(Modality.WINDOW_MODAL);
-    details.setScene(new Scene(scroll, 920, 520));
-    details.show();
-  }
-
-  private static String patientStatusButtonText(Patient patient) {
-    return patient.active() ? "Deactivate patient" : "Activate patient";
-  }
-
-  private static PatientForm patientForm(String prefix, boolean includePatientId) {
-    TextField patientId = includePatientId ? field(prefix + "-id", "Generated Patient ID") : null;
-    if (patientId != null) {
-      patientId.setEditable(false);
-    }
-    ComboBox<IdentityType> identityType =
-        new ComboBox<>(FXCollections.observableArrayList(IdentityType.values()));
-    identityType.setId(prefix + "-identity-type");
-    ComboBox<CountryOption> issuingCountry =
-        new ComboBox<>(FXCollections.observableArrayList(CountryOption.allCountries()));
-    issuingCountry.setId(prefix + "-issuing-country");
-    TextField phoneCountryCode = field(prefix + "-phone-country-code", "65");
-    issuingCountry
-        .valueProperty()
-        .addListener(
-            (observable, previous, selected) -> {
-              if (selected != null) {
-                phoneCountryCode.setText(selected.callingCode());
-              }
-            });
-    identityType
-        .valueProperty()
-        .addListener(
-            (observable, previous, selected) -> {
-              boolean singaporeIdentity =
-                  selected == IdentityType.NRIC || selected == IdentityType.FIN;
-              if (singaporeIdentity) {
-                CountryOption.fromCode("SG")
-                    .ifPresent(country -> issuingCountry.getSelectionModel().select(country));
-              }
-              issuingCountry.setDisable(singaporeIdentity);
-            });
-    identityType.getSelectionModel().select(IdentityType.NRIC);
-    ComboBox<Sex> sex = new ComboBox<>(FXCollections.observableArrayList(Sex.MALE, Sex.FEMALE));
-    sex.setId(prefix + "-sex");
-    ComboBox<Integer> birthDay = new ComboBox<>();
-    birthDay.setId(prefix + "-date-of-birth-day");
-    birthDay.setPromptText("Day");
-    for (int day = 1; day <= 31; day++) {
-      birthDay.getItems().add(day);
-    }
-    ComboBox<Month> birthMonth = new ComboBox<>(FXCollections.observableArrayList(Month.values()));
-    birthMonth.setId(prefix + "-date-of-birth-month");
-    birthMonth.setPromptText("Month");
-    ComboBox<Integer> birthYear = new ComboBox<>();
-    birthYear.setId(prefix + "-date-of-birth-year");
-    birthYear.setPromptText("Year");
-    int currentYear = LocalDate.now(SINGAPORE_ZONE).getYear();
-    for (int year = currentYear; year >= 1900; year--) {
-      birthYear.getItems().add(year);
-    }
-    TextField age = field(prefix + "-age", "");
-    age.setEditable(false);
-    Runnable updateAgeDisplay =
-        () -> {
-          if (birthDay.getValue() != null
-              && birthMonth.getValue() != null
-              && birthYear.getValue() != null) {
-            LocalDate dateOfBirth =
-                LocalDate.of(birthYear.getValue(), birthMonth.getValue(), birthDay.getValue());
-            age.setText(calculateAgeText(dateOfBirth));
-          } else {
-            age.setText("");
-          }
-        };
-    birthDay
-        .valueProperty()
-        .addListener((observable, previous, selected) -> updateAgeDisplay.run());
-    birthMonth
-        .valueProperty()
-        .addListener((observable, previous, selected) -> updateAgeDisplay.run());
-    birthYear
-        .valueProperty()
-        .addListener((observable, previous, selected) -> updateAgeDisplay.run());
-    return new PatientForm(
-        patientId,
-        identityType,
-        field(prefix + "-identity-number", "Identity document number"),
-        issuingCountry,
-        field(prefix + "-first-name", "First name"),
-        field(prefix + "-last-name", "Last name"),
-        birthDay,
-        birthMonth,
-        birthYear,
-        age,
-        sex,
-        phoneCountryCode,
-        field(prefix + "-phone-number", "Digits only"),
-        field(prefix + "-email", "Email"),
-        field(prefix + "-address", "Address"),
-        field(prefix + "-height", "Height (cm), optional"),
-        field(prefix + "-weight", "Weight (kg), optional"));
-  }
-
-  private static GridPane patientGrid(PatientForm form, boolean includePatientId) {
-    GridPane grid = new GridPane();
-    grid.setHgap(8);
-    grid.setVgap(8);
-    int row = 0;
-    if (includePatientId) {
-      grid.addRow(row, new Label("Patient ID"), form.patientId());
-      row++;
-    }
-    grid.addRow(
-        row,
-        requiredLabel("Identity type"),
-        form.identityType(),
-        requiredLabel("Identity number"),
-        form.identityNumber());
-    row++;
-    grid.addRow(row, requiredLabel("Issuing country"), form.issuingCountry());
-    row++;
-    grid.addRow(
-        row,
-        requiredLabel("First name"),
-        form.firstName(),
-        requiredLabel("Last name"),
-        form.lastName());
-    row++;
-    HBox dateOfBirthControls = new HBox(6, form.birthDay(), form.birthMonth(), form.birthYear());
-    grid.addRow(
-        row, requiredLabel("Date of birth"), dateOfBirthControls, new Label("Age"), form.age());
-    row++;
-    grid.addRow(row, requiredLabel("Sex"), form.sex());
-    row++;
-    Label phonePlus = new Label("+");
-    phonePlus.setId(form.phoneCountryCode().getId().replace("country-code", "plus"));
-    HBox phoneCountryCode = new HBox(4, phonePlus, form.phoneCountryCode());
-    grid.addRow(
-        row,
-        requiredLabel("Phone country code"),
-        phoneCountryCode,
-        requiredLabel("Phone number"),
-        form.phoneNumber());
-    row++;
-    grid.addRow(row, requiredLabel("Email"), form.email());
-    row++;
-    grid.addRow(row, requiredLabel("Address"), form.address());
-    row++;
-    grid.addRow(
-        row, new Label("Height (cm)"), form.height(), new Label("Weight (kg)"), form.weight());
-    return grid;
-  }
-
-  private static Patient patientFromForm(PatientForm form, long id, boolean active) {
-    CountryOption country = form.issuingCountry().getValue();
-    LocalDate dateOfBirth = null;
-    if (form.birthDay().getValue() != null
-        && form.birthMonth().getValue() != null
-        && form.birthYear().getValue() != null) {
-      dateOfBirth =
-          LocalDate.of(
-              form.birthYear().getValue(),
-              form.birthMonth().getValue(),
-              form.birthDay().getValue());
-    }
-    return new Patient(
-        id,
-        form.identityType().getValue(),
-        form.identityNumber().getText(),
-        country == null ? null : country.code(),
-        form.firstName().getText(),
-        form.lastName().getText(),
-        dateOfBirth == null ? null : dateOfBirth.toString(),
-        form.sex().getValue(),
-        form.phoneCountryCode().getText(),
-        form.phoneNumber().getText(),
-        form.email().getText(),
-        form.address().getText(),
-        parseOptionalMeasurement(form.height().getText(), "Height"),
-        parseOptionalMeasurement(form.weight().getText(), "Weight"),
-        active);
-  }
-
-  private static void populatePatientForm(Patient patient, PatientForm form) {
-    if (form.patientId() != null) {
-      form.patientId().setText(patient.displayedId());
-    }
-    form.identityType().setValue(patient.identityType());
-    form.identityNumber().setText(valueOrEmpty(patient.identityNumber()));
-    if (patient.identityType() != IdentityType.NRIC && patient.identityType() != IdentityType.FIN) {
-      form.issuingCountry().setValue(CountryOption.fromCode(patient.issuingCountry()).orElse(null));
-    }
-    form.firstName().setText(valueOrEmpty(patient.firstName()));
-    form.lastName().setText(valueOrEmpty(patient.lastName()));
-    if (patient.dateOfBirth() != null) {
-      LocalDate dob = LocalDate.parse(patient.dateOfBirth());
-      form.birthDay().setValue(dob.getDayOfMonth());
-      form.birthMonth().setValue(dob.getMonth());
-      form.birthYear().setValue(dob.getYear());
-    }
-    form.sex().setValue(patient.sex());
-    form.phoneCountryCode().setText(valueOrEmpty(patient.phoneCountryCode()));
-    form.phoneNumber().setText(valueOrEmpty(patient.phoneNumber()));
-    form.email().setText(valueOrEmpty(patient.email()));
-    form.address().setText(valueOrEmpty(patient.address()));
-    form.height().setText(patient.heightCm() == null ? "" : patient.heightCm().toString());
-    form.weight().setText(patient.weightKg() == null ? "" : patient.weightKg().toString());
-  }
-
-  private static void clearPatientForm(PatientForm form) {
-    clear(
-        form.identityNumber(),
-        form.firstName(),
-        form.lastName(),
-        form.age(),
-        form.phoneCountryCode(),
-        form.phoneNumber(),
-        form.email(),
-        form.address(),
-        form.height(),
-        form.weight());
-    if (form.patientId() != null) {
-      form.patientId().clear();
-    }
-    form.birthDay().getSelectionModel().clearSelection();
-    form.birthMonth().getSelectionModel().clearSelection();
-    form.birthYear().getSelectionModel().clearSelection();
-    form.identityType().getSelectionModel().clearSelection();
-    form.issuingCountry().getSelectionModel().clearSelection();
-    form.sex().getSelectionModel().clearSelection();
-  }
-
-  private static Label requiredLabel(String text) {
-    return new Label(text + " *");
-  }
-
-  static String calculateAgeText(LocalDate dateOfBirth) {
-    if (dateOfBirth == null) {
-      return "";
-    }
-    LocalDate today = LocalDate.now(SINGAPORE_ZONE);
-    return dateOfBirth.isAfter(today)
-        ? ""
-        : Integer.toString(Period.between(dateOfBirth, today).getYears());
   }
 
   private static Tab featureTab(String title, VBox content) {
@@ -1337,87 +944,6 @@ public final class ReceptionistView {
     HBox view = new HBox(4, hours, new Label(":"), minutes);
     view.setId(id);
     return new TimeFields(hours, minutes, view);
-  }
-
-  private static void makePatientSearchable(ComboBox<Patient> selector) {
-    selector.setEditable(true);
-    selector.setPromptText("Search patients");
-    selector.setConverter(
-        new StringConverter<>() {
-          @Override
-          public String toString(Patient patient) {
-            return patient == null
-                ? ""
-                : patient.displayedId()
-                    + " "
-                    + valueOrEmpty(patient.firstName())
-                    + " "
-                    + valueOrEmpty(patient.lastName());
-          }
-
-          @Override
-          public Patient fromString(String value) {
-            return selector.getItems().stream()
-                .filter(patient -> toString(patient).equalsIgnoreCase(value))
-                .findFirst()
-                .orElse(null);
-          }
-        });
-  }
-
-  private static void refreshPatients(
-      ClinicServices services,
-      Session session,
-      ListView<Patient> patientList,
-      SelectionState selection,
-      Label feedback,
-      String query) {
-    try {
-      long selectedPatientId = selection.patientId;
-      patientList.setItems(
-          FXCollections.observableArrayList(
-              services.patientService().searchAdministrative(session, query)));
-      if (!selectPatient(patientList, selectedPatientId)) {
-        selection.patientId = 0;
-      }
-    } catch (SQLException exception) {
-      feedback.setText("Patients are temporarily unavailable");
-    }
-  }
-
-  private static void refreshAppointmentPatients(
-      ClinicServices services,
-      Session session,
-      ComboBox<Patient> selector,
-      Label feedback,
-      long preferredPatientId) {
-    try {
-      selector.setItems(
-          FXCollections.observableArrayList(
-              services.patientService().searchAdministrative(session, "").stream()
-                  .filter(Patient::active)
-                  .toList()));
-      if (!selectPatient(selector, preferredPatientId) && !selector.getItems().isEmpty()) {
-        selector.getSelectionModel().selectFirst();
-      }
-    } catch (SQLException exception) {
-      feedback.setText("Patients are temporarily unavailable");
-    }
-  }
-
-  private static Double parseOptionalMeasurement(String value, String fieldName) {
-    if (value == null || value.isBlank()) {
-      return null;
-    }
-    try {
-      double measurement = Double.parseDouble(value.trim());
-      if (!Double.isFinite(measurement) || measurement <= 0) {
-        throw new ValidationException(fieldName + " must be a positive number");
-      }
-      return measurement;
-    } catch (NumberFormatException exception) {
-      throw new ValidationException(fieldName + " must be a positive number", exception);
-    }
   }
 
   private static void refreshCheckoutReady(
@@ -1703,7 +1229,7 @@ public final class ReceptionistView {
               .toList();
       patients.getItems().setAll(availablePatients);
       patients.getSelectionModel().select(patient);
-      makePatientSearchable(patients);
+      PatientDirectoryView.makePatientSearchable(patients);
       Label details =
           new Label(
               patient.displayedId()
@@ -1996,28 +1522,6 @@ public final class ReceptionistView {
     }
   }
 
-  private static boolean selectPatient(ListView<Patient> list, long id) {
-    for (int index = 0; index < list.getItems().size(); index++) {
-      if (list.getItems().get(index).id() == id) {
-        list.getSelectionModel().select(index);
-        return true;
-      }
-    }
-    list.getSelectionModel().clearSelection();
-    return false;
-  }
-
-  private static boolean selectPatient(ComboBox<Patient> selector, long id) {
-    for (Patient patient : selector.getItems()) {
-      if (patient.id() == id) {
-        selector.getSelectionModel().select(patient);
-        return true;
-      }
-    }
-    selector.getSelectionModel().clearSelection();
-    return false;
-  }
-
   private static void selectAppointment(ListView<Appointment> list, long id) {
     for (int index = 0; index < list.getItems().size(); index++) {
       if (list.getItems().get(index).id() == id) {
@@ -2056,35 +1560,7 @@ public final class ReceptionistView {
     }
   }
 
-  private static void clear(TextField... fields) {
-    for (TextField field : fields) {
-      field.clear();
-    }
-  }
-
-  private record PatientForm(
-      TextField patientId,
-      ComboBox<IdentityType> identityType,
-      TextField identityNumber,
-      ComboBox<CountryOption> issuingCountry,
-      TextField firstName,
-      TextField lastName,
-      ComboBox<Integer> birthDay,
-      ComboBox<Month> birthMonth,
-      ComboBox<Integer> birthYear,
-      TextField age,
-      ComboBox<Sex> sex,
-      TextField phoneCountryCode,
-      TextField phoneNumber,
-      TextField email,
-      TextField address,
-      TextField height,
-      TextField weight) {
-    // Groups one tab's independent patient-form controls.
-  }
-
   private static final class SelectionState {
-    private long patientId;
     private long appointmentId;
   }
 }

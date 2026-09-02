@@ -11,4 +11,20 @@
         <Method name="clinicalService"/>
         <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
+    <Match>
+        <Class name="nusynapxe.service.ClinicServices"/>
+        <Method name="patientService"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <!-- Dynamic schema identifiers are read from SQLite metadata and quoted before use. -->
+    <Match>
+        <Class name="nusynapxe.persistence.PatientRepository"/>
+        <Method name="count"/>
+        <Bug pattern="SQL_INJECTION_JDBC"/>
+    </Match>
+    <Match>
+        <Class name="nusynapxe.persistence.PatientRepository"/>
+        <Method name="countPatientForeignKeys"/>
+        <Bug pattern="SQL_INJECTION_JDBC"/>
+    </Match>
 </FindBugsFilter>

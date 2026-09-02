@@ -1,5 +1,6 @@
 package nusynapxe.service;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -162,7 +163,8 @@ final class AppointmentServiceTest {
   }
 
   @Test
-  void receptionistDashboardSearchesAndRejectsInactivePatients() throws SQLException {
+  void receptionistDashboardSearchesRejectsInactivePatientsAndAllowsReactivation()
+      throws SQLException {
     try (SqliteDatabase database = openDatabase()) {
       Accounts fixture = accounts(database);
       AppointmentService service = service(database);
@@ -189,6 +191,15 @@ final class AppointmentServiceTest {
       new PatientRepository(database).deactivate(fixture.patient().id());
       assertThrows(
           ValidationException.class,
+          () ->
+              service.book(
+                  fixture.receptionistSession(),
+                  fixture.patient().id(),
+                  fixture.doctor().id(),
+                  LocalDateTime.of(2026, 9, 1, 10, 0),
+                  LocalDateTime.of(2026, 9, 1, 10, 30)));
+      new PatientRepository(database).activate(fixture.patient().id());
+      assertDoesNotThrow(
           () ->
               service.book(
                   fixture.receptionistSession(),

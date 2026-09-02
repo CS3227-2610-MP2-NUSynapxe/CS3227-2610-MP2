@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -16,9 +17,16 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import nusynapxe.domain.Account;
+import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
+import nusynapxe.domain.ClinicalRecord;
 import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
+import nusynapxe.domain.PatientDeletionBlockers;
+import nusynapxe.domain.Payment;
+import nusynapxe.domain.PaymentMethod;
+import nusynapxe.domain.PaymentStatus;
+import nusynapxe.domain.Prescription;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Sex;
 import org.junit.jupiter.api.Test;
@@ -133,6 +141,166 @@ final class PatientDirectoryRepositoryTest {
       assertEquals(
           patient.id(),
           new AppointmentRepository(database).findById(appointmentId).orElseThrow().patientId());
+    }
+  }
+
+  @Test
+  void deletesUnusedPatientAndBlocksEveryKnownRelationship() throws SQLException {
+    try (SqliteDatabase database = openDatabase("delete.db")) {
+      PatientRepository patients = new PatientRepository(database);
+      Patient unused = patients.create(patient(IdentityType.OTHER, "UNUSED", "ZZ", "Unused"));
+
+      assertTrue(patients.findDeletionBlockers(unused.id()).orElseThrow().canDelete());
+      assertTrue(patients.deleteIfUnrelated(unused.id()).isEmpty());
+      assertTrue(patients.findById(unused.id()).isEmpty());
+
+      AccountRepository accounts = new AccountRepository(database);
+      Account doctor =
+          accounts.create("doctor", "Doctor", Role.DOCTOR, new byte[] {1}, new byte[] {2});
+      Account receptionist =
+          accounts.create(
+              "reception", "Reception", Role.RECEPTIONIST, new byte[] {3}, new byte[] {4});
+      Patient history = patients.create(patient(IdentityType.OTHER, "HISTORY", "ZZ", "History"));
+      Appointment appointment =
+          new AppointmentRepository(database)
+              .create(
+                  history.id(),
+                  doctor.id(),
+                  LocalDateTime.of(2026, 9, 2, 9, 0),
+                  LocalDateTime.of(2026, 9, 2, 9, 30),
+                  AppointmentStatus.COMPLETED);
+      ClinicalRecord clinicalRecord =
+          new ClinicalRecordRepository(database)
+              .save(
+                  new ClinicalRecord(
+                      0,
+                      history.id(),
+                      appointment.id(),
+                      doctor.id(),
+                      "Diagnosis",
+                      "Notes",
+                      "Follow up"));
+      Prescription prescription =
+          new ClinicalRecordRepository(database)
+              .addPrescription(
+                  new Prescription(
+                      0,
+                      clinicalRecord.id(),
+                      "Medicine",
+                      "10 mg",
+                      "Daily",
+                      "7 days",
+                      "Take with food"));
+      Payment payment =
+          new PaymentRepository(database)
+              .create(
+                  new Payment(
+                      0,
+                      appointment.id(),
+                      history.id(),
+                      receptionist.id(),
+                      2500,
+                      PaymentMethod.CARD,
+                      PaymentStatus.SUCCESSFUL,
+                      LocalDateTime.of(2026, 9, 2, 10, 0)));
+      ReceiptRepository receipts = new ReceiptRepository(database);
+      database.connection().setAutoCommit(false);
+      try {
+        receipts.create(
+            database.connection(),
+            payment.id(),
+            appointment.id(),
+            history.id(),
+            payment.amountMinor(),
+            payment.method(),
+            LocalDate.of(2026, 9, 2),
+            LocalDateTime.of(2026, 9, 2, 10, 0));
+        database.connection().commit();
+      } finally {
+        database.connection().setAutoCommit(true);
+      }
+
+      PatientDeletionBlockers blockers = patients.findDeletionBlockers(history.id()).orElseThrow();
+      assertEquals(1, blockers.appointments());
+      assertEquals(1, blockers.clinicalRecords());
+      assertEquals(1, blockers.prescriptions());
+      assertEquals(1, blockers.payments());
+      assertEquals(1, blockers.receipts());
+      assertEquals(0, blockers.otherReferences());
+      assertEquals(blockers, patients.deleteIfUnrelated(history.id()).orElseThrow());
+      assertEquals(history, patients.findById(history.id()).orElseThrow());
+      assertEquals(
+          appointment,
+          new AppointmentRepository(database).findById(appointment.id()).orElseThrow());
+      assertEquals(
+          clinicalRecord,
+          new ClinicalRecordRepository(database).findByAppointment(appointment.id()).orElseThrow());
+      assertEquals(
+          prescription,
+          new ClinicalRecordRepository(database).findPrescriptions(clinicalRecord.id()).get(0));
+      assertEquals(
+          payment,
+          new PaymentRepository(database).findByAppointment(appointment.id()).orElseThrow());
+      assertEquals(
+          history.id(),
+          receipts
+              .findById(
+                  receipts.findAll("history", doctor.id(), LocalDate.of(2026, 9, 2)).get(0).id())
+              .patientId());
+    }
+  }
+
+  @Test
+  void countsAnAdditionalPatientForeignKeyAsOtherRelatedData() throws SQLException {
+    try (SqliteDatabase database = openDatabase("other-delete-reference.db")) {
+      PatientRepository patients = new PatientRepository(database);
+      Patient patient = patients.create(patient(IdentityType.OTHER, "OTHER", "ZZ", "Other"));
+      try (var statement = database.connection().createStatement()) {
+        statement.execute(
+            "CREATE TABLE patient_flags ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "patient_id INTEGER NOT NULL REFERENCES patients(id))");
+        statement.executeUpdate(
+            "INSERT INTO patient_flags(patient_id) VALUES (" + patient.id() + ")");
+      }
+
+      PatientDeletionBlockers blockers = patients.findDeletionBlockers(patient.id()).orElseThrow();
+      assertEquals(1, blockers.otherReferences());
+      assertEquals(
+          List.of(new PatientDeletionBlockers.BlockingRelation("Other patient-related records", 1)),
+          blockers.blockingRelations().stream()
+              .filter(relation -> relation.label().startsWith("Other"))
+              .toList());
+      assertEquals(blockers, patients.deleteIfUnrelated(patient.id()).orElseThrow());
+      assertTrue(patients.findById(patient.id()).isPresent());
+    }
+  }
+
+  @Test
+  void translatesAStaleForeignKeyRaceIntoASafeBlockedOutcome() throws SQLException {
+    try (SqliteDatabase database = openDatabase("stale-delete.db")) {
+      PatientRepository patients = new PatientRepository(database);
+      Patient patient = patients.create(patient(IdentityType.OTHER, "RACE", "ZZ", "Race"));
+      try (var statement = database.connection().createStatement()) {
+        statement.execute(
+            "CREATE TABLE patient_delete_race ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "patient_id INTEGER NOT NULL REFERENCES patients(id))");
+        statement.execute(
+            "CREATE TRIGGER patient_delete_race_trigger BEFORE DELETE ON patients "
+                + "BEGIN INSERT INTO patient_delete_race(patient_id) VALUES (OLD.id); END");
+      }
+
+      assertTrue(patients.findDeletionBlockers(patient.id()).orElseThrow().canDelete());
+      PatientDeletionBlockers blockers = patients.deleteIfUnrelated(patient.id()).orElseThrow();
+
+      assertEquals(1, blockers.otherReferences());
+      assertTrue(patients.findById(patient.id()).isPresent());
+      try (var statement = database.connection().createStatement();
+          var result = statement.executeQuery("SELECT COUNT(*) FROM patient_delete_race")) {
+        assertTrue(result.next());
+        assertEquals(0, result.getLong(1));
+      }
     }
   }
 

@@ -18,6 +18,9 @@ username, and **Log out** in a shared header. Receptionists use the dark
 left-hand navigation rail to switch between **Patients**, **Appointments**,
 **Checkout**, and **Revenue**. The active page heading provides the fuller
 description of the selected work area.
+Doctors use a two-item navigation rail with **Dashboard** for the existing
+appointment and consultation workspace and **Patients** for the shared
+administrative patient directory. The selected destination is highlighted.
 The registration/search tabs and appointment booking/management tabs remain
 independent inside their respective areas.
 
@@ -116,6 +119,18 @@ A patient migrated from an
 older database remains searchable, but its identity-document fields must be
 completed before its next basic-data save.
 
+Doctors have the same patient-directory permissions as Receptionists: they can
+register, search, edit, activate, deactivate, and request deletion of patients.
+Deleting is reserved for an accidental or unused patient with no appointments,
+clinical records, prescriptions, payments, receipts, or other related data.
+Select **Delete patient**, review the permanent-action confirmation, and select
+**Delete permanently** only when the record is unused. If any related data is
+found, deletion is refused and a popup lists each blocking category and count;
+the patient and all history are preserved. Close the popup and use
+**Deactivate patient** when the patient should remain in the system but must not
+be selected for new bookings. Deactivation is reversible and does not remove
+the Patient ID or history.
+
 Receptionists can view and maintain only basic identity, demographic,
 measurement, contact, and address data. The directory never returns
 diagnoses, consultation or follow-up notes, or prescriptions, and basic-data
@@ -203,20 +218,27 @@ opening a feature tab reloads information that another workflow may have changed
 
 ## Doctor workflow
 
-1. Log in with a Doctor account. The workspace shows only that Doctor's
+1. Log in with a Doctor account. **Dashboard** is the default destination and
+   shows only that Doctor's
    appointment schedule in the left side of a schedule/detail layout. Select a
    visit to reveal its consultation context on the right; until a visit is
    selected, the detail area explains what to do.
-2. Select a pending appointment and choose **Accept selected**, or enter new
+2. Select **Patients** to open the administrative directory. Doctors can
+   register, search, edit, activate, deactivate, and safely delete patients
+   there using the same administrative fields as Receptionists. The directory
+   includes inactive patients and contains no diagnosis, consultation,
+   follow-up, prescription, or other clinical controls. Return to **Dashboard**
+   to resume appointment and clinical work.
+3. Select a pending appointment and choose **Accept selected**, or enter new
    times and choose **Reschedule selected** for a pending or accepted visit.
-3. Enter a non-overlapping `yyyy-MM-dd HH:mm` interval and select **Block time
+4. Enter a non-overlapping `yyyy-MM-dd HH:mm` interval and select **Block time
    off** to make that period unavailable for future bookings.
-4. After Reception has checked in the patient, select **Refresh schedule** and
+5. After Reception has checked in the patient, select **Refresh schedule** and
    select the appointment. Enter the diagnosis, consultation notes, and
    follow-up notes, then choose **Save consultation**.
-5. Complete all prescription fields—medication, dosage, frequency, duration,
+6. Complete all prescription fields—medication, dosage, frequency, duration,
    and instructions—and choose **Add prescription**.
-6. Select **Mark consultation completed**. This makes the visit available for
+7. Select **Mark consultation completed**. This makes the visit available for
    Receptionist checkout.
 
 Only the assigned Doctor can read or change the clinical record and

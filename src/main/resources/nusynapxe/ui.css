@@ -399,6 +399,26 @@
     -fx-text-fill: white;
 }
 
+#doctor-navigation {
+    -fx-background-color: #102a43;
+    -fx-background-radius: 12px;
+    -fx-padding: 16px;
+}
+
+#doctor-navigation > .label {
+    -fx-text-fill: #d8e5f0;
+    -fx-font-weight: bold;
+}
+
+#doctor-navigation > .button.active-navigation {
+    -fx-background-color: #0f8f83;
+    -fx-text-fill: white;
+}
+
+#doctor-navigation > .button.active-navigation:hover {
+    -fx-background-color: #0b746b;
+}
+
 .sub-navigation > .tab-header-area > .tab-header-background {
     -fx-background-color: #e7eef5;
 }

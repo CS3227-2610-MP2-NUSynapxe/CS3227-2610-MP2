@@ -20,6 +20,7 @@ Useful focused commands are:
 .\gradlew.bat test --tests nusynapxe.service.AppointmentServiceTest --no-daemon --console=plain
 .\gradlew.bat test --tests nusynapxe.persistence.SchemaMigrationTest --tests nusynapxe.persistence.PatientDirectoryRepositoryTest --no-daemon --console=plain
 .\gradlew.bat test --tests nusynapxe.service.PatientServiceTest --tests nusynapxe.ui.ReceptionistViewTest --no-daemon --console=plain
+.\gradlew.bat test --tests nusynapxe.service.PatientServiceTest --tests nusynapxe.persistence.PatientDirectoryRepositoryTest --tests nusynapxe.ui.DoctorViewTest --no-daemon --console=plain
 .\gradlew.bat checkstyleMain checkstyleTest --no-daemon --console=plain
 .\gradlew.bat pmdMain --no-daemon --console=plain
 .\gradlew.bat spotbugsMain --no-daemon --console=plain
@@ -111,6 +112,17 @@ case-insensitive partial document, country, name, phone, or email text. SQL
 wildcards supplied by a user are escaped and treated literally. Blank search
 lists the directory, and results use deterministic name-then-ID ordering.
 
+Patient deletion uses `PatientDeletionBlockers` as a non-sensitive relationship
+projection. The repository counts appointments, clinical records,
+prescriptions reached through clinical records, payments, receipts, and any
+other table with a direct foreign key to `patients`. `deleteIfUnrelated` repeats
+the counts and the patient-row delete in one transaction. It deletes only the
+patient row when every count is zero; it never deletes child rows or uses
+`ON DELETE CASCADE`. A final SQLite foreign-key failure is rolled back and
+returned as an additional safe blocker category for a stale or newly added
+relationship. `PatientDeletionBlockedException` carries only the patient ID
+and category counts to the UI.
+
 New schema changes should remain ordered, versioned, and transactional. Keep
 basic administrative and clinical columns in separate repository projections. All
 appointment and time-off interval writes use transactions and reject overlap;
@@ -126,9 +138,11 @@ creates an in-memory `Session` after verifying an enabled account and clears
 the submitted password array. Sessions are never serialized to SQLite.
 
 `Authorization.requireRole` and `requireDoctorOwnership` are called by every
-protected service operation. Receptionist registration, search, detail,
-update, deactivation, and activation require `Role.RECEPTIONIST`. `PatientRepository`
-selects an explicit basic-data projection and never joins clinical tables;
+protected service operation. `Authorization.requirePatientAdministration`
+accepts only authenticated `Role.DOCTOR` or `Role.RECEPTIONIST` sessions for
+patient registration, search, retrieval, update, activation, deactivation,
+deletion preflight, and deletion. `PatientRepository` selects an explicit
+basic-data projection and never joins clinical tables;
 the `Patient` record cannot contain diagnoses, notes, or prescriptions.
 `ClinicalService` requires the assigned Doctor and a checked-in or later
 appointment. System Admin is limited to account administration.
@@ -144,7 +158,9 @@ The Receptionist scheduling dashboard uses `AppointmentRepository.search` and
 status filters. It derives summary counts from the same filtered result set.
 The repository joins only the administrative patient projection, and the UI
 formats rows with Patient ID/name, Doctor ID, interval, and status. Booking
-rejects inactive patients at the service boundary. Booking and rescheduling use
+rejects inactive patients at the service boundary. Reactivation restores booking
+eligibility subject to the normal schedule-conflict rules. Existing appointments
+and all history remain available after deactivation. Booking and rescheduling use
 a calendar date plus separate hour (`00`–`23`) and minute (`00`/`30`) selectors, and
 all conflict and lifecycle checks remain transactional service/repository
 rules.
@@ -221,6 +237,18 @@ has no manual refresh control. Important ids include `login-submit`, `setup-subm
 `reception-patient-deactivate`, `reception-book`, `reception-checkout`,
 `doctor-consultation-save`, and `logout-button`.
 
+`PatientDirectoryView` is the shared administrative directory embedded by the
+Receptionist and Doctor workspaces. It receives the authenticated session,
+services, an ID prefix, a feedback label, and a callback for refreshing
+dependent selectors. Receptionist IDs retain the `reception-*` prefix; Doctor
+IDs use `doctor-*`. The selected-patient details window contains the
+administrative form, **Save patient changes**, **Activate/Deactivate patient**,
+and **Delete patient**. Eligible deletion opens an explicit confirmation
+window; a blocked deletion opens the owned `*-patient-delete-blocked-window`
+modal with category/count labels and deactivation guidance. Refreshes suppress
+automatic detail-window reopening so failed writes do not create duplicate
+windows or leave the list out of sync.
+
 The shared authenticated header has `workspace-header`, `app-brand`,
 `workspace-title`, `workspace-identity`, and `logout-button`. The Receptionist
 top-level `reception-workspace-tabs` remains a `TabPane`, but its tabs are
@@ -247,6 +275,11 @@ schedule and a selected-appointment detail pane containing availability,
 consultation, prescriptions, and completion cards. Consultation actions remain
 disabled until a schedule item is selected; the existing services still own
 authorization and lifecycle validation.
+The Doctor shell keeps that content under the `Dashboard` destination and
+places the shared administrative directory under `Patients`;
+`doctor-nav-dashboard`, `doctor-nav-patients`, and `doctor-patients-page` are
+the navigation markers. The Patients destination has no clinical service or
+prescription controls.
 
 TestFX tests require a display. The CI workflow runs the Java suite through
 `xvfb-run --auto-servernum` on Ubuntu. For controls inside a scroll pane,

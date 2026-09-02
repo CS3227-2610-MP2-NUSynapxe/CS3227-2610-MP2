@@ -258,6 +258,14 @@ final class ReceptionistViewTest extends ApplicationTest {
     assertTrue(lookup("#reception-patient-id").tryQuery().isPresent());
     verifyThat("#reception-patient-deactivate", hasText("Deactivate patient"));
     assertEquals("ABFOREIGN9", text("#reception-patient-identity-number"));
+    setText("#reception-patient-phone-number", "not-digits");
+    fire("#reception-patient-update");
+    assertTrue(
+        lookup("#reception-patient-details-feedback")
+            .queryAs(javafx.scene.control.Label.class)
+            .getText()
+            .contains("Phone number"));
+    assertEquals(1, patientList().getItems().size());
     setText("#reception-patient-phone-country-code", "33");
     setText("#reception-patient-phone-number", "123456789");
     fire("#reception-patient-update");
@@ -336,6 +344,24 @@ final class ReceptionistViewTest extends ApplicationTest {
     closePatientDetails();
     // Patient should still be highlighted after closing details window
     assertEquals(0, patientList().getSelectionModel().getSelectedIndex());
+    interact(() -> patientList().getSelectionModel().clearSelection());
+    selectFirstPatient();
+    waitForNode("#reception-patient-details-window");
+
+    Thread cancelThread = new Thread(() -> fire("#reception-patient-delete"));
+    cancelThread.start();
+    waitForNode("#reception-patient-delete-confirm-window");
+    fire("#reception-patient-delete-cancel");
+    join(cancelThread);
+    assertEquals(0, patientList().getSelectionModel().getSelectedIndex());
+
+    Thread deleteThread = new Thread(() -> fire("#reception-patient-delete"));
+    deleteThread.start();
+    waitForNode("#reception-patient-delete-confirm-window");
+    fire("#reception-patient-delete-confirm");
+    join(deleteThread);
+    verifyThat("#reception-feedback", hasText("Patient deleted"));
+    assertTrue(patientList().getItems().isEmpty());
   }
 
   @Test
@@ -544,5 +570,15 @@ final class ReceptionistViewTest extends ApplicationTest {
     } catch (TimeoutException exception) {
       throw new AssertionError("Timed out waiting for " + selector, exception);
     }
+  }
+
+  private void join(Thread thread) {
+    try {
+      thread.join(60_000);
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      throw new AssertionError("Interrupted while waiting for patient dialog", exception);
+    }
+    assertFalse(thread.isAlive(), "Patient dialog action did not finish");
   }
 }

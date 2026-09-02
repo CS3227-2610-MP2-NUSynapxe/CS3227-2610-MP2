@@ -1,5 +1,7 @@
 package nusynapxe.ui;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.testfx.api.FxAssert.verifyThat;
 import static org.testfx.matcher.base.NodeMatchers.isVisible;
@@ -7,20 +9,31 @@ import static org.testfx.matcher.control.LabeledMatchers.hasText;
 
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.ListView;
+import javafx.scene.control.TabPane;
 import javafx.scene.control.TextInputControl;
 import javafx.stage.Stage;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.AppointmentStatus;
+import nusynapxe.domain.ClinicalRecord;
 import nusynapxe.domain.Patient;
+import nusynapxe.domain.Payment;
+import nusynapxe.domain.PaymentMethod;
+import nusynapxe.domain.PaymentStatus;
+import nusynapxe.domain.Prescription;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
+import nusynapxe.domain.Sex;
 import nusynapxe.persistence.AppointmentRepository;
+import nusynapxe.persistence.ClinicalRecordRepository;
 import nusynapxe.persistence.PatientRepository;
+import nusynapxe.persistence.PaymentRepository;
 import nusynapxe.persistence.SqliteDatabase;
 import nusynapxe.service.ClinicServices;
 import org.junit.jupiter.api.AfterEach;
@@ -33,6 +46,8 @@ final class DoctorViewTest extends ApplicationTest {
   @TempDir private Path temporaryDirectory;
   private SqliteDatabase database;
   private ClinicServices services;
+  private Account doctor;
+  private Account receptionist;
 
   @Override
   public void start(Stage stage) throws SQLException {
@@ -42,11 +57,20 @@ final class DoctorViewTest extends ApplicationTest {
     Account admin =
         services.accountService().createInitialAdmin("admin", "Admin", "secure-pass".toCharArray());
     Session adminSession = new Session(admin.id(), admin.username(), Role.SYSTEM_ADMIN);
-    Account doctor =
+    doctor =
         services
             .accountService()
             .createStaff(
                 adminSession, "doctor", "Dr. Ada", Role.DOCTOR, "doctor-pass".toCharArray());
+    receptionist =
+        services
+            .accountService()
+            .createStaff(
+                adminSession,
+                "reception",
+                "Reception",
+                Role.RECEPTIONIST,
+                "reception-pass".toCharArray());
     Patient patient =
         new PatientRepository(database)
             .create(new Patient(0, "Pat", "Lee", "", "555-0100", "", ""));
@@ -102,12 +126,183 @@ final class DoctorViewTest extends ApplicationTest {
     verifyThat("#login-view", isVisible());
   }
 
+  @Test
+  void doctorCanNavigateToPatientsAndDeleteAnUnusedPatient() throws SQLException {
+    loginAsDoctor();
+    fire("#doctor-nav-patients");
+    verifyThat("#doctor-patients-page", isVisible());
+    assertTrue(lookup("#doctor-patient-tabs").tryQuery().isPresent());
+    assertFalse(lookup("#doctor-master-detail").tryQuery().isPresent());
+    assertFalse(lookup("#doctor-consultation-save").tryQuery().isPresent());
+    assertFalse(lookup("#doctor-prescription-submit").tryQuery().isPresent());
+
+    selectCombo("#doctor-register-sex", Sex.FEMALE);
+    setText("#doctor-register-identity-number", "S1234567D");
+    setText("#doctor-register-first-name", "New");
+    setText("#doctor-register-last-name", "Patient");
+    setDate("#doctor-register-date-of-birth", LocalDate.of(1990, 1, 1));
+    setText("#doctor-register-phone-number", "5550101");
+    setText("#doctor-register-email", "new.patient@example.test");
+    setText("#doctor-register-address", "New address");
+    fire("#doctor-patient-register");
+    verifyThat("#doctor-feedback", hasText("Patient registered"));
+
+    selectPatientManagementTab();
+    setText("#doctor-patient-search", "new.patient@example.test");
+    fire("#doctor-patient-search-submit");
+    assertEquals(1, patientList().getItems().size());
+    selectFirstPatient();
+    waitForNode("#doctor-patient-details-window");
+
+    setText("#doctor-patient-phone-number", "5550102");
+    fire("#doctor-patient-update");
+    verifyThat("#doctor-feedback", hasText("Patient changes saved"));
+
+    Thread cancelThread = new Thread(() -> fire("#doctor-patient-delete"));
+    cancelThread.start();
+    waitForNode("#doctor-patient-delete-confirm-window");
+    fire("#doctor-patient-delete-cancel");
+    join(cancelThread);
+    assertTrue(lookup("#doctor-patient-details-window").tryQuery().isPresent());
+
+    Thread deleteThread = new Thread(() -> fire("#doctor-patient-delete"));
+    deleteThread.start();
+    waitForNode("#doctor-patient-delete-confirm-window");
+    fire("#doctor-patient-delete-confirm");
+    join(deleteThread);
+    verifyThat("#doctor-feedback", hasText("Patient deleted"));
+    assertTrue(patientList().getItems().isEmpty());
+    assertTrue(
+        services
+            .patientService()
+            .searchAdministrative(doctorSession(), "new.patient@example.test")
+            .isEmpty());
+    fire("#doctor-nav-dashboard");
+    verifyThat("#doctor-master-detail", isVisible());
+  }
+
+  @Test
+  void doctorSeesWhyAReferencedPatientCannotBeDeleted() throws SQLException {
+    addPatientHistory();
+    loginAsDoctor();
+    fire("#doctor-nav-patients");
+    selectPatientManagementTab();
+    setText("#doctor-patient-search", "P000001");
+    fire("#doctor-patient-search-submit");
+    selectFirstPatient();
+    waitForNode("#doctor-patient-details-window");
+
+    Thread deleteThread = new Thread(() -> fire("#doctor-patient-delete"));
+    deleteThread.start();
+    waitForNode("#doctor-patient-delete-blocked-window");
+    verifyThat("#doctor-patient-delete-blocked-explanation", isVisible());
+    verifyThat("#doctor-patient-delete-blocked-appointments", hasText("Appointments: 1"));
+    verifyThat("#doctor-patient-delete-blocked-clinical-records", hasText("Clinical records: 1"));
+    verifyThat("#doctor-patient-delete-blocked-prescriptions", hasText("Prescriptions: 1"));
+    verifyThat("#doctor-patient-delete-blocked-payments", hasText("Payments: 1"));
+    verifyThat("#doctor-patient-delete-blocked-receipts", hasText("Receipts: 1"));
+    assertTrue(
+        lookup("#doctor-patient-delete-blocked-alternative")
+            .queryAs(javafx.scene.control.Label.class)
+            .getText()
+            .contains("deactivate the patient instead"));
+    fire("#doctor-patient-delete-blocked-close");
+    join(deleteThread);
+    assertTrue(lookup("#doctor-patient-details-window").tryQuery().isPresent());
+  }
+
   private void selectFirst(String selector) {
     interact(() -> lookup(selector).queryAs(ListView.class).getSelectionModel().selectFirst());
   }
 
   private void setText(String selector, String value) {
     interact(() -> lookup(selector).queryAs(TextInputControl.class).setText(value));
+  }
+
+  @SuppressWarnings("unchecked")
+  private <T> void selectCombo(String selector, T value) {
+    interact(() -> lookup(selector).queryAs(ComboBox.class).setValue(value));
+  }
+
+  @SuppressWarnings("unchecked")
+  private void setDate(String selector, LocalDate value) {
+    interact(
+        () -> {
+          lookup(selector + "-day").queryAs(ComboBox.class).setValue(value.getDayOfMonth());
+          lookup(selector + "-month").queryAs(ComboBox.class).setValue(value.getMonth());
+          lookup(selector + "-year").queryAs(ComboBox.class).setValue(value.getYear());
+        });
+  }
+
+  private void selectPatientManagementTab() {
+    interact(
+        () -> lookup("#doctor-patient-tabs").queryAs(TabPane.class).getSelectionModel().select(1));
+  }
+
+  @SuppressWarnings("unchecked")
+  private ListView<Patient> patientList() {
+    return lookup("#doctor-patient-list").queryAs(ListView.class);
+  }
+
+  private void selectFirstPatient() {
+    interact(() -> patientList().getSelectionModel().selectFirst());
+  }
+
+  private void loginAsDoctor() {
+    setText("#login-username", "doctor");
+    setText("#login-password", "doctor-pass");
+    fire("#login-submit");
+    waitForNode("#doctor-workspace");
+  }
+
+  private Session doctorSession() {
+    return new Session(doctor.id(), doctor.username(), Role.DOCTOR);
+  }
+
+  private void addPatientHistory() throws SQLException {
+    ClinicalRecord clinicalRecord =
+        new ClinicalRecordRepository(database)
+            .save(
+                new ClinicalRecord(
+                    0,
+                    1,
+                    1,
+                    doctor.id(),
+                    "Existing diagnosis",
+                    "Existing notes",
+                    "Existing follow-up"));
+    new ClinicalRecordRepository(database)
+        .addPrescription(
+            new Prescription(
+                0,
+                clinicalRecord.id(),
+                "Existing medicine",
+                "10 mg",
+                "Daily",
+                "7 days",
+                "Take with food"));
+    services.appointmentService().complete(doctorSession(), 1);
+    new PaymentRepository(database)
+        .createCheckout(
+            new Payment(
+                0,
+                1,
+                1,
+                receptionist.id(),
+                2500,
+                PaymentMethod.CARD,
+                PaymentStatus.SUCCESSFUL,
+                LocalDateTime.of(2026, 9, 2, 10, 0)));
+  }
+
+  private void join(Thread thread) {
+    try {
+      thread.join(60_000);
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      throw new AssertionError("Interrupted while waiting for patient dialog", exception);
+    }
+    assertFalse(thread.isAlive(), "Patient dialog action did not finish");
   }
 
   private void fire(String selector) {

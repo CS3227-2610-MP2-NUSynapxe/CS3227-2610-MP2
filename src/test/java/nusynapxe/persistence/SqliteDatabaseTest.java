@@ -58,6 +58,19 @@ final class SqliteDatabaseTest {
     }
   }
 
+  @Test
+  void patientForeignKeysRemainRestrictive() throws SQLException {
+    try (SqliteDatabase database =
+        new SqliteDatabase(temporaryDirectory.resolve("foreign-keys.db"))) {
+      database.open();
+
+      for (String table :
+          Set.of("appointments", "clinical_records", "prescriptions", "payments", "receipts")) {
+        assertTrue(foreignKeyDeleteActions(database, table).stream().allMatch("NO ACTION"::equals));
+      }
+    }
+  }
+
   private static int foreignKeysEnabled(SqliteDatabase database) throws SQLException {
     try (PreparedStatement statement =
             database.connection().prepareStatement("PRAGMA foreign_keys");
@@ -96,6 +109,19 @@ final class SqliteDatabaseTest {
         names.add(resultSet.getString("name"));
       }
       return Set.copyOf(names);
+    }
+  }
+
+  private static Set<String> foreignKeyDeleteActions(SqliteDatabase database, String table)
+      throws SQLException {
+    try (PreparedStatement statement =
+            database.connection().prepareStatement("PRAGMA foreign_key_list(" + table + ")");
+        ResultSet resultSet = statement.executeQuery()) {
+      Set<String> actions = new HashSet<>();
+      while (resultSet.next()) {
+        actions.add(resultSet.getString("on_delete"));
+      }
+      return Set.copyOf(actions);
     }
   }
 

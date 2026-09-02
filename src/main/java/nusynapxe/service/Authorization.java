@@ -26,6 +26,14 @@ public final class Authorization {
     }
   }
 
+  /** Requires an authenticated Doctor or Receptionist for administrative patient operations. */
+  public static void requirePatientAdministration(Session session) {
+    requireAuthenticated(session);
+    if (session.role() != Role.DOCTOR && session.role() != Role.RECEPTIONIST) {
+      throw new AuthorizationException("You are not allowed to perform this operation");
+    }
+  }
+
   /** Requires that a Doctor session owns the referenced doctor resource. */
   public static void requireDoctorOwnership(Session session, long doctorId) {
     requireRole(session, Role.DOCTOR);
