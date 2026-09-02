@@ -1477,11 +1477,23 @@ public final class ReceptionistView {
     }
     return String.format(
         Locale.ROOT,
-        "%s | Patient %s | Doctor #%d | %s",
+        "%s | Patient %s | Doctor: %s | %s",
         appointment.startsAt().format(DATE_TIME_FORMAT),
         patient.trim(),
-        appointment.doctorId(),
+        doctorDisplayName(services, session, appointment.doctorId()),
         appointment.status());
+  }
+
+  private static String doctorDisplayName(ClinicServices services, Session session, long doctorId) {
+    try {
+      return services.accountService().listDoctors(session).stream()
+          .filter(doctor -> doctor.id() == doctorId)
+          .map(Account::displayName)
+          .findFirst()
+          .orElse("ID " + doctorId);
+    } catch (SQLException | AuthorizationException exception) {
+      return "ID " + doctorId;
+    }
   }
 
   private static boolean selectPatient(ListView<Patient> list, long id) {
