@@ -84,7 +84,7 @@ final class ReceptionistViewTest extends ApplicationTest {
   void receptionistBooksChecksInChecksOutAndViewsRevenue() throws SQLException {
     loginAsReceptionist();
     verifyThat("#receptionist-workspace", isVisible());
-    assertEquals(4, workspaceTabs().getTabs().size());
+    assertEquals(5, workspaceTabs().getTabs().size());
     assertTrue(lookup("#reception-schedule-date").tryQuery().isPresent());
     assertTrue(lookup("#reception-schedule-doctor").tryQuery().isPresent());
     assertTrue(lookup("#reception-schedule-status").tryQuery().isPresent());
@@ -126,21 +126,22 @@ final class ReceptionistViewTest extends ApplicationTest {
     Appointment appointment = bookedAppointments.get(0);
     services.appointmentService().accept(doctorSession, appointment.id());
 
-    selectWorkspaceTab(0);
-    selectWorkspaceTab(1);
-    selectFirstAppointment("#reception-appointment-list");
+    selectWorkspaceTab(2);
+    assertTrue(lookup("#reception-check-in-queue-list").tryQuery().isPresent());
+    assertTrue(lookup("#reception-check-in-queue-summary").tryQuery().isPresent());
+    selectFirstAppointment("#reception-check-in-queue-list");
     services.appointmentService().checkIn(receptionistSession, appointment.id());
     assertEquals(
         AppointmentStatus.CHECKED_IN, services.appointmentService().get(appointment.id()).status());
     services.appointmentService().complete(doctorSession, appointment.id());
 
-    selectWorkspaceTab(2);
+    selectWorkspaceTab(3);
     selectFirstAppointment("#reception-checkout-appointment-list");
     setText("#reception-charge", "45.00");
     fire("#reception-checkout");
     verifyThat("#reception-feedback", hasText("Checkout completed"));
 
-    selectWorkspaceTab(3);
+    selectWorkspaceTab(4);
     setText("#reception-revenue-date", LocalDate.now().toString());
     fire("#reception-revenue-submit");
     verifyThat("#reception-revenue", hasText("1 successful payment(s), total 45.00"));

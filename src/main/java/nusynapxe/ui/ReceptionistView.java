@@ -10,6 +10,8 @@ import java.time.Period;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import javafx.collections.FXCollections;
@@ -51,6 +53,10 @@ import nusynapxe.service.ValidationException;
 public final class ReceptionistView {
   private static final String APPOINTMENT_REQUIRED = "Select an appointment first";
   private static final String DETAIL_SEPARATOR = " | ";
+  private static final String DATE_LABEL = "Date";
+  private static final String QUEUE_WAITING = "Waiting";
+  private static final String QUEUE_CHECKED_IN = "Checked in";
+  private static final String QUEUE_ALL = "All";
   private static final String DATE_TIME_PATTERN = "yyyy-MM-dd HH:mm";
   private static final DateTimeFormatter DATE_TIME_FORMAT =
       DateTimeFormatter.ofPattern(DATE_TIME_PATTERN);
@@ -92,6 +98,21 @@ public final class ReceptionistView {
     TextField schedulePatient = field("reception-schedule-patient", "Patient name or ID");
     Label scheduleSummary = new Label();
     scheduleSummary.setId("reception-schedule-summary");
+    ListView<Appointment> queueList = new ListView<>();
+    queueList.setId("reception-check-in-queue-list");
+    DatePicker queueDate = new DatePicker(LocalDate.now(SINGAPORE_ZONE));
+    queueDate.setId("reception-check-in-queue-date");
+    ComboBox<Account> queueDoctor = doctorSelector();
+    queueDoctor.setId("reception-check-in-queue-doctor");
+    queueDoctor.setPromptText("All Doctors");
+    TextField queuePatient = field("reception-check-in-queue-patient", "Patient name or ID");
+    ComboBox<String> queueStatus =
+        new ComboBox<>(
+            FXCollections.observableArrayList(QUEUE_WAITING, QUEUE_CHECKED_IN, QUEUE_ALL));
+    queueStatus.setId("reception-check-in-queue-status");
+    queueStatus.getSelectionModel().select(QUEUE_ALL);
+    Label queueSummary = new Label();
+    queueSummary.setId("reception-check-in-queue-summary");
     DatePicker appointmentDate = new DatePicker(LocalDate.now());
     appointmentDate.setId("reception-appointment-date");
     ComboBox<Patient> appointmentPatient = new ComboBox<>();
@@ -147,6 +168,84 @@ public final class ReceptionistView {
               checkIn.setDisable(
                   selected == null || selected.status() != AppointmentStatus.ACCEPTED);
             });
+    queueList.setOnMouseClicked(
+        event -> {
+          Appointment selected = queueList.getSelectionModel().getSelectedItem();
+          if (selected != null) {
+            showCheckInDetailsDialog(
+                services,
+                session,
+                selected.id(),
+                feedback,
+                () ->
+                    refreshQueue(
+                        services,
+                        session,
+                        queueList,
+                        feedback,
+                        queueDate.getValue(),
+                        queueDoctor.getValue() == null ? null : queueDoctor.getValue().id(),
+                        queuePatient.getText(),
+                        queueStatus.getValue(),
+                        queueSummary));
+          }
+        });
+    queueDate
+        .valueProperty()
+        .addListener(
+            (observable, previous, selected) ->
+                refreshQueue(
+                    services,
+                    session,
+                    queueList,
+                    feedback,
+                    queueDate.getValue(),
+                    queueDoctor.getValue() == null ? null : queueDoctor.getValue().id(),
+                    queuePatient.getText(),
+                    queueStatus.getValue(),
+                    queueSummary));
+    queueDoctor
+        .valueProperty()
+        .addListener(
+            (observable, previous, selected) ->
+                refreshQueue(
+                    services,
+                    session,
+                    queueList,
+                    feedback,
+                    queueDate.getValue(),
+                    selected == null ? null : selected.id(),
+                    queuePatient.getText(),
+                    queueStatus.getValue(),
+                    queueSummary));
+    queueStatus
+        .valueProperty()
+        .addListener(
+            (observable, previous, selected) ->
+                refreshQueue(
+                    services,
+                    session,
+                    queueList,
+                    feedback,
+                    queueDate.getValue(),
+                    queueDoctor.getValue() == null ? null : queueDoctor.getValue().id(),
+                    queuePatient.getText(),
+                    selected,
+                    queueSummary));
+    queuePatient
+        .textProperty()
+        .addListener(
+            (observable, previous, selected) ->
+                refreshQueue(
+                    services,
+                    session,
+                    queueList,
+                    feedback,
+                    queueDate.getValue(),
+                    queueDoctor.getValue() == null ? null : queueDoctor.getValue().id(),
+                    selected,
+                    queueStatus.getValue(),
+                    queueSummary));
     scheduleDate
         .valueProperty()
         .addListener(
@@ -422,7 +521,7 @@ public final class ReceptionistView {
     appointmentForm.setVgap(8);
     appointmentForm.addRow(0, new Label("Patient"), appointmentPatient);
     appointmentForm.addRow(1, new Label("Doctor"), doctor);
-    appointmentForm.addRow(2, new Label("Date"), appointmentDate);
+    appointmentForm.addRow(2, new Label(DATE_LABEL), appointmentDate);
     appointmentForm.addRow(3, new Label("Starts"), startsAt.view, new Label("Ends"), endsAt.view);
     appointmentForm.addRow(4, book);
     GridPane checkoutForm = new GridPane();
@@ -432,11 +531,16 @@ public final class ReceptionistView {
     GridPane revenueForm = new GridPane();
     revenueForm.setHgap(8);
     revenueForm.setVgap(8);
-    revenueForm.addRow(0, new Label("Date"), revenueDate, revenueButton, revenue);
+    revenueForm.addRow(0, new Label(DATE_LABEL), revenueDate, revenueButton, revenue);
     VBox patientContent = new VBox(12, patientTabs);
     HBox scheduleFilters =
         new HBox(
-            8, new Label("Date"), scheduleDate, scheduleDoctor, scheduleStatus, schedulePatient);
+            8,
+            new Label(DATE_LABEL),
+            scheduleDate,
+            scheduleDoctor,
+            scheduleStatus,
+            schedulePatient);
     VBox bookingContent = new VBox(12, appointmentForm);
     VBox appointmentManageContent =
         new VBox(
@@ -448,14 +552,19 @@ public final class ReceptionistView {
     TabPane appointmentTabs = new TabPane(bookingTab, manageAppointmentsTab);
     appointmentTabs.setId("reception-appointment-tabs");
     VBox appointmentContent = new VBox(12, appointmentTabs);
+    HBox queueFilters =
+        new HBox(8, new Label(DATE_LABEL), queueDate, queueDoctor, queueStatus, queuePatient);
+    VBox queueContent = new VBox(12, queueFilters, queueSummary, queueList);
     VBox checkoutContent = new VBox(12, checkoutAppointmentList, checkoutForm);
     VBox revenueContent = new VBox(12, revenueForm);
     Tab patientFeature = featureTab("Patient directory and basic data", patientContent);
     Tab appointmentFeature = featureTab("Appointments across all Doctors", appointmentContent);
+    Tab queueFeature = featureTab("Check-in Queue", queueContent);
     Tab checkoutFeature = featureTab("Checkout", checkoutContent);
     Tab revenueFeature = featureTab("Daily revenue", revenueContent);
     TabPane workspaceTabs =
-        new TabPane(patientFeature, appointmentFeature, checkoutFeature, revenueFeature);
+        new TabPane(
+            patientFeature, appointmentFeature, queueFeature, checkoutFeature, revenueFeature);
     workspaceTabs.setId("reception-workspace-tabs");
     workspaceTabs
         .getSelectionModel()
@@ -482,6 +591,19 @@ public final class ReceptionistView {
                     schedulePatient.getText(),
                     scheduleStatus.getValue(),
                     scheduleSummary);
+              } else if (selected != null && "Check-in Queue".equals(selected.getText())) {
+                refreshDoctors(services, session, queueDoctor, feedback);
+                queueDoctor.getSelectionModel().clearSelection();
+                refreshQueue(
+                    services,
+                    session,
+                    queueList,
+                    feedback,
+                    queueDate.getValue(),
+                    null,
+                    queuePatient.getText(),
+                    queueStatus.getValue(),
+                    queueSummary);
               } else if (selected == checkoutFeature) {
                 refreshAppointments(
                     services, session, checkoutAppointmentList, selection, feedback);
@@ -508,6 +630,18 @@ public final class ReceptionistView {
         "",
         null,
         scheduleSummary);
+    refreshDoctors(services, session, queueDoctor, feedback);
+    queueDoctor.getSelectionModel().clearSelection();
+    refreshQueue(
+        services,
+        session,
+        queueList,
+        feedback,
+        queueDate.getValue(),
+        null,
+        queuePatient.getText(),
+        queueStatus.getValue(),
+        queueSummary);
     refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
     return root;
   }
@@ -1065,6 +1199,64 @@ public final class ReceptionistView {
     }
   }
 
+  private static void refreshQueue(
+      ClinicServices services,
+      Session session,
+      ListView<Appointment> queue,
+      Label feedback,
+      LocalDate date,
+      Long doctorId,
+      String patientQuery,
+      String status,
+      Label summary) {
+    try {
+      List<Appointment> appointments = new ArrayList<>();
+      boolean includeWaiting =
+          status == null || QUEUE_ALL.equals(status) || QUEUE_WAITING.equals(status);
+      boolean includeChecked =
+          status == null || QUEUE_ALL.equals(status) || QUEUE_CHECKED_IN.equals(status);
+      if (includeWaiting) {
+        appointments.addAll(
+            services
+                .appointmentService()
+                .searchAppointments(
+                    session, date, doctorId, patientQuery, AppointmentStatus.ACCEPTED));
+      }
+      if (includeChecked) {
+        appointments.addAll(
+            services
+                .appointmentService()
+                .searchAppointments(
+                    session, date, doctorId, patientQuery, AppointmentStatus.CHECKED_IN));
+      }
+      appointments.sort(Comparator.comparing(Appointment::startsAt));
+      queue.setItems(FXCollections.observableArrayList(appointments));
+      queue.setCellFactory(
+          list ->
+              new javafx.scene.control.ListCell<>() {
+                @Override
+                protected void updateItem(Appointment item, boolean empty) {
+                  super.updateItem(item, empty);
+                  setText(
+                      empty || item == null ? null : formatAppointment(services, session, item));
+                }
+              });
+      long waiting =
+          appointments.stream().filter(a -> a.status() == AppointmentStatus.ACCEPTED).count();
+      long checkedIn =
+          appointments.stream().filter(a -> a.status() == AppointmentStatus.CHECKED_IN).count();
+      summary.setText(
+          "Waiting: "
+              + waiting
+              + " | Checked in: "
+              + checkedIn
+              + " | Total: "
+              + appointments.size());
+    } catch (SQLException exception) {
+      feedback.setText("Check-in queue is temporarily unavailable");
+    }
+  }
+
   private static void showRescheduleDialog(
       ClinicServices services,
       Session session,
@@ -1177,6 +1369,69 @@ public final class ReceptionistView {
     }
   }
 
+  private static void showCheckInDetailsDialog(
+      ClinicServices services,
+      Session session,
+      long appointmentId,
+      Label workspaceFeedback,
+      Runnable onUpdated) {
+    try {
+      Appointment appointment = services.appointmentService().get(appointmentId);
+      Patient patient =
+          services.patientService().getAdministrative(session, appointment.patientId());
+      Label details =
+          new Label(
+              patient.displayedId()
+                  + DETAIL_SEPARATOR
+                  + valueOrEmpty(patient.firstName())
+                  + " "
+                  + valueOrEmpty(patient.lastName())
+                  + "\nEmail: "
+                  + valueOrEmpty(patient.email())
+                  + "\nPhone: "
+                  + valueOrEmpty(patient.phone())
+                  + "\nDoctor ID: "
+                  + appointment.doctorId()
+                  + "\nScheduled: "
+                  + appointment.startsAt().format(DATE_TIME_FORMAT)
+                  + " - "
+                  + appointment.endsAt().toLocalTime()
+                  + "\nStatus: "
+                  + appointment.status());
+      details.setId("reception-check-in-details");
+      Label feedback = new Label();
+      feedback.setId("reception-check-in-feedback");
+      Button checkIn = button("Check in patient", "reception-check-in-submit");
+      boolean eligible =
+          appointment.status() == AppointmentStatus.ACCEPTED
+              && !LocalDateTime.now(SINGAPORE_ZONE).isBefore(appointment.startsAt());
+      checkIn.setDisable(!eligible);
+      Stage dialog = new Stage();
+      checkIn.setOnAction(
+          event -> {
+            try {
+              services.appointmentService().checkIn(session, appointmentId);
+              workspaceFeedback.setText("Patient checked in");
+              onUpdated.run();
+              dialog.close();
+            } catch (ValidationException | AuthorizationException exception) {
+              feedback.setText(exception.getMessage());
+            } catch (SQLException exception) {
+              feedback.setText("Check-in is temporarily unavailable");
+            }
+          });
+      VBox content = new VBox(12, new Label("Appointment details"), details, checkIn, feedback);
+      content.setPadding(new Insets(18));
+      dialog.initOwner(workspaceFeedback.getScene().getWindow());
+      dialog.initModality(Modality.WINDOW_MODAL);
+      dialog.setTitle("Check-in details");
+      dialog.setScene(new Scene(content, 500, 300));
+      dialog.show();
+    } catch (SQLException | ValidationException | AuthorizationException exception) {
+      workspaceFeedback.setText(exception.getMessage());
+    }
+  }
+
   private static LocalDateTime parseScheduleDateTime(
       DatePicker date, TimeFields time, String fieldName) {
     if (date.getValue() == null) {
@@ -1222,11 +1477,23 @@ public final class ReceptionistView {
     }
     return String.format(
         Locale.ROOT,
-        "%s | Patient %s | Doctor #%d | %s",
+        "%s | Patient %s | Doctor: %s | %s",
         appointment.startsAt().format(DATE_TIME_FORMAT),
         patient.trim(),
-        appointment.doctorId(),
+        doctorDisplayName(services, session, appointment.doctorId()),
         appointment.status());
+  }
+
+  private static String doctorDisplayName(ClinicServices services, Session session, long doctorId) {
+    try {
+      return services.accountService().listDoctors(session).stream()
+          .filter(doctor -> doctor.id() == doctorId)
+          .map(Account::displayName)
+          .findFirst()
+          .orElse("ID " + doctorId);
+    } catch (SQLException | AuthorizationException exception) {
+      return "ID " + doctorId;
+    }
   }
 
   private static boolean selectPatient(ListView<Patient> list, long id) {
