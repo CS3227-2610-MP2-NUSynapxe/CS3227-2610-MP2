@@ -43,6 +43,7 @@ import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.PaymentMethod;
 import nusynapxe.domain.Receipt;
+import nusynapxe.domain.RevenueReport;
 import nusynapxe.domain.RevenueSummary;
 import nusynapxe.domain.Session;
 import nusynapxe.domain.Sex;
@@ -149,6 +150,15 @@ public final class ReceptionistView {
     Button revenueButton = button("Show revenue", "reception-revenue-submit");
     Label revenue = new Label();
     revenue.setId("reception-revenue");
+    DatePicker reportFromDate = new DatePicker(LocalDate.now(SINGAPORE_ZONE));
+    reportFromDate.setId("reception-revenue-report-from");
+    DatePicker reportToDate = new DatePicker(LocalDate.now(SINGAPORE_ZONE));
+    reportToDate.setId("reception-revenue-report-to");
+    Button reportButton = button("Generate report", "reception-revenue-report");
+    Label reportSummary = new Label();
+    reportSummary.setId("reception-revenue-report-summary");
+    ListView<Receipt> reportRows = new ListView<>();
+    reportRows.setId("reception-revenue-report-list");
     Label feedback = new Label();
     feedback.setId("reception-feedback");
     SelectionState selection = new SelectionState();
@@ -644,6 +654,33 @@ public final class ReceptionistView {
             feedback.setText("Revenue is temporarily unavailable");
           }
         });
+    reportButton.setOnAction(
+        event -> {
+          try {
+            LocalDate from = reportFromDate.getValue();
+            LocalDate to = reportToDate.getValue();
+            RevenueReport report =
+                services.billingService().revenueReport(session, from, to, "", null);
+            reportRows.setItems(FXCollections.observableArrayList(report.receipts()));
+            reportRows.setCellFactory(
+                list ->
+                    new javafx.scene.control.ListCell<>() {
+                      @Override
+                      protected void updateItem(Receipt item, boolean empty) {
+                        super.updateItem(item, empty);
+                        setText(empty || item == null ? null : formatReceiptRow(item));
+                      }
+                    });
+            reportSummary.setText(
+                report.receiptCount()
+                    + " successful payment(s), total "
+                    + formatMinor(report.totalMinor()));
+          } catch (ValidationException | AuthorizationException exception) {
+            feedback.setText(exception.getMessage());
+          } catch (SQLException exception) {
+            feedback.setText("Revenue report is temporarily unavailable");
+          }
+        });
 
     Button logout = button("Log out", "logout-button");
     logout.setOnAction(event -> onLogout.run());
@@ -733,7 +770,11 @@ public final class ReceptionistView {
     TabPane checkoutTabs = new TabPane(readyForCheckoutTab, receiptHistoryTab);
     checkoutTabs.setId("reception-checkout-tabs");
     VBox checkoutContent = new VBox(12, checkoutTabs);
-    VBox revenueContent = new VBox(12, revenueForm);
+    HBox reportDates =
+        new HBox(8, new Label("From"), reportFromDate, new Label("To"), reportToDate, reportButton);
+    VBox revenueContent =
+        new VBox(
+            12, new Label("Revenue Reports"), revenueForm, reportDates, reportSummary, reportRows);
     Tab patientFeature = featureTab("Patient directory and basic data", patientContent);
     Tab appointmentFeature = featureTab("Appointments across all Doctors", appointmentContent);
     Tab queueFeature = featureTab("Check-in Queue", queueContent);
