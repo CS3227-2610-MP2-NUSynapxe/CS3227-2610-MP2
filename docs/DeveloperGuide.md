@@ -153,6 +153,9 @@ Appointment times are generated in 30-minute increments from `00:00` through
 `23:30`. Rescheduling is handled in an owned modal Stage that displays the
 selected patient's administrative projection and exposes reschedule/cancel
 actions; successful completion refreshes the dashboard.
+The Check-in Queue reuses the administrative appointment search, defaults to
+Singapore's current date, combines accepted and checked-in appointments, and
+opens an administrative details popup with an eligibility-aware check-in action.
 
 The lifecycle policy is:
 

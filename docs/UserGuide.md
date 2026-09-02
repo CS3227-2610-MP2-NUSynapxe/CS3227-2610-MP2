@@ -136,6 +136,14 @@ dashboard.
 
 ### Check in, checkout, and revenue
 
+The **Check-in Queue** tab is the Receptionist's front-desk view for arrivals.
+It defaults to Singapore's current date and shows accepted appointments waiting
+for arrival together with appointments already checked in. Use the Doctor,
+patient, date, and queue-status filters to narrow the list. Select an appointment
+to open its administrative details and choose **Check in patient** when the
+appointment start time has arrived. The queue refreshes automatically after a
+successful check-in. Clinical notes and prescriptions are never shown.
+
 1. After the assigned Doctor accepts the appointment, reopen **Appointments
    across all Doctors** and select the appointment; the list refreshes automatically.
 2. Check-in is handled through the appointment workflow at or after the scheduled
