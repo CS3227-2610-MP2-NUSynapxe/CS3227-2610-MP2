@@ -29,6 +29,9 @@ import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
+import nusynapxe.domain.PaymentMethod;
+import nusynapxe.domain.Receipt;
+import nusynapxe.domain.RevenueReport;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
 import nusynapxe.domain.Sex;
@@ -148,6 +151,53 @@ final class ReceptionistViewTest extends ApplicationTest {
 
     fire("#logout-button");
     verifyThat("#login-view", isVisible());
+  }
+
+  @Test
+  void revenueReportSupportsFiltersAndEmptyState() {
+    loginAsReceptionist();
+    selectWorkspaceTab(4);
+    assertTrue(lookup("#reception-revenue-report-patient").tryQuery().isPresent());
+    assertTrue(lookup("#reception-revenue-report-doctor").tryQuery().isPresent());
+    assertTrue(lookup("#reception-revenue-report-method").tryQuery().isPresent());
+    assertTrue(lookup("#reception-revenue-export-csv").tryQuery().isPresent());
+    assertTrue(lookup("#reception-revenue-export-json").tryQuery().isPresent());
+
+    setDatePicker("#reception-revenue-report-from", LocalDate.of(2030, 1, 1));
+    setDatePicker("#reception-revenue-report-to", LocalDate.of(2030, 1, 1));
+    setText("#reception-revenue-report-patient", "does-not-exist");
+    fire("#reception-revenue-report");
+    assertTrue(
+        textLabel("#reception-revenue-report-summary").startsWith("0 successful payment(s)"));
+    assertTrue(
+        lookup("#reception-revenue-report-list").queryAs(ListView.class).getItems().isEmpty());
+  }
+
+  @Test
+  void revenueReportExportsIncludeReceiptDetails() {
+    Receipt receipt =
+        new Receipt(
+            1,
+            2,
+            3,
+            4,
+            "Pat Lee",
+            "Dr. Ada",
+            4500,
+            PaymentMethod.CARD,
+            LocalDate.of(2026, 9, 1),
+            7,
+            LocalDateTime.of(2026, 9, 1, 12, 30));
+    RevenueReport report = new RevenueReport(List.of(receipt));
+
+    String csv = ReceptionistView.reportCsv(report);
+    assertTrue(csv.startsWith("receipt,dateTime,patientId,patientName,doctor,amount,method"));
+    assertTrue(csv.contains("7,2026-09-01T12:30,4,Pat Lee,Dr. Ada,45.00,CARD"));
+
+    String json = ReceptionistView.reportJson(report);
+    assertTrue(json.contains("\"receiptCount\":1"));
+    assertTrue(json.contains("\"patientName\":\"Pat Lee\""));
+    assertTrue(json.contains("\"method\":\"CARD\""));
   }
 
   @Test
@@ -377,6 +427,10 @@ final class ReceptionistViewTest extends ApplicationTest {
           lookup(selector + "-month").queryAs(ComboBox.class).setValue(value.getMonth());
           lookup(selector + "-year").queryAs(ComboBox.class).setValue(value.getYear());
         });
+  }
+
+  private void setDatePicker(String selector, LocalDate value) {
+    interact(() -> lookup(selector).queryAs(javafx.scene.control.DatePicker.class).setValue(value));
   }
 
   private String text(String selector) {

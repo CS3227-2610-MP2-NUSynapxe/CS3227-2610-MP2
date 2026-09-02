@@ -2,6 +2,8 @@ package nusynapxe.ui;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -33,6 +35,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.util.StringConverter;
@@ -162,6 +165,9 @@ public final class ReceptionistView {
     reportSummary.setId("reception-revenue-report-summary");
     ListView<Receipt> reportRows = new ListView<>();
     reportRows.setId("reception-revenue-report-list");
+    RevenueReport[] currentReport = {new RevenueReport(List.of())};
+    Button exportCsv = button("Export CSV", "reception-revenue-export-csv");
+    Button exportJson = button("Export JSON", "reception-revenue-export-json");
     TextField legacyRevenueDate = field("reception-revenue-date", "yyyy-MM-dd");
     Button legacyRevenueButton = button("Show revenue", "reception-revenue-submit");
     Label legacyRevenue = new Label();
@@ -659,6 +665,7 @@ public final class ReceptionistView {
                         reportPatient.getText(),
                         reportDoctor.getValue() == null ? null : reportDoctor.getValue().id(),
                         reportMethod.getValue());
+            currentReport[0] = report;
             reportRows.setItems(FXCollections.observableArrayList(report.receipts()));
             reportRows.setCellFactory(
                 list ->
@@ -672,7 +679,11 @@ public final class ReceptionistView {
             reportSummary.setText(
                 report.receiptCount()
                     + " successful payment(s), total "
-                    + formatMinor(report.totalMinor()));
+                    + formatMinor(report.totalMinor())
+                    + "\nBy method: "
+                    + report.byMethod()
+                    + "\nBy Doctor: "
+                    + report.byDoctor());
           } catch (ValidationException | AuthorizationException exception) {
             feedback.setText(exception.getMessage());
           } catch (SQLException exception) {
@@ -696,6 +707,12 @@ public final class ReceptionistView {
             feedback.setText("Revenue is temporarily unavailable");
           }
         });
+
+    exportCsv.setOnAction(
+        event ->
+            exportReport(currentReport[0], reportRows.getScene().getWindow(), false, feedback));
+    exportJson.setOnAction(
+        event -> exportReport(currentReport[0], reportRows.getScene().getWindow(), true, feedback));
 
     Button logout = button("Log out", "logout-button");
     logout.setOnAction(event -> onLogout.run());
@@ -793,7 +810,13 @@ public final class ReceptionistView {
             reportMethod,
             reportButton);
     VBox revenueContent =
-        new VBox(12, new Label("Revenue Reports"), reportDates, reportSummary, reportRows);
+        new VBox(
+            12,
+            new Label("Revenue Reports"),
+            reportDates,
+            new HBox(8, exportCsv, exportJson),
+            reportSummary,
+            reportRows);
     VBox legacyRevenueCompatibility =
         new VBox(legacyRevenueDate, legacyRevenueButton, legacyRevenue);
     legacyRevenueCompatibility.setOpacity(0);
@@ -1471,6 +1494,80 @@ public final class ReceptionistView {
 
   private static String formatReceipt(Receipt receipt) {
     return formatReceiptRow(receipt) + "\nRecorded: " + receipt.recordedAt() + "\nStatus: PAID";
+  }
+
+  private static void exportReport(
+      RevenueReport report, javafx.stage.Window owner, boolean json, Label feedback) {
+    FileChooser chooser = new FileChooser();
+    chooser.setInitialFileName(json ? "revenue-report.json" : "revenue-report.csv");
+    javafx.stage.FileChooser.ExtensionFilter filter =
+        new javafx.stage.FileChooser.ExtensionFilter(
+            json ? "JSON files" : "CSV files", json ? "*.json" : "*.csv");
+    chooser.getExtensionFilters().add(filter);
+    java.io.File target = chooser.showSaveDialog(owner);
+    if (target == null) {
+      return;
+    }
+    try {
+      String content = json ? reportJson(report) : reportCsv(report);
+      Files.writeString(target.toPath(), content, StandardCharsets.UTF_8);
+      feedback.setText("Revenue report exported");
+    } catch (java.io.IOException exception) {
+      feedback.setText("Revenue report export failed");
+    }
+  }
+
+  static String reportCsv(RevenueReport report) {
+    StringBuilder csv =
+        new StringBuilder("receipt,dateTime,patientId,patientName,doctor,amount,method\n");
+    for (Receipt receipt : report.receipts()) {
+      csv.append(receipt.sequenceNumber())
+          .append(',')
+          .append(receipt.recordedAt())
+          .append(',')
+          .append(receipt.patientId())
+          .append(',')
+          .append(receipt.patientName())
+          .append(',')
+          .append(receipt.doctorName())
+          .append(',')
+          .append(formatMinor(receipt.amountMinor()))
+          .append(',')
+          .append(receipt.method())
+          .append('\n');
+    }
+    return csv.toString();
+  }
+
+  static String reportJson(RevenueReport report) {
+    StringBuilder json =
+        new StringBuilder("{\"receiptCount\":")
+            .append(report.receiptCount())
+            .append(",\"total\":\"")
+            .append(formatMinor(report.totalMinor()))
+            .append("\",\"receipts\":[");
+    for (int index = 0; index < report.receipts().size(); index++) {
+      Receipt receipt = report.receipts().get(index);
+      if (index > 0) {
+        json.append(',');
+      }
+      json.append("{\"receiptNumber\":")
+          .append(receipt.sequenceNumber())
+          .append(",\"dateTime\":\"")
+          .append(receipt.recordedAt())
+          .append("\",\"patientId\":")
+          .append(receipt.patientId())
+          .append(",\"patientName\":\"")
+          .append(receipt.patientName())
+          .append("\",\"doctor\":\"")
+          .append(receipt.doctorName())
+          .append("\",\"amount\":\"")
+          .append(formatMinor(receipt.amountMinor()))
+          .append("\",\"method\":\"")
+          .append(receipt.method())
+          .append("\"}");
+    }
+    return json.append("]}").toString();
   }
 
   private static void refreshSchedule(

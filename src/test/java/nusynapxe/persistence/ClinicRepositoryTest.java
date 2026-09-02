@@ -127,6 +127,25 @@ final class ClinicRepositoryTest {
       assertEquals(1, summary.transactionCount());
       assertEquals(2500, summary.totalMinor());
       assertTrue(summary.date().isEqual(LocalDate.of(2026, 9, 1)));
+
+      ReceiptRepository receipts = new ReceiptRepository(database);
+      database.connection().setAutoCommit(false);
+      try {
+        receipts.create(
+            database.connection(),
+            payment.id(),
+            appointment.id(),
+            patient.id(),
+            payment.amountMinor(),
+            payment.method(),
+            LocalDate.of(2026, 9, 1),
+            LocalDateTime.of(2026, 9, 1, 10, 0));
+        database.connection().commit();
+      } finally {
+        database.connection().setAutoCommit(true);
+      }
+      assertEquals(1, receipts.findAll("grace", doctor.id(), LocalDate.of(2026, 9, 1)).size());
+      assertTrue(receipts.findAll("unknown", null, LocalDate.of(2026, 9, 1)).isEmpty());
     }
   }
 

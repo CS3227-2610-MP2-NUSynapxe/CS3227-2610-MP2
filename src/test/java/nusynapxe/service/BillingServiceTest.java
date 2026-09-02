@@ -2,6 +2,7 @@ package nusynapxe.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.sql.SQLException;
@@ -117,6 +118,51 @@ final class BillingServiceTest {
 
       assertEquals(0, payments.revenueFor(LocalDate.of(2026, 9, 1)).transactionCount());
       assertEquals(0, payments.revenueFor(LocalDate.of(2026, 9, 1)).totalMinor());
+    }
+  }
+
+  @Test
+  void revenueReportIsReceptionistOnlyAndMatchesSuccessfulReceipts() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      Fixture fixture = fixture(database);
+      BillingService billing = billing(database, fixture);
+      billing.checkout(
+          fixture.receptionistSession(), fixture.appointment().id(), 2500, PaymentMethod.CARD);
+
+      var report =
+          billing.revenueReport(
+              fixture.receptionistSession(),
+              LocalDate.of(2026, 9, 1),
+              LocalDate.of(2026, 9, 2),
+              "grace",
+              null,
+              PaymentMethod.CARD);
+      assertEquals(1, report.receiptCount());
+      assertEquals(2500, report.totalMinor());
+      assertEquals(2500L, report.byMethod().get(PaymentMethod.CARD));
+      assertTrue(report.byDoctor().values().stream().anyMatch(value -> value == 2500L));
+
+      Session doctorSession = new Session(1, "doctor", Role.DOCTOR);
+      assertThrows(
+          AuthorizationException.class,
+          () ->
+              billing.revenueReport(
+                  doctorSession,
+                  LocalDate.of(2026, 9, 1),
+                  LocalDate.of(2026, 9, 1),
+                  "",
+                  null,
+                  null));
+      assertThrows(
+          ValidationException.class,
+          () ->
+              billing.revenueReport(
+                  fixture.receptionistSession(),
+                  LocalDate.of(2026, 9, 2),
+                  LocalDate.of(2026, 9, 1),
+                  "",
+                  null,
+                  null));
     }
   }
 
