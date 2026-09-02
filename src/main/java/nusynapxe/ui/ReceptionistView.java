@@ -1197,7 +1197,13 @@ public final class ReceptionistView {
     fields.minutes.setValue(String.format(Locale.ROOT, "%02d", time.getMinute() < 30 ? 0 : 30));
   }
 
-  private record TimeFields(ComboBox<String> hours, ComboBox<String> minutes, HBox view) { }
+  private record TimeFields(ComboBox<String> hours, ComboBox<String> minutes, HBox view) {
+    private TimeFields {
+      if (hours == null || minutes == null || view == null) {
+        throw new IllegalArgumentException("Time controls are required");
+      }
+    }
+  }
 
   private static String formatAppointment(
       ClinicServices services, Session session, Appointment appointment) {
@@ -1256,17 +1262,6 @@ public final class ReceptionistView {
 
   private static String valueOrEmpty(String value) {
     return value == null ? "" : value;
-  }
-
-  private static LocalDateTime parseDateTime(String value, String fieldName) {
-    if (value == null) {
-      throw new ValidationException(fieldName + " must use " + DATE_TIME_PATTERN);
-    }
-    try {
-      return LocalDateTime.parse(value.trim(), DATE_TIME_FORMAT);
-    } catch (DateTimeParseException exception) {
-      throw new ValidationException(fieldName + " must use " + DATE_TIME_PATTERN, exception);
-    }
   }
 
   private static LocalDate parseDate(String value, String fieldName) {
