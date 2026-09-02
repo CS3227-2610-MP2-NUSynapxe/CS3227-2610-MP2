@@ -1,5 +1,7 @@
 package nusynapxe.ui;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.testfx.api.FxAssert.verifyThat;
 import static org.testfx.matcher.base.NodeMatchers.isVisible;
 import static org.testfx.matcher.control.LabeledMatchers.hasText;
@@ -7,6 +9,8 @@ import static org.testfx.matcher.control.LabeledMatchers.hasText;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.TableView;
 import javafx.scene.control.TextInputControl;
 import javafx.stage.Stage;
 import nusynapxe.persistence.SqliteDatabase;
@@ -39,6 +43,18 @@ final class SystemAdminViewTest extends ApplicationTest {
   void systemAdminCreatesStaffAccountAndRefreshesList() {
     createInitialAdminAndLogin();
     verifyThat("#system-admin-workspace", isVisible());
+    assertTrue(lookup("#admin-account-form-card").tryQuery().isPresent());
+    assertTrue(lookup("#admin-account-list-card").tryQuery().isPresent());
+    verifyThat("#app-brand", hasText("NUSynapxe"));
+    ComboBox<?> role = lookup("#admin-account-role").queryAs(ComboBox.class);
+    assertTrue(role.getStyleClass().contains("compact-selector"));
+    assertEquals("Doctor", role.getButtonCell().getText());
+    TableView<?> accountTable = lookup("#admin-account-list").queryAs(TableView.class);
+    assertEquals(4, accountTable.getColumns().size());
+    assertEquals("Username", accountTable.getColumns().get(0).getText());
+    assertEquals("Display Name", accountTable.getColumns().get(1).getText());
+    assertEquals("Role", accountTable.getColumns().get(2).getText());
+    assertEquals("Status", accountTable.getColumns().get(3).getText());
 
     setText("#admin-account-username", "doctor");
     setText("#admin-account-display-name", "Dr. Ada");
@@ -47,6 +63,7 @@ final class SystemAdminViewTest extends ApplicationTest {
 
     verifyThat("#admin-account-feedback", hasText("Account created"));
     verifyThat("#admin-account-list", isVisible());
+    assertEquals(2, accountTable.getItems().size());
 
     fire("#admin-account-submit");
     verifyThat("#admin-account-feedback", hasText("Username is required"));
