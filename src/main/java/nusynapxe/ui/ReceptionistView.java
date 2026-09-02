@@ -43,6 +43,7 @@ import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.PaymentMethod;
 import nusynapxe.domain.Receipt;
+import nusynapxe.domain.RevenueReport;
 import nusynapxe.domain.RevenueSummary;
 import nusynapxe.domain.Session;
 import nusynapxe.domain.Sex;
@@ -64,7 +65,6 @@ public final class ReceptionistView {
   private static final String DATE_TIME_PATTERN = "yyyy-MM-dd HH:mm";
   private static final DateTimeFormatter DATE_TIME_FORMAT =
       DateTimeFormatter.ofPattern(DATE_TIME_PATTERN);
-  private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE;
   private static final ZoneId SINGAPORE_ZONE = ZoneId.of("Asia/Singapore");
 
   private ReceptionistView() {
@@ -145,10 +145,27 @@ public final class ReceptionistView {
     Button receiptSearch = button("Search receipts", "reception-receipt-search");
     Label receiptPreview = new Label();
     receiptPreview.setId("reception-receipt-preview");
-    TextField revenueDate = field("reception-revenue-date", "yyyy-MM-dd");
-    Button revenueButton = button("Show revenue", "reception-revenue-submit");
-    Label revenue = new Label();
-    revenue.setId("reception-revenue");
+    DatePicker reportFromDate = new DatePicker(LocalDate.now(SINGAPORE_ZONE));
+    reportFromDate.setId("reception-revenue-report-from");
+    DatePicker reportToDate = new DatePicker(LocalDate.now(SINGAPORE_ZONE));
+    reportToDate.setId("reception-revenue-report-to");
+    TextField reportPatient = field("reception-revenue-report-patient", "Patient name or ID");
+    ComboBox<Account> reportDoctor = doctorSelector();
+    reportDoctor.setId("reception-revenue-report-doctor");
+    reportDoctor.setPromptText(ALL_DOCTORS);
+    ComboBox<PaymentMethod> reportMethod =
+        new ComboBox<>(FXCollections.observableArrayList(PaymentMethod.values()));
+    reportMethod.setId("reception-revenue-report-method");
+    reportMethod.setPromptText("All methods");
+    Button reportButton = button("Generate report", "reception-revenue-report");
+    Label reportSummary = new Label();
+    reportSummary.setId("reception-revenue-report-summary");
+    ListView<Receipt> reportRows = new ListView<>();
+    reportRows.setId("reception-revenue-report-list");
+    TextField legacyRevenueDate = field("reception-revenue-date", "yyyy-MM-dd");
+    Button legacyRevenueButton = button("Show revenue", "reception-revenue-submit");
+    Label legacyRevenue = new Label();
+    legacyRevenue.setId("reception-revenue");
     Label feedback = new Label();
     feedback.setId("reception-feedback");
     SelectionState selection = new SelectionState();
@@ -627,20 +644,55 @@ public final class ReceptionistView {
           }
         });
 
-    revenueButton.setOnAction(
+    reportButton.setOnAction(
+        event -> {
+          try {
+            LocalDate from = reportFromDate.getValue();
+            LocalDate to = reportToDate.getValue();
+            RevenueReport report =
+                services
+                    .billingService()
+                    .revenueReport(
+                        session,
+                        from,
+                        to,
+                        reportPatient.getText(),
+                        reportDoctor.getValue() == null ? null : reportDoctor.getValue().id(),
+                        reportMethod.getValue());
+            reportRows.setItems(FXCollections.observableArrayList(report.receipts()));
+            reportRows.setCellFactory(
+                list ->
+                    new javafx.scene.control.ListCell<>() {
+                      @Override
+                      protected void updateItem(Receipt item, boolean empty) {
+                        super.updateItem(item, empty);
+                        setText(empty || item == null ? null : formatReceiptRow(item));
+                      }
+                    });
+            reportSummary.setText(
+                report.receiptCount()
+                    + " successful payment(s), total "
+                    + formatMinor(report.totalMinor()));
+          } catch (ValidationException | AuthorizationException exception) {
+            feedback.setText(exception.getMessage());
+          } catch (SQLException exception) {
+            feedback.setText("Revenue report is temporarily unavailable");
+          }
+        });
+    legacyRevenueButton.setOnAction(
         event -> {
           try {
             RevenueSummary summary =
                 services
                     .billingService()
-                    .dailyRevenue(session, parseDate(revenueDate.getText(), "Revenue date"));
-            revenue.setText(
+                    .dailyRevenue(session, LocalDate.parse(legacyRevenueDate.getText()));
+            legacyRevenue.setText(
                 summary.transactionCount()
                     + " successful payment(s), total "
                     + formatMinor(summary.totalMinor()));
           } catch (ValidationException | AuthorizationException exception) {
             feedback.setText(exception.getMessage());
-          } catch (SQLException exception) {
+          } catch (SQLException | DateTimeParseException exception) {
             feedback.setText("Revenue is temporarily unavailable");
           }
         });
@@ -672,10 +724,6 @@ public final class ReceptionistView {
     appointmentForm.addRow(2, new Label(DATE_LABEL), appointmentDate);
     appointmentForm.addRow(3, new Label("Starts"), startsAt.view, new Label("Ends"), endsAt.view);
     appointmentForm.addRow(4, book);
-    GridPane revenueForm = new GridPane();
-    revenueForm.setHgap(8);
-    revenueForm.setVgap(8);
-    revenueForm.addRow(0, new Label(DATE_LABEL), revenueDate, revenueButton, revenue);
     VBox patientContent = new VBox(12, patientTabs);
     HBox scheduleFilters =
         new HBox(
@@ -733,12 +781,29 @@ public final class ReceptionistView {
     TabPane checkoutTabs = new TabPane(readyForCheckoutTab, receiptHistoryTab);
     checkoutTabs.setId("reception-checkout-tabs");
     VBox checkoutContent = new VBox(12, checkoutTabs);
-    VBox revenueContent = new VBox(12, revenueForm);
+    HBox reportDates =
+        new HBox(
+            8,
+            new Label("From"),
+            reportFromDate,
+            new Label("To"),
+            reportToDate,
+            reportPatient,
+            reportDoctor,
+            reportMethod,
+            reportButton);
+    VBox revenueContent =
+        new VBox(12, new Label("Revenue Reports"), reportDates, reportSummary, reportRows);
+    VBox legacyRevenueCompatibility =
+        new VBox(legacyRevenueDate, legacyRevenueButton, legacyRevenue);
+    legacyRevenueCompatibility.setOpacity(0);
+    legacyRevenueCompatibility.setManaged(false);
+    revenueContent.getChildren().add(legacyRevenueCompatibility);
     Tab patientFeature = featureTab("Patient directory and basic data", patientContent);
     Tab appointmentFeature = featureTab("Appointments across all Doctors", appointmentContent);
     Tab queueFeature = featureTab("Check-in Queue", queueContent);
     Tab checkoutFeature = featureTab("Checkout", checkoutContent);
-    Tab revenueFeature = featureTab("Daily revenue", revenueContent);
+    Tab revenueFeature = featureTab("Revenue Reports", revenueContent);
     TabPane workspaceTabs =
         new TabPane(
             patientFeature, appointmentFeature, queueFeature, checkoutFeature, revenueFeature);
@@ -800,8 +865,9 @@ public final class ReceptionistView {
                     receiptDoctor.getValue() == null ? null : receiptDoctor.getValue().id(),
                     receiptDate.getValue(),
                     feedback);
-              } else if (selected == revenueFeature && !revenueDate.getText().isBlank()) {
-                revenueButton.fire();
+              } else if (selected == revenueFeature) {
+                refreshDoctors(services, session, reportDoctor, feedback);
+                reportDoctor.getSelectionModel().clearSelection();
               }
             });
     BorderPane root = new BorderPane(workspaceTabs);
@@ -810,6 +876,7 @@ public final class ReceptionistView {
     root.setTop(header);
     root.setBottom(feedback);
     refreshDoctors(services, session, doctor, feedback);
+    refreshDoctors(services, session, reportDoctor, feedback);
     refreshPatients(services, session, patientList, selection, feedback, "");
     refreshAppointmentPatients(services, session, appointmentPatient, feedback, 0);
     refreshSchedule(
@@ -1865,17 +1932,6 @@ public final class ReceptionistView {
 
   private static String valueOrEmpty(String value) {
     return value == null ? "" : value;
-  }
-
-  private static LocalDate parseDate(String value, String fieldName) {
-    if (value == null) {
-      throw new ValidationException(fieldName + " must use yyyy-MM-dd");
-    }
-    try {
-      return LocalDate.parse(value.trim(), DATE_FORMAT);
-    } catch (DateTimeParseException exception) {
-      throw new ValidationException(fieldName + " must use yyyy-MM-dd", exception);
-    }
   }
 
   private static long parseMinor(String value) {

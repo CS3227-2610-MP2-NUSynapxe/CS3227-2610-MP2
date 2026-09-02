@@ -4,6 +4,8 @@ import java.sql.SQLException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
@@ -11,6 +13,7 @@ import nusynapxe.domain.Payment;
 import nusynapxe.domain.PaymentMethod;
 import nusynapxe.domain.PaymentStatus;
 import nusynapxe.domain.Receipt;
+import nusynapxe.domain.RevenueReport;
 import nusynapxe.domain.RevenueSummary;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
@@ -74,6 +77,31 @@ public final class BillingService {
       throw new ValidationException("Revenue date is required");
     }
     return payments.revenueFor(date);
+  }
+
+  /** Returns a receipt-backed report for an inclusive local date range. */
+  public RevenueReport revenueReport(
+      Session actor,
+      LocalDate from,
+      LocalDate to,
+      String patientQuery,
+      Long doctorId,
+      PaymentMethod method)
+      throws SQLException {
+    Authorization.requireRole(actor, Role.RECEPTIONIST);
+    if (from == null || to == null) {
+      throw new ValidationException("Report dates are required");
+    }
+    if (to.isBefore(from)) {
+      throw new ValidationException("Report end date must not be before its start date");
+    }
+    List<Receipt> result = new ArrayList<>();
+    for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
+      receipts.findAll(patientQuery, doctorId, date).stream()
+          .filter(receipt -> method == null || receipt.method() == method)
+          .forEach(result::add);
+    }
+    return new RevenueReport(result);
   }
 
   /** Returns Receptionist-visible receipt history. */
