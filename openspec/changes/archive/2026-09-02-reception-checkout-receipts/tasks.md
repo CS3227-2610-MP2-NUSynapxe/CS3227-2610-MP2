@@ -28,6 +28,6 @@
 ## 5. Documentation and quality
 
 - [x] 5.1 Update User Guide and Developer Guide with checkout search, receipt preview, history, sequence numbers, and reprint behavior.
-- [x] 5.2 Add `logs/reception-checkout-receipts.md` without real patient data.
+- [x] 5.2 Add `../../../../logs/2026-09-02-reception-checkout-receipts.md` without real patient data.
 - [x] 5.3 Run Spotless, Checkstyle, PMD, SpotBugs, JaCoCo, Javadoc, the full test suite, and strict OpenSpec validation.
 - [x] 5.4 Commit implementation, tests, and documentation separately; do not push unless explicitly requested.
