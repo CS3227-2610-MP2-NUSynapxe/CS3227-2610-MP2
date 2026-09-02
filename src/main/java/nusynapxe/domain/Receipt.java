@@ -3,7 +3,19 @@ package nusynapxe.domain;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-/** Immutable receipt projection for a successful checkout. */
+/** Immutable receipt projection for a successful checkout.
+ * @param id receipt identifier
+ * @param paymentId linked payment identifier
+ * @param appointmentId linked appointment identifier
+ * @param patientId linked patient identifier
+ * @param patientName patient display name
+ * @param doctorName doctor display name
+ * @param amountMinor payment amount in minor currency units
+ * @param method payment method
+ * @param receiptDate Singapore-local receipt date
+ * @param sequenceNumber daily receipt sequence number
+ * @param recordedAt payment recording timestamp
+ */
 public record Receipt(
     long id,
     long paymentId,
