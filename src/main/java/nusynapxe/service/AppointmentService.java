@@ -2,6 +2,7 @@ package nusynapxe.service;
 
 import java.sql.SQLException;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -9,6 +10,7 @@ import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.DoctorTimeOff;
+import nusynapxe.domain.Patient;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
 import nusynapxe.persistence.AccountRepository;
@@ -69,6 +71,17 @@ public final class AppointmentService {
   public List<Appointment> allAppointments(Session actor) throws SQLException {
     Authorization.requireRole(actor, Role.RECEPTIONIST);
     return appointments.findAll();
+  }
+
+  /** Returns Receptionist-visible appointments matching optional dashboard filters. */
+  public List<Appointment> searchAppointments(
+      Session actor, LocalDate date, Long doctorId, String patientQuery, AppointmentStatus status)
+      throws SQLException {
+    Authorization.requireRole(actor, Role.RECEPTIONIST);
+    if (doctorId != null) {
+      requireDoctor(doctorId);
+    }
+    return appointments.search(date, doctorId, patientQuery, status);
   }
 
   /** Accepts a pending appointment as its assigned Doctor. */
@@ -148,8 +161,12 @@ public final class AppointmentService {
   }
 
   private void requirePatient(long patientId) throws SQLException {
-    if (patients.findById(patientId).isEmpty()) {
-      throw new ValidationException("Patient does not exist");
+    Patient patient =
+        patients
+            .findById(patientId)
+            .orElseThrow(() -> new ValidationException("Patient does not exist"));
+    if (!patient.active()) {
+      throw new ValidationException("Inactive patients cannot be scheduled");
     }
   }
 

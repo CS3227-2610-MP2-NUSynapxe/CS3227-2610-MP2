@@ -10,12 +10,15 @@ import java.time.Period;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.List;
+import java.util.Locale;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
@@ -33,6 +36,7 @@ import javafx.stage.Stage;
 import javafx.util.StringConverter;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
+import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.PaymentMethod;
@@ -46,6 +50,7 @@ import nusynapxe.service.ValidationException;
 /** Builds the Receptionist scheduling, patient, checkout, and revenue workspace. */
 public final class ReceptionistView {
   private static final String APPOINTMENT_REQUIRED = "Select an appointment first";
+  private static final String DETAIL_SEPARATOR = " | ";
   private static final String DATE_TIME_PATTERN = "yyyy-MM-dd HH:mm";
   private static final DateTimeFormatter DATE_TIME_FORMAT =
       DateTimeFormatter.ofPattern(DATE_TIME_PATTERN);
@@ -67,17 +72,31 @@ public final class ReceptionistView {
     patientList.setId("reception-patient-list");
 
     ComboBox<Account> doctor = doctorSelector();
-    TextField startsAt = field("reception-start", DATE_TIME_PATTERN);
-    TextField endsAt = field("reception-end", DATE_TIME_PATTERN);
+    TimeFields startsAt = timeSelector("reception-start");
+    TimeFields endsAt = timeSelector("reception-end");
     Button book = button("Book appointment", "reception-book");
-    TextField rescheduleStartsAt = field("reception-reschedule-start", DATE_TIME_PATTERN);
-    TextField rescheduleEndsAt = field("reception-reschedule-end", DATE_TIME_PATTERN);
     Button reschedule = button("Reschedule selected", "reception-reschedule");
     Button cancel = button("Cancel selected", "reception-cancel");
     ListView<Appointment> appointmentList = new ListView<>();
     appointmentList.setId("reception-appointment-list");
+    DatePicker scheduleDate = new DatePicker();
+    scheduleDate.setId("reception-schedule-date");
+    scheduleDate.setPromptText("Any date");
+    ComboBox<Account> scheduleDoctor = doctorSelector();
+    scheduleDoctor.setId("reception-schedule-doctor");
+    scheduleDoctor.setPromptText("All Doctors");
+    ComboBox<AppointmentStatus> scheduleStatus =
+        new ComboBox<>(FXCollections.observableArrayList(AppointmentStatus.values()));
+    scheduleStatus.setId("reception-schedule-status");
+    scheduleStatus.setPromptText("All statuses");
+    TextField schedulePatient = field("reception-schedule-patient", "Patient name or ID");
+    Label scheduleSummary = new Label();
+    scheduleSummary.setId("reception-schedule-summary");
+    DatePicker appointmentDate = new DatePicker(LocalDate.now());
+    appointmentDate.setId("reception-appointment-date");
     ComboBox<Patient> appointmentPatient = new ComboBox<>();
     appointmentPatient.setId("reception-appointment-patient");
+    makePatientSearchable(appointmentPatient);
     Button checkIn = button("Check in selected", "reception-check-in");
     TextField charge = field("reception-charge", "Amount");
     ComboBox<PaymentMethod> method =
@@ -117,8 +136,77 @@ public final class ReceptionistView {
         .getSelectionModel()
         .selectedItemProperty()
         .addListener(
+            (observable, previous, selected) -> {
+              selection.appointmentId = selected == null ? 0 : selected.id();
+              boolean editable =
+                  selected != null
+                      && (selected.status() == AppointmentStatus.PENDING
+                          || selected.status() == AppointmentStatus.ACCEPTED);
+              reschedule.setDisable(!editable);
+              cancel.setDisable(!editable);
+              checkIn.setDisable(
+                  selected == null || selected.status() != AppointmentStatus.ACCEPTED);
+            });
+    scheduleDate
+        .valueProperty()
+        .addListener(
             (observable, previous, selected) ->
-                selection.appointmentId = selected == null ? 0 : selected.id());
+                refreshSchedule(
+                    services,
+                    session,
+                    appointmentList,
+                    selection,
+                    feedback,
+                    scheduleDate.getValue(),
+                    scheduleDoctor.getValue() == null ? null : scheduleDoctor.getValue().id(),
+                    schedulePatient.getText(),
+                    scheduleStatus.getValue(),
+                    scheduleSummary));
+    scheduleDoctor
+        .valueProperty()
+        .addListener(
+            (observable, previous, selected) ->
+                refreshSchedule(
+                    services,
+                    session,
+                    appointmentList,
+                    selection,
+                    feedback,
+                    scheduleDate.getValue(),
+                    selected == null ? null : selected.id(),
+                    schedulePatient.getText(),
+                    scheduleStatus.getValue(),
+                    scheduleSummary));
+    scheduleStatus
+        .valueProperty()
+        .addListener(
+            (observable, previous, selected) ->
+                refreshSchedule(
+                    services,
+                    session,
+                    appointmentList,
+                    selection,
+                    feedback,
+                    scheduleDate.getValue(),
+                    scheduleDoctor.getValue() == null ? null : scheduleDoctor.getValue().id(),
+                    schedulePatient.getText(),
+                    selected,
+                    scheduleSummary));
+    schedulePatient
+        .textProperty()
+        .addListener(
+            (observable, previous, selected) ->
+                refreshSchedule(
+                    services,
+                    session,
+                    appointmentList,
+                    selection,
+                    feedback,
+                    scheduleDate.getValue(),
+                    scheduleDoctor.getValue() == null ? null : scheduleDoctor.getValue().id(),
+                    selected,
+                    scheduleStatus.getValue(),
+                    scheduleSummary));
     checkoutAppointmentList
         .getSelectionModel()
         .selectedItemProperty()
@@ -170,13 +258,25 @@ public final class ReceptionistView {
                         session,
                         appointmentPatient.getValue().id(),
                         doctor.getValue().id(),
-                        parseDateTime(startsAt.getText(), "Start time"),
-                        parseDateTime(endsAt.getText(), "End time"));
+                        parseScheduleDateTime(appointmentDate, startsAt, "Start time"),
+                        parseScheduleDateTime(appointmentDate, endsAt, "End time"));
             selection.appointmentId = appointment.id();
             feedback.setText("Appointment booked and awaiting Doctor acceptance");
-            refreshAppointments(services, session, appointmentList, selection, feedback);
+            refreshSchedule(
+                services,
+                session,
+                appointmentList,
+                selection,
+                feedback,
+                scheduleDate.getValue(),
+                scheduleDoctor.getValue() == null ? null : scheduleDoctor.getValue().id(),
+                schedulePatient.getText(),
+                scheduleStatus.getValue(),
+                scheduleSummary);
             refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
-          } catch (ValidationException | AuthorizationException exception) {
+          } catch (ValidationException
+              | AuthorizationException
+              | IllegalArgumentException exception) {
             feedback.setText(exception.getMessage());
           } catch (SQLException exception) {
             feedback.setText("Appointment booking is temporarily unavailable");
@@ -187,20 +287,25 @@ public final class ReceptionistView {
         event -> {
           try {
             requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
-            services
-                .appointmentService()
-                .reschedule(
-                    session,
-                    selection.appointmentId,
-                    parseDateTime(rescheduleStartsAt.getText(), "New start time"),
-                    parseDateTime(rescheduleEndsAt.getText(), "New end time"));
-            feedback.setText("Appointment rescheduled");
-            refreshAppointments(services, session, appointmentList, selection, feedback);
-            refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
+            showRescheduleDialog(
+                services,
+                session,
+                selection.appointmentId,
+                feedback,
+                () ->
+                    refreshSchedule(
+                        services,
+                        session,
+                        appointmentList,
+                        selection,
+                        feedback,
+                        scheduleDate.getValue(),
+                        scheduleDoctor.getValue() == null ? null : scheduleDoctor.getValue().id(),
+                        schedulePatient.getText(),
+                        scheduleStatus.getValue(),
+                        scheduleSummary));
           } catch (ValidationException | AuthorizationException exception) {
             feedback.setText(exception.getMessage());
-          } catch (SQLException exception) {
-            feedback.setText("Appointment rescheduling is temporarily unavailable");
           }
         });
 
@@ -210,7 +315,17 @@ public final class ReceptionistView {
             requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
             services.appointmentService().cancel(session, selection.appointmentId);
             feedback.setText("Appointment cancelled");
-            refreshAppointments(services, session, appointmentList, selection, feedback);
+            refreshSchedule(
+                services,
+                session,
+                appointmentList,
+                selection,
+                feedback,
+                scheduleDate.getValue(),
+                scheduleDoctor.getValue() == null ? null : scheduleDoctor.getValue().id(),
+                schedulePatient.getText(),
+                scheduleStatus.getValue(),
+                scheduleSummary);
             refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
           } catch (ValidationException | AuthorizationException exception) {
             feedback.setText(exception.getMessage());
@@ -225,7 +340,17 @@ public final class ReceptionistView {
             requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
             services.appointmentService().checkIn(session, selection.appointmentId);
             feedback.setText("Patient checked in");
-            refreshAppointments(services, session, appointmentList, selection, feedback);
+            refreshSchedule(
+                services,
+                session,
+                appointmentList,
+                selection,
+                feedback,
+                scheduleDate.getValue(),
+                scheduleDoctor.getValue() == null ? null : scheduleDoctor.getValue().id(),
+                schedulePatient.getText(),
+                scheduleStatus.getValue(),
+                scheduleSummary);
             refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
           } catch (ValidationException | AuthorizationException exception) {
             feedback.setText(exception.getMessage());
@@ -297,10 +422,9 @@ public final class ReceptionistView {
     appointmentForm.setVgap(8);
     appointmentForm.addRow(0, new Label("Patient"), appointmentPatient);
     appointmentForm.addRow(1, new Label("Doctor"), doctor);
-    appointmentForm.addRow(2, new Label("Starts"), startsAt, new Label("Ends"), endsAt, book);
-    appointmentForm.addRow(
-        3, new Label("New start"), rescheduleStartsAt, new Label("New end"), rescheduleEndsAt);
-    appointmentForm.addRow(4, reschedule, cancel);
+    appointmentForm.addRow(2, new Label("Date"), appointmentDate);
+    appointmentForm.addRow(3, new Label("Starts"), startsAt.view, new Label("Ends"), endsAt.view);
+    appointmentForm.addRow(4, book);
     GridPane checkoutForm = new GridPane();
     checkoutForm.setHgap(8);
     checkoutForm.setVgap(8);
@@ -310,7 +434,20 @@ public final class ReceptionistView {
     revenueForm.setVgap(8);
     revenueForm.addRow(0, new Label("Date"), revenueDate, revenueButton, revenue);
     VBox patientContent = new VBox(12, patientTabs);
-    VBox appointmentContent = new VBox(12, appointmentForm, appointmentList, checkIn);
+    HBox scheduleFilters =
+        new HBox(
+            8, new Label("Date"), scheduleDate, scheduleDoctor, scheduleStatus, schedulePatient);
+    VBox bookingContent = new VBox(12, appointmentForm);
+    VBox appointmentManageContent =
+        new VBox(
+            12, scheduleFilters, scheduleSummary, appointmentList, new HBox(8, reschedule, cancel));
+    Tab bookingTab = new Tab("Book appointment", bookingContent);
+    bookingTab.setClosable(false);
+    Tab manageAppointmentsTab = new Tab("Search and manage appointments", appointmentManageContent);
+    manageAppointmentsTab.setClosable(false);
+    TabPane appointmentTabs = new TabPane(bookingTab, manageAppointmentsTab);
+    appointmentTabs.setId("reception-appointment-tabs");
+    VBox appointmentContent = new VBox(12, appointmentTabs);
     VBox checkoutContent = new VBox(12, checkoutAppointmentList, checkoutForm);
     VBox revenueContent = new VBox(12, revenueForm);
     Tab patientFeature = featureTab("Patient directory and basic data", patientContent);
@@ -332,7 +469,19 @@ public final class ReceptionistView {
                 refreshDoctors(services, session, doctor, feedback);
                 refreshAppointmentPatients(
                     services, session, appointmentPatient, feedback, selection.patientId);
-                refreshAppointments(services, session, appointmentList, selection, feedback);
+                refreshDoctors(services, session, scheduleDoctor, feedback);
+                scheduleDoctor.getSelectionModel().clearSelection();
+                refreshSchedule(
+                    services,
+                    session,
+                    appointmentList,
+                    selection,
+                    feedback,
+                    scheduleDate.getValue(),
+                    null,
+                    schedulePatient.getText(),
+                    scheduleStatus.getValue(),
+                    scheduleSummary);
               } else if (selected == checkoutFeature) {
                 refreshAppointments(
                     services, session, checkoutAppointmentList, selection, feedback);
@@ -348,7 +497,17 @@ public final class ReceptionistView {
     refreshDoctors(services, session, doctor, feedback);
     refreshPatients(services, session, patientList, selection, feedback, "");
     refreshAppointmentPatients(services, session, appointmentPatient, feedback, 0);
-    refreshAppointments(services, session, appointmentList, selection, feedback);
+    refreshSchedule(
+        services,
+        session,
+        appointmentList,
+        selection,
+        feedback,
+        null,
+        null,
+        "",
+        null,
+        scheduleSummary);
     refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
     return root;
   }
@@ -707,6 +866,8 @@ public final class ReceptionistView {
 
   private static ComboBox<Account> doctorSelector() {
     ComboBox<Account> doctor = new ComboBox<>();
+    doctor.setEditable(true);
+    doctor.setPromptText("Search Doctors");
     doctor.setId("reception-doctor");
     doctor.setConverter(
         new StringConverter<>() {
@@ -734,6 +895,50 @@ public final class ReceptionistView {
     } catch (SQLException exception) {
       feedback.setText("Doctors are temporarily unavailable");
     }
+  }
+
+  private static TimeFields timeSelector(String id) {
+    ComboBox<String> hours = new ComboBox<>();
+    hours.setId(id + "-hour");
+    ComboBox<String> minutes = new ComboBox<>();
+    minutes.setId(id + "-minute");
+    hours.setPromptText("HH");
+    minutes.setPromptText("mm");
+    for (int hour = 0; hour < 24; hour++) {
+      hours.getItems().add(String.format(Locale.ROOT, "%02d", hour));
+    }
+    minutes.getItems().addAll("00", "30");
+    hours.getSelectionModel().select(0);
+    minutes.getSelectionModel().select(0);
+    HBox view = new HBox(4, hours, new Label(":"), minutes);
+    view.setId(id);
+    return new TimeFields(hours, minutes, view);
+  }
+
+  private static void makePatientSearchable(ComboBox<Patient> selector) {
+    selector.setEditable(true);
+    selector.setPromptText("Search patients");
+    selector.setConverter(
+        new StringConverter<>() {
+          @Override
+          public String toString(Patient patient) {
+            return patient == null
+                ? ""
+                : patient.displayedId()
+                    + " "
+                    + valueOrEmpty(patient.firstName())
+                    + " "
+                    + valueOrEmpty(patient.lastName());
+          }
+
+          @Override
+          public Patient fromString(String value) {
+            return selector.getItems().stream()
+                .filter(patient -> toString(patient).equalsIgnoreCase(value))
+                .findFirst()
+                .orElse(null);
+          }
+        });
   }
 
   private static void refreshPatients(
@@ -809,6 +1014,221 @@ public final class ReceptionistView {
     }
   }
 
+  private static void refreshSchedule(
+      ClinicServices services,
+      Session session,
+      ListView<Appointment> appointmentList,
+      SelectionState selection,
+      Label feedback,
+      LocalDate date,
+      Long doctorId,
+      String patientQuery,
+      AppointmentStatus status,
+      Label summary) {
+    try {
+      List<Appointment> appointments =
+          services
+              .appointmentService()
+              .searchAppointments(session, date, doctorId, patientQuery, status);
+      appointmentList.setItems(FXCollections.observableArrayList(appointments));
+      appointmentList.setCellFactory(
+          list ->
+              new javafx.scene.control.ListCell<>() {
+                @Override
+                protected void updateItem(Appointment item, boolean empty) {
+                  super.updateItem(item, empty);
+                  setText(
+                      empty || item == null ? null : formatAppointment(services, session, item));
+                }
+              });
+      selectAppointment(appointmentList, selection.appointmentId);
+      long pending =
+          appointments.stream().filter(a -> a.status() == AppointmentStatus.PENDING).count();
+      long accepted =
+          appointments.stream().filter(a -> a.status() == AppointmentStatus.ACCEPTED).count();
+      long checkedIn =
+          appointments.stream().filter(a -> a.status() == AppointmentStatus.CHECKED_IN).count();
+      long completed =
+          appointments.stream().filter(a -> a.status() == AppointmentStatus.COMPLETED).count();
+      summary.setText(
+          appointments.size()
+              + " appointment(s) | Pending: "
+              + pending
+              + " | Accepted: "
+              + accepted
+              + " | Checked in: "
+              + checkedIn
+              + " | Completed: "
+              + completed);
+    } catch (SQLException exception) {
+      feedback.setText("Appointments are temporarily unavailable");
+    }
+  }
+
+  private static void showRescheduleDialog(
+      ClinicServices services,
+      Session session,
+      long appointmentId,
+      Label workspaceFeedback,
+      Runnable onUpdated) {
+    try {
+      Appointment appointment = services.appointmentService().get(appointmentId);
+      Patient patient =
+          services.patientService().getAdministrative(session, appointment.patientId());
+      DatePicker date = new DatePicker(appointment.startsAt().toLocalDate());
+      date.setId("reception-reschedule-dialog-date");
+      TimeFields start = timeSelector("reception-reschedule-dialog-start");
+      TimeFields end = timeSelector("reception-reschedule-dialog-end");
+      selectTime(start, appointment.startsAt().toLocalTime());
+      selectTime(end, appointment.endsAt().toLocalTime());
+      ComboBox<Patient> patients = new ComboBox<>();
+      patients.setId("reception-reschedule-dialog-patient");
+      List<Patient> availablePatients =
+          services.patientService().searchAdministrative(session, "").stream()
+              .filter(candidate -> candidate.active() || candidate.id() == patient.id())
+              .toList();
+      patients.getItems().setAll(availablePatients);
+      patients.getSelectionModel().select(patient);
+      makePatientSearchable(patients);
+      Label details =
+          new Label(
+              patient.displayedId()
+                  + DETAIL_SEPARATOR
+                  + valueOrEmpty(patient.firstName())
+                  + " "
+                  + valueOrEmpty(patient.lastName())
+                  + DETAIL_SEPARATOR
+                  + valueOrEmpty(patient.email()));
+      details.setId("reception-reschedule-dialog-patient-details");
+      Label feedback = new Label();
+      feedback.setId("reception-reschedule-dialog-feedback");
+      patients
+          .valueProperty()
+          .addListener(
+              (observable, previous, selected) -> {
+                if (selected != null) {
+                  details.setText(
+                      selected.displayedId()
+                          + DETAIL_SEPARATOR
+                          + valueOrEmpty(selected.firstName())
+                          + " "
+                          + valueOrEmpty(selected.lastName())
+                          + DETAIL_SEPARATOR
+                          + valueOrEmpty(selected.email()));
+                }
+              });
+      Button save = button("Reschedule appointment", "reception-reschedule-dialog-submit");
+      Button cancel = button("Cancel appointment", "reception-reschedule-dialog-cancel");
+      Stage dialog = new Stage();
+      save.setOnAction(
+          event -> {
+            try {
+              services
+                  .appointmentService()
+                  .reschedule(
+                      session,
+                      appointmentId,
+                      parseScheduleDateTime(date, start, "Start time"),
+                      parseScheduleDateTime(date, end, "End time"));
+              workspaceFeedback.setText("Appointment rescheduled");
+              onUpdated.run();
+              dialog.close();
+            } catch (ValidationException | AuthorizationException exception) {
+              feedback.setText(exception.getMessage());
+            } catch (SQLException exception) {
+              feedback.setText("Appointment rescheduling is temporarily unavailable");
+            }
+          });
+      cancel.setOnAction(
+          event -> {
+            try {
+              services.appointmentService().cancel(session, appointmentId);
+              workspaceFeedback.setText("Appointment cancelled");
+              onUpdated.run();
+              dialog.close();
+            } catch (ValidationException | AuthorizationException exception) {
+              feedback.setText(exception.getMessage());
+            } catch (SQLException exception) {
+              feedback.setText("Appointment cancellation is temporarily unavailable");
+            }
+          });
+      VBox content =
+          new VBox(
+              10,
+              new Label("Patient"),
+              patients,
+              details,
+              new Label("New date"),
+              date,
+              new Label("Start"),
+              start.view,
+              new Label("End"),
+              end.view,
+              new HBox(8, save, cancel),
+              feedback);
+      content.setPadding(new Insets(18));
+      dialog.initOwner(workspaceFeedback.getScene().getWindow());
+      dialog.initModality(Modality.WINDOW_MODAL);
+      dialog.setTitle("Reschedule appointment");
+      dialog.setScene(new Scene(content, 520, 500));
+      dialog.show();
+    } catch (SQLException | ValidationException | AuthorizationException exception) {
+      workspaceFeedback.setText(exception.getMessage());
+    }
+  }
+
+  private static LocalDateTime parseScheduleDateTime(
+      DatePicker date, TimeFields time, String fieldName) {
+    if (date.getValue() == null) {
+      throw new ValidationException("Appointment date is required");
+    }
+    try {
+      return LocalDateTime.of(
+          date.getValue(),
+          java.time.LocalTime.of(
+              Integer.parseInt(time.hours.getValue()), Integer.parseInt(time.minutes.getValue())));
+    } catch (DateTimeParseException exception) {
+      throw new ValidationException(fieldName + " must use a valid time", exception);
+    }
+  }
+
+  private static void selectTime(TimeFields fields, java.time.LocalTime time) {
+    fields.hours.setValue(String.format(Locale.ROOT, "%02d", time.getHour()));
+    fields.minutes.setValue(String.format(Locale.ROOT, "%02d", time.getMinute() < 30 ? 0 : 30));
+  }
+
+  private record TimeFields(ComboBox<String> hours, ComboBox<String> minutes, HBox view) {
+    private TimeFields {
+      if (hours == null || minutes == null || view == null) {
+        throw new IllegalArgumentException("Time controls are required");
+      }
+    }
+  }
+
+  private static String formatAppointment(
+      ClinicServices services, Session session, Appointment appointment) {
+    String patient = "P" + String.format(Locale.ROOT, "%06d", appointment.patientId());
+    try {
+      Patient details =
+          services.patientService().getAdministrative(session, appointment.patientId());
+      patient =
+          patient
+              + " "
+              + valueOrEmpty(details.firstName())
+              + " "
+              + valueOrEmpty(details.lastName()).trim();
+    } catch (SQLException | ValidationException | AuthorizationException ignored) {
+      // Keep the generated Patient ID visible if a display lookup is unavailable.
+    }
+    return String.format(
+        Locale.ROOT,
+        "%s | Patient %s | Doctor #%d | %s",
+        appointment.startsAt().format(DATE_TIME_FORMAT),
+        patient.trim(),
+        appointment.doctorId(),
+        appointment.status());
+  }
+
   private static boolean selectPatient(ListView<Patient> list, long id) {
     for (int index = 0; index < list.getItems().size(); index++) {
       if (list.getItems().get(index).id() == id) {
@@ -842,17 +1262,6 @@ public final class ReceptionistView {
 
   private static String valueOrEmpty(String value) {
     return value == null ? "" : value;
-  }
-
-  private static LocalDateTime parseDateTime(String value, String fieldName) {
-    if (value == null) {
-      throw new ValidationException(fieldName + " must use " + DATE_TIME_PATTERN);
-    }
-    try {
-      return LocalDateTime.parse(value.trim(), DATE_TIME_FORMAT);
-    } catch (DateTimeParseException exception) {
-      throw new ValidationException(fieldName + " must use " + DATE_TIME_PATTERN, exception);
-    }
   }
 
   private static LocalDate parseDate(String value, String fieldName) {

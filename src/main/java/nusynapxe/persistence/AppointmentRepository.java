@@ -4,6 +4,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -138,11 +139,50 @@ public final class AppointmentRepository {
 
   /** Returns all appointments in chronological order. */
   public List<Appointment> findAll() throws SQLException {
-    try (PreparedStatement statement =
-        database
-            .connection()
-            .prepareStatement(
-                SELECT_PREFIX + APPOINTMENT_COLUMNS + " FROM appointments ORDER BY starts_at")) {
+    return search(null, null, null, null);
+  }
+
+  /** Searches appointments using optional date, Doctor, patient, and status filters. */
+  public List<Appointment> search(
+      LocalDate date, Long doctorId, String patientQuery, AppointmentStatus status)
+      throws SQLException {
+    StringBuilder sql =
+        new StringBuilder(
+            "SELECT a.id, a.patient_id, a.doctor_id, a.starts_at, a.ends_at, a.status "
+                + "FROM appointments a JOIN patients p ON p.id = a.patient_id WHERE 1 = 1");
+    List<Object> parameters = new java.util.ArrayList<>();
+    if (date != null) {
+      sql.append(" AND a.starts_at LIKE ?");
+      parameters.add(date + "%");
+    }
+    if (doctorId != null) {
+      sql.append(" AND a.doctor_id = ?");
+      parameters.add(doctorId);
+    }
+    if (status != null) {
+      sql.append(" AND a.status = ?");
+      parameters.add(status.name());
+    }
+    if (patientQuery != null && !patientQuery.trim().isEmpty()) {
+      sql.append(
+          " AND (CAST(p.id AS TEXT) LIKE ? OR LOWER(p.first_name) LIKE ? "
+              + "OR LOWER(p.last_name) LIKE ? OR LOWER(p.email) LIKE ?)");
+      String pattern = "%" + patientQuery.trim().toLowerCase(java.util.Locale.ROOT) + "%";
+      parameters.add(pattern);
+      parameters.add(pattern);
+      parameters.add(pattern);
+      parameters.add(pattern);
+    }
+    sql.append(" ORDER BY a.starts_at, a.id");
+    try (PreparedStatement statement = database.connection().prepareStatement(sql.toString())) {
+      for (int index = 0; index < parameters.size(); index++) {
+        Object parameter = parameters.get(index);
+        if (parameter instanceof Long value) {
+          statement.setLong(index + 1, value);
+        } else {
+          statement.setString(index + 1, parameter.toString());
+        }
+      }
       return SqliteQueries.readAll(statement, AppointmentRepository::readAppointment);
     }
   }

@@ -104,26 +104,43 @@ changes do not alter them.
 
 ### Book and manage a visit
 
-Open the separate **Appointments across all Doctors** feature tab.
+Open the separate **Appointments across all Doctors** feature tab. Use the
+**Book appointment** sub-tab for new bookings and **Search and manage
+appointments** for filters and existing appointments.
+
+The scheduling dashboard shows a chronological all-Doctor list and summary
+counts for Pending, Accepted, Checked in, and Completed appointments. Use the
+optional date, Doctor, status, and patient name/Patient ID filters to narrow
+the list; changing a filter reloads the list automatically. Selecting a patient
+for a new booking only offers active patients. Existing appointments remain
+available for historical viewing if a patient is later deactivated.
+
+Patient and Doctor booking fields are searchable dropdowns: click the field and
+type part of the name or identifier instead of scrolling through the full list.
+Start and end times use separate hour (`00`–`23`) and minute (`00` or `30`)
+dropdowns.
 
 1. Choose a patient and a Doctor.
-2. Enter appointment times as `yyyy-MM-dd HH:mm` and select **Book
+2. Select the appointment date with the calendar and choose start/end hours and
+   half-hour minute values. Select **Book
    appointment**. The new appointment starts as `PENDING` and awaits the
    assigned Doctor's acceptance.
-3. Reopen the appointment tab after another staff member changes an appointment;
-   its data reloads automatically. The scheduler covers every Doctor, but overlapping appointments and Doctor
+3. The scheduler covers every Doctor, but overlapping appointments and Doctor
    time-off are rejected. Adjacent appointments are allowed.
 
-To change an existing pending or accepted visit, select it, enter the new
-start and end times, and choose **Reschedule selected**. Choose **Cancel
-selected** to cancel it before completion.
+To change an existing pending or accepted visit, select it and choose
+**Reschedule selected**. A popup shows the patient information and provides a
+new date, start time, end time, **Reschedule appointment**, and **Cancel
+appointment** actions. Successful actions close the popup and refresh the
+dashboard.
 
 ### Check in, checkout, and revenue
 
 1. After the assigned Doctor accepts the appointment, reopen **Appointments
    across all Doctors** and select the appointment; the list refreshes automatically.
-2. At or after the scheduled start time, select **Check in selected**. The
-   appointment changes to `CHECKED_IN`.
+2. Check-in is handled through the appointment workflow at or after the scheduled
+   start time; the all-Doctor dashboard has no standalone **Check in selected**
+   button.
 3. The Doctor records the consultation and selects **Mark consultation
    completed**. Open the separate **Checkout** tab and select the appointment.
 4. Enter a positive charge in major currency units, such as `45.00`, choose

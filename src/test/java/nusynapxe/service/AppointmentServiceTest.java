@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import nusynapxe.domain.Account;
@@ -157,6 +158,47 @@ final class AppointmentServiceTest {
           () ->
               AppointmentTransitions.requireAllowed(
                   AppointmentStatus.COMPLETED, AppointmentStatus.ACCEPTED));
+    }
+  }
+
+  @Test
+  void receptionistDashboardSearchesAndRejectsInactivePatients() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      Accounts fixture = accounts(database);
+      AppointmentService service = service(database);
+      Appointment appointment =
+          service.book(
+              fixture.receptionistSession(),
+              fixture.patient().id(),
+              fixture.doctor().id(),
+              APPOINTMENT_START,
+              APPOINTMENT_END);
+
+      assertEquals(
+          1,
+          service
+              .searchAppointments(
+                  fixture.receptionistSession(),
+                  LocalDate.of(2026, 9, 1),
+                  fixture.doctor().id(),
+                  "grace",
+                  AppointmentStatus.PENDING)
+              .size());
+      assertEquals(appointment, service.allAppointments(fixture.receptionistSession()).get(0));
+
+      new PatientRepository(database).deactivate(fixture.patient().id());
+      assertThrows(
+          ValidationException.class,
+          () ->
+              service.book(
+                  fixture.receptionistSession(),
+                  fixture.patient().id(),
+                  fixture.doctor().id(),
+                  LocalDateTime.of(2026, 9, 1, 10, 0),
+                  LocalDateTime.of(2026, 9, 1, 10, 30)));
+      assertThrows(
+          AuthorizationException.class,
+          () -> service.searchAppointments(fixture.doctorSession(), null, null, "", null));
     }
   }
 

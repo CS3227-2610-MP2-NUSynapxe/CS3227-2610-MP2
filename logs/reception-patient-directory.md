@@ -135,3 +135,18 @@ patient's current state. Repository and Receptionist service operations now
 support both status transitions while retaining the same Patient ID and all
 history. Focused repository, service, and TestFX tests cover these behaviors.
 Only synthetic patient data is used in tests, and no changes were pushed.
+
+The scheduling UI was refined with editable searchable patient and Doctor
+selectors, half-hour time dropdowns, and a patient-context rescheduling popup.
+The popup displays only administrative patient details and provides separate
+reschedule and cancellation actions. Focused TestFX, service, and PMD checks
+passed after the refinement.
+
+## Receptionist scheduling dashboard
+
+The next approved feature is the Receptionist all-Doctor scheduling dashboard.
+The implementation adds optional date, Doctor, patient, and status filters,
+summary counts, calendar-based booking dates, inactive-patient protection, and
+an administrative appointment list. Existing conflict detection and lifecycle
+transitions remain service-layer rules. Focused repository, service, and
+Receptionist TestFX tests were extended; no real patient data is recorded here.
