@@ -74,6 +74,9 @@ public final class ReceptionistView {
     TextField startsAt = field("reception-start", DATE_TIME_PATTERN);
     TextField endsAt = field("reception-end", DATE_TIME_PATTERN);
     Button book = button("Book appointment", "reception-book");
+    DatePicker rescheduleDate = new DatePicker();
+    rescheduleDate.setId("reception-reschedule-date");
+    rescheduleDate.setPromptText("New date");
     TextField rescheduleStartsAt = field("reception-reschedule-start", DATE_TIME_PATTERN);
     TextField rescheduleEndsAt = field("reception-reschedule-end", DATE_TIME_PATTERN);
     Button reschedule = button("Reschedule selected", "reception-reschedule");
@@ -290,8 +293,8 @@ public final class ReceptionistView {
                 .reschedule(
                     session,
                     selection.appointmentId,
-                    parseDateTime(rescheduleStartsAt.getText(), "New start time"),
-                    parseDateTime(rescheduleEndsAt.getText(), "New end time"));
+                    parseScheduleDateTime(rescheduleDate, rescheduleStartsAt, "New start time"),
+                    parseScheduleDateTime(rescheduleDate, rescheduleEndsAt, "New end time"));
             feedback.setText("Appointment rescheduled");
             refreshSchedule(
                 services,
@@ -427,9 +430,10 @@ public final class ReceptionistView {
     appointmentForm.addRow(1, new Label("Doctor"), doctor);
     appointmentForm.addRow(2, new Label("Date"), appointmentDate);
     appointmentForm.addRow(3, new Label("Starts"), startsAt, new Label("Ends"), endsAt, book);
+    appointmentForm.addRow(4, new Label("New date"), rescheduleDate);
     appointmentForm.addRow(
-        4, new Label("New start"), rescheduleStartsAt, new Label("New end"), rescheduleEndsAt);
-    appointmentForm.addRow(5, reschedule, cancel);
+        5, new Label("New start"), rescheduleStartsAt, new Label("New end"), rescheduleEndsAt);
+    appointmentForm.addRow(6, reschedule, cancel);
     GridPane checkoutForm = new GridPane();
     checkoutForm.setHgap(8);
     checkoutForm.setVgap(8);

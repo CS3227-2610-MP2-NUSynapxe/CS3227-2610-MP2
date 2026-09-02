@@ -122,7 +122,7 @@ available for historical viewing if a patient is later deactivated.
    time-off are rejected. Adjacent appointments are allowed.
 
 To change an existing pending or accepted visit, select it, enter the new
-start and end times, and choose **Reschedule selected**. Choose **Cancel
+date with the calendar plus new start and end times, and choose **Reschedule selected**. Choose **Cancel
 selected** to cancel it before completion.
 
 ### Check in, checkout, and revenue
