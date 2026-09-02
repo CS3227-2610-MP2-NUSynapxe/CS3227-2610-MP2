@@ -10,16 +10,19 @@ import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.Payment;
 import nusynapxe.domain.PaymentMethod;
 import nusynapxe.domain.PaymentStatus;
+import nusynapxe.domain.Receipt;
 import nusynapxe.domain.RevenueSummary;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
 import nusynapxe.persistence.PaymentRepository;
+import nusynapxe.persistence.ReceiptRepository;
 
 /** Applies Receptionist authorization and validation to checkout operations. */
 public final class BillingService {
   private final PaymentRepository payments;
   private final AppointmentService appointments;
   private final Clock clock;
+  private final ReceiptRepository receipts;
 
   /** Creates billing service using the system clock. */
   public BillingService(PaymentRepository payments, AppointmentService appointments) {
@@ -30,6 +33,7 @@ public final class BillingService {
     this.payments = Objects.requireNonNull(payments, "payments");
     this.appointments = Objects.requireNonNull(appointments, "appointments");
     this.clock = Objects.requireNonNull(clock, "clock");
+    this.receipts = new ReceiptRepository(payments.backingDatabase());
   }
 
   /** Records a successful payment and checks out a completed appointment. */
@@ -70,5 +74,18 @@ public final class BillingService {
       throw new ValidationException("Revenue date is required");
     }
     return payments.revenueFor(date);
+  }
+
+  /** Returns Receptionist-visible receipt history. */
+  public java.util.List<Receipt> receiptHistory(
+      Session actor, String patientQuery, Long doctorId, LocalDate date) throws SQLException {
+    Authorization.requireRole(actor, Role.RECEPTIONIST);
+    return receipts.findAll(patientQuery, doctorId, date);
+  }
+
+  /** Returns one persisted receipt for reprinting. */
+  public Receipt receipt(Session actor, long receiptId) throws SQLException {
+    Authorization.requireRole(actor, Role.RECEPTIONIST);
+    return receipts.findById(receiptId);
   }
 }

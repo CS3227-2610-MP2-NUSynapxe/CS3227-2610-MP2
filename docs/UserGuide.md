@@ -151,10 +151,16 @@ successful check-in. Clinical notes and prescriptions are never shown.
    button.
 3. The Doctor records the consultation and selects **Mark consultation
    completed**. Open the separate **Checkout** tab and select the appointment.
-4. Enter a positive charge in major currency units, such as `45.00`, choose
-   Cash, Card, Transfer, or Other, and select **Complete checkout**. This
+4. Select the completed appointment to open its checkout window. Enter a
+   positive charge in major currency units, such as `45.00`, choose Cash,
+   Card, Transfer, or Other, and select **Complete checkout** in that window. This
    records the successful payment and changes the appointment to
    `CHECKED_OUT`.
+6. In the **Checkout** workspace, use the Patient, Doctor, and date filters to
+   find completed appointments ready for payment. After checkout, the receipt
+   preview shows the daily receipt number and Singapore timestamp. Open the
+   **Receipts** sub-tab to browse prior payments and select a receipt to view
+   its persisted details.
 5. Open **Daily revenue**, enter a date as `yyyy-MM-dd`, and select **Show revenue** to see the count
    and total of successful checkouts for that local clinic date.
 

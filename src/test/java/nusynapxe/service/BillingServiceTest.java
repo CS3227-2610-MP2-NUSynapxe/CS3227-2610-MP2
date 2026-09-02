@@ -42,6 +42,17 @@ final class BillingServiceTest {
               fixture.receptionistSession(), fixture.appointment().id(), 2500, PaymentMethod.CARD);
 
       assertEquals(2500, payment.amountMinor());
+      var receipts = billing.receiptHistory(fixture.receptionistSession(), "", null, null);
+      assertEquals(1, receipts.size());
+      assertEquals(1, receipts.get(0).sequenceNumber());
+      assertThrows(
+          ValidationException.class,
+          () ->
+              billing.checkout(
+                  fixture.receptionistSession(),
+                  fixture.appointment().id(),
+                  2500,
+                  PaymentMethod.CARD));
       assertEquals(
           AppointmentStatus.CHECKED_OUT,
           fixture.appointments().get(fixture.appointment().id()).status());

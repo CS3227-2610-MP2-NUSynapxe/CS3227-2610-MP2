@@ -10,13 +10,21 @@ public record PasswordHash(byte[] salt, byte[] verifier) {
     verifier = Objects.requireNonNull(verifier, "verifier").clone();
   }
 
-  /** Returns a copy of the salt. */
+  /**
+   * Returns a copy of the salt.
+   *
+   * @return defensive copy of the salt
+   */
   @Override
   public byte[] salt() {
     return salt.clone();
   }
 
-  /** Returns a copy of the derived verifier. */
+  /**
+   * Returns a copy of the derived verifier.
+   *
+   * @return defensive copy of the derived verifier
+   */
   @Override
   public byte[] verifier() {
     return verifier.clone();

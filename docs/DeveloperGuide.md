@@ -156,6 +156,9 @@ actions; successful completion refreshes the dashboard.
 The Check-in Queue reuses the administrative appointment search, defaults to
 Singapore's current date, combines accepted and checked-in appointments, and
 opens an administrative details popup with an eligibility-aware check-in action.
+Checkout uses a completed-appointment search and a separate receipt-history
+projection. Successful payments create one receipt with a unique daily sequence;
+history viewing is read-only and contains administrative fields only.
 
 The lifecycle policy is:
 
