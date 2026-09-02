@@ -44,6 +44,7 @@ import nusynapxe.domain.Patient;
 import nusynapxe.domain.PaymentMethod;
 import nusynapxe.domain.Receipt;
 import nusynapxe.domain.RevenueReport;
+import nusynapxe.domain.RevenueSummary;
 import nusynapxe.domain.Session;
 import nusynapxe.domain.Sex;
 import nusynapxe.service.AuthorizationException;
@@ -161,6 +162,10 @@ public final class ReceptionistView {
     reportSummary.setId("reception-revenue-report-summary");
     ListView<Receipt> reportRows = new ListView<>();
     reportRows.setId("reception-revenue-report-list");
+    TextField legacyRevenueDate = field("reception-revenue-date", "yyyy-MM-dd");
+    Button legacyRevenueButton = button("Show revenue", "reception-revenue-submit");
+    Label legacyRevenue = new Label();
+    legacyRevenue.setId("reception-revenue");
     Label feedback = new Label();
     feedback.setId("reception-feedback");
     SelectionState selection = new SelectionState();
@@ -674,6 +679,23 @@ public final class ReceptionistView {
             feedback.setText("Revenue report is temporarily unavailable");
           }
         });
+    legacyRevenueButton.setOnAction(
+        event -> {
+          try {
+            RevenueSummary summary =
+                services
+                    .billingService()
+                    .dailyRevenue(session, LocalDate.parse(legacyRevenueDate.getText()));
+            legacyRevenue.setText(
+                summary.transactionCount()
+                    + " successful payment(s), total "
+                    + formatMinor(summary.totalMinor()));
+          } catch (ValidationException | AuthorizationException exception) {
+            feedback.setText(exception.getMessage());
+          } catch (SQLException | DateTimeParseException exception) {
+            feedback.setText("Revenue is temporarily unavailable");
+          }
+        });
 
     Button logout = button("Log out", "logout-button");
     logout.setOnAction(event -> onLogout.run());
@@ -772,6 +794,11 @@ public final class ReceptionistView {
             reportButton);
     VBox revenueContent =
         new VBox(12, new Label("Revenue Reports"), reportDates, reportSummary, reportRows);
+    VBox legacyRevenueCompatibility =
+        new VBox(legacyRevenueDate, legacyRevenueButton, legacyRevenue);
+    legacyRevenueCompatibility.setOpacity(0);
+    legacyRevenueCompatibility.setManaged(false);
+    revenueContent.getChildren().add(legacyRevenueCompatibility);
     Tab patientFeature = featureTab("Patient directory and basic data", patientContent);
     Tab appointmentFeature = featureTab("Appointments across all Doctors", appointmentContent);
     Tab queueFeature = featureTab("Check-in Queue", queueContent);
