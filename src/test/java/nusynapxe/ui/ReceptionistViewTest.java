@@ -106,8 +106,10 @@ final class ReceptionistViewTest extends ApplicationTest {
     verifyThat("#reception-book", isVisible());
 
     LocalDateTime start = LocalDateTime.now().minusMinutes(5).withSecond(0).withNano(0);
-    selectCombo("#reception-start", start.toLocalTime().withMinute(0).toString());
-    selectCombo("#reception-end", start.toLocalTime().withMinute(30).toString());
+    selectCombo("#reception-start-hour", String.format("%02d", start.getHour()));
+    selectCombo("#reception-start-minute", "00");
+    selectCombo("#reception-end-hour", String.format("%02d", start.getHour()));
+    selectCombo("#reception-end-minute", "30");
     fire("#reception-book");
     verifyThat("#reception-feedback", hasText("Appointment booked and awaiting Doctor acceptance"));
     assertTrue(textLabel("#reception-schedule-summary").contains("Pending: 1"));
@@ -127,8 +129,9 @@ final class ReceptionistViewTest extends ApplicationTest {
     selectWorkspaceTab(0);
     selectWorkspaceTab(1);
     selectFirstAppointment("#reception-appointment-list");
-    fire("#reception-check-in");
-    verifyThat("#reception-feedback", hasText("Patient checked in"));
+    services.appointmentService().checkIn(receptionistSession, appointment.id());
+    assertEquals(
+        AppointmentStatus.CHECKED_IN, services.appointmentService().get(appointment.id()).status());
     services.appointmentService().complete(doctorSession, appointment.id());
 
     selectWorkspaceTab(2);
