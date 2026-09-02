@@ -3,12 +3,12 @@ package nusynapxe.ui;
 import java.sql.SQLException;
 import java.util.Optional;
 import javafx.geometry.Insets;
-import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import nusynapxe.domain.Session;
 import nusynapxe.service.AuthenticationService;
@@ -27,10 +27,8 @@ public final class LoginView {
     PasswordField password = new PasswordField();
     password.setId("login-password");
     password.setPromptText("Password");
-    Label feedback = new Label();
-    feedback.setId("login-feedback");
-    Button submit = new Button("Log in");
-    submit.setId("login-submit");
+    Label feedback = UiComponents.feedback("login-feedback");
+    Button submit = UiComponents.primaryButton("Log in", "login-submit");
     submit.setDefaultButton(true);
     submit.setOnAction(
         event -> {
@@ -48,19 +46,28 @@ public final class LoginView {
           }
         });
 
-    VBox root =
-        new VBox(
-            10,
-            new Label("NUSynapxe"),
-            new Label("Clinic staff login"),
-            username,
-            password,
-            submit,
+    Label brand = new Label("NUSynapxe");
+    brand.setId("app-brand");
+    brand.getStyleClass().add("brand-name");
+    Label tagline = new Label("Clinic staff login");
+    tagline.getStyleClass().add("brand-tagline");
+    VBox identity = new VBox(6, brand, tagline);
+    identity.getStyleClass().add("auth-brand");
+    VBox form =
+        UiComponents.card(
+            "login-form-card",
+            UiComponents.pageTitle("Welcome back"),
+            UiComponents.supportingText("Sign in to access your authorised clinic workspace."),
+            UiComponents.fieldGroup("Username", username),
+            UiComponents.fieldGroup("Password", password),
+            UiComponents.actionBar(submit),
             feedback);
+    VBox content = new VBox(24, identity, form);
+    content.getStyleClass().add("auth-content");
+    StackPane root = new StackPane(content);
     root.setId("login-view");
-    root.setAlignment(Pos.CENTER);
+    root.getStyleClass().add("auth-screen");
     root.setPadding(new Insets(32));
-    root.setMaxWidth(360);
     return root;
   }
 

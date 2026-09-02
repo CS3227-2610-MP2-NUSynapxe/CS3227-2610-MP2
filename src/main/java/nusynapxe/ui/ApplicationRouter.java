@@ -5,8 +5,8 @@ import java.util.Objects;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Parent;
+import javafx.scene.Scene;
 import javafx.scene.control.Button;
-import javafx.scene.control.Label;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import nusynapxe.domain.Role;
@@ -16,6 +16,11 @@ import nusynapxe.service.ClinicServices;
 
 /** Routes the JavaFX stage between setup, authentication, and role workspaces. */
 public final class ApplicationRouter {
+  private static final double INITIAL_WIDTH = 1200;
+  private static final double INITIAL_HEIGHT = 760;
+  private static final double MINIMUM_WIDTH = 980;
+  private static final double MINIMUM_HEIGHT = 640;
+
   private final Stage stage;
   private final ClinicServices services;
 
@@ -69,22 +74,35 @@ public final class ApplicationRouter {
       setContent(DoctorView.create(services, session, this::showLogin));
       return;
     }
-    Label title = new Label(session.role().name().replace('_', ' ') + " workspace");
-    title.setId("workspace-title");
-    Label identity = new Label("Signed in as " + session.username());
-    identity.setId("workspace-identity");
     Button logout = new Button("Log out");
     logout.setId("logout-button");
     logout.setOnAction(event -> showLogin());
-    VBox root = new VBox(12, title, identity, logout);
+    VBox root =
+        new VBox(
+            12,
+            UiComponents.workspaceHeader(
+                session.role().name().replace('_', ' ') + " workspace",
+                session.username(),
+                logout));
     root.setId(workspaceId(session.role()));
+    root.getStyleClass().add("workspace-shell");
     root.setAlignment(Pos.CENTER);
     root.setPadding(new Insets(32));
     setContent(root);
   }
 
   private void setContent(Parent root) {
-    stage.setScene(new javafx.scene.Scene(root, 760, 520));
+    Scene scene = stage.getScene();
+    if (scene == null) {
+      scene = new Scene(root, INITIAL_WIDTH, INITIAL_HEIGHT);
+      UiComponents.applyStylesheet(scene);
+      stage.setScene(scene);
+    } else {
+      scene.setRoot(root);
+    }
+    stage.setMinWidth(MINIMUM_WIDTH);
+    stage.setMinHeight(MINIMUM_HEIGHT);
+    stage.setResizable(true);
   }
 
   private static String workspaceId(Role role) {

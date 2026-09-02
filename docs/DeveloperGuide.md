@@ -178,8 +178,16 @@ stores integer minor units and aggregates successful payments by local date.
 ## UI and TestFX conventions
 
 `ApplicationRouter` opens Login or first-run Setup and routes an authenticated
-session to one of the role workspaces. Views are built programmatically so
-semantic ids remain easy to assert. The patient area has independent
+session to one of the role workspaces. Every routed scene loads
+`src/main/resources/nusynapxe/ui.css`; the application opens the stage
+maximized, while the router uses a restored initial size of `1200 x 760`, a
+minimum size of `980 x 640`, and keeps the stage resizable.
+`UiComponents` contains presentation-only factories for cards, headings,
+field groups, action bars, feedback, empty states, buttons, status badges, and
+the authenticated header. It has no service or persistence dependency.
+
+Views are built programmatically so semantic ids remain easy to assert. The
+patient area has independent
 `Register new patient` and `Search and manage patients` tabs. Country options
 come from `Locale.getISOCountries()`, use English display names, persist ISO
 two-letter codes, and order Singapore first. NRIC and FIN selection chooses
@@ -205,6 +213,33 @@ has no manual refresh control. Important ids include `login-submit`, `setup-subm
 `reception-patient-search-submit`, `reception-patient-update`,
 `reception-patient-deactivate`, `reception-book`, `reception-checkout`,
 `doctor-consultation-save`, and `logout-button`.
+
+The shared authenticated header has `workspace-header`, `app-brand`,
+`workspace-title`, `workspace-identity`, and `logout-button`. The Receptionist
+top-level `reception-workspace-tabs` remains a `TabPane`, but its tabs are
+shown as a left navigation rail; the patient and appointment subflows use
+compact secondary tabs. New layout markers include
+`reception-patient-search-card`, `reception-patient-results-card`,
+`reception-booking-card`, `reception-appointment-results-card`,
+`reception-checkout-payment-card`, `reception-revenue-card`,
+`doctor-master-detail`, `doctor-detail-scroll`, `doctor-no-selection`,
+`admin-account-form-card`, and `admin-account-list-card`.
+
+Operational results use dedicated JavaFX renderers. Patient cells show only
+Patient ID, name, and active status. Receptionist appointment cells show
+administrative Patient context, Doctor ID, date/time, and a written lifecycle
+status; they never render the `Appointment` record's raw `toString()`. Doctor
+prescription cells show medication and usage fields. System Admin staff
+accounts use a compact table with Username, Display Name, Role, and Status
+columns. Empty results use stable `*-empty` markers and an explanatory
+message. Color is supplementary to status text, and the stylesheet provides a
+visible focus outline for keyboard navigation.
+
+The Doctor workspace uses two independently scrollable panes: the assigned
+schedule and a selected-appointment detail pane containing availability,
+consultation, prescriptions, and completion cards. Consultation actions remain
+disabled until a schedule item is selected; the existing services still own
+authorization and lifecycle validation.
 
 TestFX tests require a display. The CI workflow runs the Java suite through
 `xvfb-run --auto-servernum` on Ubuntu. For controls inside a scroll pane,

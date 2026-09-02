@@ -17,7 +17,7 @@ public final class NUSynapxeApp extends Application {
   }
 
   /**
-   * Opens local storage and displays the initial application window.
+   * Opens local storage and displays the initial maximized application window.
    *
    * @param stage stage supplied by the JavaFX runtime
    * @throws SQLException if the local database cannot be opened or initialized
@@ -30,6 +30,7 @@ public final class NUSynapxeApp extends Application {
     stage.setTitle("NUSynapxe");
     router = new ApplicationRouter(stage, database);
     router.showInitial();
+    stage.setMaximized(true);
     stage.show();
   }
 
