@@ -20,9 +20,10 @@ left-hand navigation rail to switch between **Patients**, **Appointments**,
 description of the selected work area.
 Doctors use a two-item navigation rail with **Dashboard** for the existing
 appointment and consultation workspace and **Patients** for the shared
-administrative patient directory. The selected destination is highlighted.
-The registration/search tabs and appointment booking/management tabs remain
-independent inside their respective areas.
+administrative patient directory. **Dashboard** and **Patients** occupy the
+full rail width as contiguous destinations, and the selected destination is
+highlighted. Appointment booking and management remain independent inside the
+Appointments area.
 
 ## First launch
 
@@ -68,7 +69,13 @@ interface displays it in a form such as `P000042`; staff do not enter or edit
 this value, and it is not shown on the new-patient form. Appointments, payments, and retained records continue to use the
 same Patient ID even when basic details are corrected.
 
-Select the **Register new patient** tab to create a record:
+The **Patient directory** is one page. It initially shows the patient search
+controls and a table with these columns: **Patient ID**, **Name**, **Date of
+birth**, **Phone**, **Email**, **Status**, and **Actions**. The **Actions**
+column is fixed at the far right and contains an **Edit** button for each row.
+Select **Register new patient** at the bottom to switch to the registration
+form. The identity, country, date, and sex dropdowns use compact controls so
+the form remains easy to scan:
 
 1. Choose **NRIC**, **FIN**, **PASSPORT**, or **OTHER** as the identity type.
 2. Select the issuing country from the country dropdown, which lists Singapore
@@ -93,8 +100,11 @@ Select the **Register new patient** tab to create a record:
    fields. Height is a positive whole number of centimetres, such as `171`;
    weight is positive kilograms with at most one decimal, such as `70.4`.
    There is no patient billing-information field; checkout is separate.
-6. Select **Register patient**. The new record and patient selectors refresh
-   automatically, and the blank registration form remains independent of edit.
+6. Select **Register patient**. On success, the form is cleared, the search is
+   reset, patient selectors and directory results refresh, and the view returns
+   to **Patient directory**. If validation or persistence fails, the form stays
+   open with feedback so the entered values can be corrected. Select **Cancel**
+   to discard an unfinished registration and return to the directory.
 
 The combination of identity type, issuing country, and identity number must
 be unique after trimming and uppercasing. A duplicate is completely rejected
@@ -102,22 +112,24 @@ with `A patient with this identity document already exists`; no second patient
 is created. The message and application logs do not repeat the full document
 number.
 
-Select **Search and manage patients** to find patients by Patient ID (for example,
-`P000042` or `42`), identity type/number/country, name, phone, or email.
+Use the **Patient directory** search controls to find patients by Patient ID
+(for example, `P000042` or `42`), identity type/number/country, name, phone, or
+email.
 Search is case-insensitive, partial text is accepted, and **Clear search**
 restores the full directory. No matches produce an empty list rather than an
 application error.
 
-The search tab contains only the search controls and results. Select a result
-to open its permitted basic-data fields in a separate patient-details window.
-Correct them and select **Save patient changes**. A failed validation or
-duplicate identity leaves the entire stored record unchanged. Select
-**Deactivate patient** when a record should no longer be active; the same
-button changes to **Activate patient** for an inactive record. Either status
-change preserves its Patient ID, appointments, payments, and clinical history.
-A patient migrated from an
-older database remains searchable, but its identity-document fields must be
-completed before its next basic-data save.
+Select a row's **Edit** button to replace the directory with an **Edit patient**
+page. It shows the generated Patient ID and the same permitted basic-data
+fields as registration. Correct them and select **Save patient changes** to
+return to the directory; a failed validation or duplicate identity leaves the
+edit page open with feedback so the values can be corrected. Select **Cancel**
+to discard unsaved edits and return to the directory. Select **Deactivate
+patient** when a record should no longer be active; the same button changes to
+**Activate patient** for an inactive record. Either status change preserves
+its Patient ID, appointments, payments, and clinical history. A patient
+migrated from an older database remains searchable, but its identity-document
+fields must be completed before its next basic-data save.
 
 Doctors have the same patient-directory permissions as Receptionists: they can
 register, search, edit, activate, deactivate, and request deletion of patients.

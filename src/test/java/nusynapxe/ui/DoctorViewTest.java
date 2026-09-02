@@ -11,17 +11,20 @@ import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ListView;
-import javafx.scene.control.TabPane;
+import javafx.scene.control.TableView;
 import javafx.scene.control.TextInputControl;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.ClinicalRecord;
+import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.Payment;
 import nusynapxe.domain.PaymentMethod;
@@ -129,13 +132,43 @@ final class DoctorViewTest extends ApplicationTest {
   @Test
   void doctorCanNavigateToPatientsAndDeleteAnUnusedPatient() throws SQLException {
     loginAsDoctor();
+    Button dashboardNavigation = lookup("#doctor-nav-dashboard").queryAs(Button.class);
+    Button patientsNavigation = lookup("#doctor-nav-patients").queryAs(Button.class);
+    double navigationWidth = lookup("#doctor-navigation").query().getBoundsInLocal().getWidth();
+    assertEquals(navigationWidth, dashboardNavigation.getBoundsInParent().getWidth(), 0.1);
+    assertEquals(navigationWidth, patientsNavigation.getBoundsInParent().getWidth(), 0.1);
+    assertEquals(0, lookup("#doctor-navigation").queryAs(VBox.class).getSpacing(), 0.0);
+    assertTrue(dashboardNavigation.getStyleClass().contains("active-navigation"));
+
     fire("#doctor-nav-patients");
     verifyThat("#doctor-patients-page", isVisible());
-    assertTrue(lookup("#doctor-patient-tabs").tryQuery().isPresent());
+    verifyThat("#doctor-patient-directory-view", isVisible());
+    assertFalse(lookup("#doctor-patient-tabs").tryQuery().isPresent());
+    assertFalse(lookup("#doctor-patient-register-tab").tryQuery().isPresent());
+    assertFalse(lookup("#doctor-patient-manage-tab").tryQuery().isPresent());
+    assertTrue(patientsNavigation.getStyleClass().contains("active-navigation"));
+    assertFalse(dashboardNavigation.getStyleClass().contains("active-navigation"));
     assertFalse(lookup("#doctor-master-detail").tryQuery().isPresent());
     assertFalse(lookup("#doctor-consultation-save").tryQuery().isPresent());
     assertFalse(lookup("#doctor-prescription-submit").tryQuery().isPresent());
+    assertEquals(
+        List.of("Patient ID", "Name", "Date of birth", "Phone", "Email", "Status", "Actions"),
+        patientTable().getColumns().stream().map(column -> column.getText()).toList());
+    assertCompactPatientSelectors("doctor-register");
 
+    fire("#doctor-patient-open-register");
+    verifyThat("#doctor-patient-register-view", isVisible());
+    fire("#doctor-patient-register");
+    verifyThat("#doctor-feedback", hasText("Identity type is required"));
+    verifyThat("#doctor-patient-register-view", isVisible());
+    setText("#doctor-register-identity-number", "draft-only");
+    fire("#doctor-patient-register-cancel");
+    verifyThat("#doctor-patient-directory-view", isVisible());
+    assertTrue(
+        services.patientService().searchAdministrative(doctorSession(), "draft-only").isEmpty());
+
+    fire("#doctor-patient-open-register");
+    selectCombo("#doctor-register-identity-type", IdentityType.NRIC);
     selectCombo("#doctor-register-sex", Sex.FEMALE);
     setText("#doctor-register-identity-number", "S1234567D");
     setText("#doctor-register-first-name", "New");
@@ -146,24 +179,43 @@ final class DoctorViewTest extends ApplicationTest {
     setText("#doctor-register-address", "New address");
     fire("#doctor-patient-register");
     verifyThat("#doctor-feedback", hasText("Patient registered"));
+    verifyThat("#doctor-patient-directory-view", isVisible());
 
-    selectPatientManagementTab();
     setText("#doctor-patient-search", "new.patient@example.test");
     fire("#doctor-patient-search-submit");
-    assertEquals(1, patientList().getItems().size());
-    selectFirstPatient();
-    waitForNode("#doctor-patient-details-window");
+    assertEquals(1, patientTable().getItems().size());
+    Patient registeredPatient = patientTable().getItems().get(0);
+    assertEquals(registeredPatient.displayedId(), tableValue(0, registeredPatient));
+    assertEquals("New Patient", tableValue(1, registeredPatient));
+    assertEquals("1990-01-01", tableValue(2, registeredPatient));
+    assertEquals("+65 5550101", tableValue(3, registeredPatient));
+    assertEquals("new.patient@example.test", tableValue(4, registeredPatient));
+    assertEquals("Active", tableValue(5, registeredPatient));
+    interact(() -> patientTable().getSelectionModel().selectFirst());
+    assertFalse(lookup("#doctor-patient-details-window").tryQuery().isPresent());
+    assertFalse(lookup("#doctor-patient-edit-view").query().isVisible());
+    preparePatientTable();
+    assertTrue(lookup("#doctor-patient-edit-" + registeredPatient.id()).tryQuery().isPresent());
+    fire("#doctor-patient-edit-" + registeredPatient.id());
+    waitForNode("#doctor-patient-edit-view");
+    assertFalse(lookup("#doctor-patient-details-window").tryQuery().isPresent());
+    assertCompactPatientSelectors("doctor-patient");
 
     setText("#doctor-patient-phone-number", "5550102");
     fire("#doctor-patient-update");
     verifyThat("#doctor-feedback", hasText("Patient changes saved"));
+    verifyThat("#doctor-patient-directory-view", isVisible());
+    assertFalse(lookup("#doctor-patient-edit-view").query().isVisible());
+    preparePatientTable();
+    fire("#doctor-patient-edit-" + registeredPatient.id());
+    waitForNode("#doctor-patient-edit-view");
 
     Thread cancelThread = new Thread(() -> fire("#doctor-patient-delete"));
     cancelThread.start();
     waitForNode("#doctor-patient-delete-confirm-window");
     fire("#doctor-patient-delete-cancel");
     join(cancelThread);
-    assertTrue(lookup("#doctor-patient-details-window").tryQuery().isPresent());
+    verifyThat("#doctor-patient-edit-view", isVisible());
 
     Thread deleteThread = new Thread(() -> fire("#doctor-patient-delete"));
     deleteThread.start();
@@ -171,7 +223,7 @@ final class DoctorViewTest extends ApplicationTest {
     fire("#doctor-patient-delete-confirm");
     join(deleteThread);
     verifyThat("#doctor-feedback", hasText("Patient deleted"));
-    assertTrue(patientList().getItems().isEmpty());
+    assertTrue(patientTable().getItems().isEmpty());
     assertTrue(
         services
             .patientService()
@@ -186,11 +238,12 @@ final class DoctorViewTest extends ApplicationTest {
     addPatientHistory();
     loginAsDoctor();
     fire("#doctor-nav-patients");
-    selectPatientManagementTab();
     setText("#doctor-patient-search", "P000001");
     fire("#doctor-patient-search-submit");
-    selectFirstPatient();
-    waitForNode("#doctor-patient-details-window");
+    Patient referencedPatient = patientTable().getItems().get(0);
+    preparePatientTable();
+    fire("#doctor-patient-edit-" + referencedPatient.id());
+    waitForNode("#doctor-patient-edit-view");
 
     Thread deleteThread = new Thread(() -> fire("#doctor-patient-delete"));
     deleteThread.start();
@@ -208,7 +261,7 @@ final class DoctorViewTest extends ApplicationTest {
             .contains("deactivate the patient instead"));
     fire("#doctor-patient-delete-blocked-close");
     join(deleteThread);
-    assertTrue(lookup("#doctor-patient-details-window").tryQuery().isPresent());
+    verifyThat("#doctor-patient-edit-view", isVisible());
   }
 
   private void selectFirst(String selector) {
@@ -234,18 +287,58 @@ final class DoctorViewTest extends ApplicationTest {
         });
   }
 
-  private void selectPatientManagementTab() {
-    interact(
-        () -> lookup("#doctor-patient-tabs").queryAs(TabPane.class).getSelectionModel().select(1));
-  }
-
   @SuppressWarnings("unchecked")
-  private ListView<Patient> patientList() {
-    return lookup("#doctor-patient-list").queryAs(ListView.class);
+  private TableView<Patient> patientTable() {
+    return lookup("#doctor-patient-table").queryAs(TableView.class);
   }
 
-  private void selectFirstPatient() {
-    interact(() -> patientList().getSelectionModel().selectFirst());
+  private void preparePatientTable() {
+    interact(
+        () -> {
+          TableView<Patient> table = patientTable();
+          table.scrollTo(0);
+          table.applyCss();
+          table.layout();
+        });
+    WaitForAsyncUtils.waitForFxEvents();
+  }
+
+  private String tableValue(int columnIndex, Patient patient) {
+    return (String)
+        patientTable().getColumns().get(columnIndex).getCellObservableValue(patient).getValue();
+  }
+
+  private void assertCompactPatientSelectors(String formPrefix) {
+    assertTrue(
+        lookup("#" + formPrefix + "-identity-type")
+            .queryAs(ComboBox.class)
+            .getStyleClass()
+            .contains("compact-selector"));
+    assertTrue(
+        lookup("#" + formPrefix + "-issuing-country")
+            .queryAs(ComboBox.class)
+            .getStyleClass()
+            .contains("compact-selector"));
+    assertTrue(
+        lookup("#" + formPrefix + "-date-of-birth-day")
+            .queryAs(ComboBox.class)
+            .getStyleClass()
+            .contains("compact-selector"));
+    assertTrue(
+        lookup("#" + formPrefix + "-date-of-birth-month")
+            .queryAs(ComboBox.class)
+            .getStyleClass()
+            .contains("compact-selector"));
+    assertTrue(
+        lookup("#" + formPrefix + "-date-of-birth-year")
+            .queryAs(ComboBox.class)
+            .getStyleClass()
+            .contains("compact-selector"));
+    assertTrue(
+        lookup("#" + formPrefix + "-sex")
+            .queryAs(ComboBox.class)
+            .getStyleClass()
+            .contains("compact-selector"));
   }
 
   private void loginAsDoctor() {

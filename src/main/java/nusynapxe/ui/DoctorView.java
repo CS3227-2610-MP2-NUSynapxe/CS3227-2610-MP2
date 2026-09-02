@@ -440,7 +440,7 @@ public final class DoctorView {
     Button dashboardNavigation = UiComponents.secondaryButton("Dashboard", "doctor-nav-dashboard");
     Button patientsNavigation = UiComponents.secondaryButton("Patients", "doctor-nav-patients");
     dashboardNavigation.getStyleClass().add(ACTIVE_NAVIGATION_STYLE);
-    VBox navigation = new VBox(8, new Label("Navigation"), dashboardNavigation, patientsNavigation);
+    VBox navigation = new VBox(0, new Label("Navigation"), dashboardNavigation, patientsNavigation);
     navigation.setId("doctor-navigation");
     dashboardNavigation.setOnAction(
         event -> {

@@ -22,6 +22,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TabPane;
+import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.stage.Stage;
 import nusynapxe.domain.Account;
@@ -95,6 +96,9 @@ final class ReceptionistViewTest extends ApplicationTest {
     assertFalse(lookup("#reception-refresh").tryQuery().isPresent());
     assertFalse(lookup("#reception-register-id").tryQuery().isPresent());
 
+    fire("#reception-patient-open-register");
+    verifyThat("#reception-patient-register-view", isVisible());
+    selectCombo("#reception-register-identity-type", IdentityType.NRIC);
     selectCombo("#reception-register-sex", Sex.FEMALE);
     setText("#reception-register-first-name", "Pat");
     setText("#reception-register-last-name", "Lee");
@@ -203,13 +207,18 @@ final class ReceptionistViewTest extends ApplicationTest {
   @Test
   void receptionistSearchesEditsDeactivatesAndRejectsDuplicateIdentity() throws SQLException {
     loginAsReceptionist();
-    assertTrue(lookup("#reception-patient-tabs").tryQuery().isPresent());
-    assertTrue(lookup("#reception-patient-register-tab").tryQuery().isPresent());
-    assertTrue(lookup("#reception-patient-manage-tab").tryQuery().isPresent());
+    verifyThat("#reception-patient-directory-view", isVisible());
+    assertFalse(lookup("#reception-patient-tabs").tryQuery().isPresent());
+    assertFalse(lookup("#reception-patient-register-tab").tryQuery().isPresent());
+    assertFalse(lookup("#reception-patient-manage-tab").tryQuery().isPresent());
     assertFalse(lookup("#reception-register-billing").tryQuery().isPresent());
     assertFalse(lookup("#reception-patient-billing").tryQuery().isPresent());
     assertFalse(lookup("#reception-refresh").tryQuery().isPresent());
     assertFalse(lookup("#reception-register-id").tryQuery().isPresent());
+    assertEquals(
+        List.of("Patient ID", "Name", "Date of birth", "Phone", "Email", "Status", "Actions"),
+        patientTable().getColumns().stream().map(column -> column.getText()).toList());
+    assertCompactPatientSelectors("reception-register");
     assertEquals(2, combo("#reception-register-sex").getItems().size());
     assertEquals(Sex.MALE, combo("#reception-register-sex").getItems().get(0));
     assertEquals("", textField("#reception-register-age").getPromptText());
@@ -217,6 +226,8 @@ final class ReceptionistViewTest extends ApplicationTest {
     assertEquals(Locale.getISOCountries().length, countryCombo().getItems().size());
     assertEquals("SG", countryCombo().getItems().get(0).code());
 
+    fire("#reception-patient-open-register");
+    verifyThat("#reception-patient-register-view", isVisible());
     selectCombo("#reception-register-identity-type", IdentityType.FIN);
     assertEquals("SG", countryCombo().getValue().code());
     assertTrue(countryCombo().isDisabled());
@@ -243,36 +254,40 @@ final class ReceptionistViewTest extends ApplicationTest {
     fire("#reception-patient-register");
 
     verifyThat("#reception-feedback", hasText("Patient registered"));
-    assertEquals("", text("#reception-register-identity-number"));
+    verifyThat("#reception-patient-directory-view", isVisible());
 
-    selectPatientManagementTab();
     assertTrue(lookup("#reception-patient-search").tryQuery().isPresent());
     assertFalse(lookup("#reception-patient-id").tryQuery().isPresent());
     assertFalse(lookup("#reception-patient-update").tryQuery().isPresent());
 
     setText("#reception-patient-search", "p000001");
     fire("#reception-patient-search-submit");
-    assertEquals(1, patientList().getItems().size());
-    selectFirstPatient();
-    waitForNode("#reception-patient-details-window");
+    assertEquals(1, patientTable().getItems().size());
+    Patient editedPatient = patientTable().getItems().get(0);
+    preparePatientTable();
+    fire("#reception-patient-edit-" + editedPatient.id());
+    waitForNode("#reception-patient-edit-view");
+    assertFalse(lookup("#reception-patient-details-window").tryQuery().isPresent());
+    assertCompactPatientSelectors("reception-patient");
     assertTrue(lookup("#reception-patient-id").tryQuery().isPresent());
     verifyThat("#reception-patient-deactivate", hasText("Deactivate patient"));
     assertEquals("ABFOREIGN9", text("#reception-patient-identity-number"));
     setText("#reception-patient-phone-number", "not-digits");
     fire("#reception-patient-update");
     assertTrue(
-        lookup("#reception-patient-details-feedback")
+        lookup("#reception-patient-edit-feedback")
             .queryAs(javafx.scene.control.Label.class)
             .getText()
             .contains("Phone number"));
-    assertEquals(1, patientList().getItems().size());
+    assertEquals(1, patientTable().getItems().size());
     setText("#reception-patient-phone-country-code", "33");
     setText("#reception-patient-phone-number", "123456789");
     fire("#reception-patient-update");
     verifyThat("#reception-feedback", hasText("Patient changes saved"));
-    closePatientDetails();
+    verifyThat("#reception-patient-directory-view", isVisible());
 
-    selectRegistrationTab();
+    fire("#reception-patient-open-register");
+    verifyThat("#reception-patient-register-view", isVisible());
     selectCombo("#reception-register-identity-type", IdentityType.PASSPORT);
     selectCombo("#reception-register-issuing-country", country("GB"));
     selectCombo("#reception-register-sex", Sex.FEMALE);
@@ -286,19 +301,24 @@ final class ReceptionistViewTest extends ApplicationTest {
     fire("#reception-patient-register");
     verifyThat(
         "#reception-feedback", hasText("A patient with this identity document already exists"));
+    verifyThat("#reception-patient-register-view", isVisible());
+    assertEquals("ABFOREIGN9", text("#reception-register-identity-number"));
     assertEquals(1, services.patientService().listAdministrative(receptionistSession()).size());
     assertEquals(
         "+33123456789",
         services.patientService().getAdministrative(receptionistSession(), 1).phone());
 
-    selectPatientManagementTab();
+    fire("#reception-patient-register-cancel");
+    verifyThat("#reception-patient-directory-view", isVisible());
     setText("#reception-patient-search", "does-not-exist");
     fire("#reception-patient-search-submit");
-    assertTrue(patientList().getItems().isEmpty());
+    assertTrue(patientTable().getItems().isEmpty());
     fire("#reception-patient-search-clear");
-    assertEquals(1, patientList().getItems().size());
-    selectFirstPatient();
-    waitForNode("#reception-patient-details-window");
+    assertEquals(1, patientTable().getItems().size());
+    Patient activePatient = patientTable().getItems().get(0);
+    preparePatientTable();
+    fire("#reception-patient-edit-" + activePatient.id());
+    waitForNode("#reception-patient-edit-view");
     fire("#reception-patient-deactivate");
     verifyThat("#reception-feedback", hasText("Patient deactivated"));
     verifyThat("#reception-patient-deactivate", hasText("Activate patient"));
@@ -310,8 +330,10 @@ final class ReceptionistViewTest extends ApplicationTest {
   }
 
   @Test
-  void patientSelectionHighlightsSelectedPatientAndOpensDetailsWindow() throws SQLException {
+  void patientTableRowsOpenInEditPageAndSupportDeletion() throws SQLException {
     loginAsReceptionist();
+    fire("#reception-patient-open-register");
+    selectCombo("#reception-register-identity-type", IdentityType.NRIC);
     selectCombo("#reception-register-sex", Sex.MALE);
     setText("#reception-register-first-name", "John");
     setText("#reception-register-last-name", "Doe");
@@ -323,37 +345,36 @@ final class ReceptionistViewTest extends ApplicationTest {
     fire("#reception-patient-register");
     verifyThat("#reception-feedback", hasText("Patient registered"));
 
-    selectPatientManagementTab();
-    fire("#reception-patient-search-clear");
-    assertEquals(1, patientList().getItems().size());
-
-    // Select patient and verify details window opens
-    selectFirstPatient();
-    waitForNode("#reception-patient-details-window");
-    assertTrue(lookup("#reception-patient-details-window").tryQuery().isPresent());
+    verifyThat("#reception-patient-directory-view", isVisible());
+    assertEquals(1, patientTable().getItems().size());
+    Patient registeredPatient = patientTable().getItems().get(0);
+    preparePatientTable();
+    assertTrue(lookup("#reception-patient-edit-" + registeredPatient.id()).tryQuery().isPresent());
+    fire("#reception-patient-edit-" + registeredPatient.id());
+    waitForNode("#reception-patient-edit-view");
+    assertFalse(lookup("#reception-patient-details-window").tryQuery().isPresent());
     assertEquals("P000001", text("#reception-patient-id"));
 
-    // Verify patient remains selected in list (highlighted in blue)
-    assertEquals(0, patientList().getSelectionModel().getSelectedIndex());
+    setText("#reception-patient-phone-number", "draft-only");
+    fire("#reception-patient-edit-cancel");
+    verifyThat("#reception-patient-directory-view", isVisible());
     assertEquals(
-        "John Doe",
-        patientList().getSelectionModel().getSelectedItem().firstName()
-            + " "
-            + patientList().getSelectionModel().getSelectedItem().lastName());
+        "+656565656565",
+        services
+            .patientService()
+            .getAdministrative(receptionistSession(), registeredPatient.id())
+            .phone());
 
-    closePatientDetails();
-    // Patient should still be highlighted after closing details window
-    assertEquals(0, patientList().getSelectionModel().getSelectedIndex());
-    interact(() -> patientList().getSelectionModel().clearSelection());
-    selectFirstPatient();
-    waitForNode("#reception-patient-details-window");
+    preparePatientTable();
+    fire("#reception-patient-edit-" + registeredPatient.id());
+    waitForNode("#reception-patient-edit-view");
 
     Thread cancelThread = new Thread(() -> fire("#reception-patient-delete"));
     cancelThread.start();
     waitForNode("#reception-patient-delete-confirm-window");
     fire("#reception-patient-delete-cancel");
     join(cancelThread);
-    assertEquals(0, patientList().getSelectionModel().getSelectedIndex());
+    verifyThat("#reception-patient-edit-view", isVisible());
 
     Thread deleteThread = new Thread(() -> fire("#reception-patient-delete"));
     deleteThread.start();
@@ -361,12 +382,14 @@ final class ReceptionistViewTest extends ApplicationTest {
     fire("#reception-patient-delete-confirm");
     join(deleteThread);
     verifyThat("#reception-feedback", hasText("Patient deleted"));
-    assertTrue(patientList().getItems().isEmpty());
+    assertTrue(patientTable().getItems().isEmpty());
   }
 
   @Test
-  void patientDetailsWindowDisplaysAndEditsPatientInformation() throws SQLException {
+  void patientEditPageDisplaysAndEditsPatientInformation() throws SQLException {
     loginAsReceptionist();
+    fire("#reception-patient-open-register");
+    selectCombo("#reception-register-identity-type", IdentityType.NRIC);
     selectCombo("#reception-register-sex", Sex.FEMALE);
     setText("#reception-register-identity-number", "T1234567B");
     setText("#reception-register-first-name", "Jane");
@@ -379,12 +402,13 @@ final class ReceptionistViewTest extends ApplicationTest {
     setText("#reception-register-weight", "62.5");
     fire("#reception-patient-register");
 
-    selectPatientManagementTab();
-    fire("#reception-patient-search-clear");
-    selectFirstPatient();
-    waitForNode("#reception-patient-details-window");
+    verifyThat("#reception-patient-directory-view", isVisible());
+    Patient editedPatient = patientTable().getItems().get(0);
+    preparePatientTable();
+    fire("#reception-patient-edit-" + editedPatient.id());
+    waitForNode("#reception-patient-edit-view");
 
-    // Verify patient information is displayed
+    // Verify patient information is displayed on the edit page.
     assertEquals("T1234567B", text("#reception-patient-identity-number"));
     assertEquals("Jane", text("#reception-patient-first-name"));
     assertEquals("Smith", text("#reception-patient-last-name"));
@@ -396,6 +420,7 @@ final class ReceptionistViewTest extends ApplicationTest {
     setText("#reception-patient-email", "jane.updated@example.test");
     fire("#reception-patient-update");
     verifyThat("#reception-feedback", hasText("Patient changes saved"));
+    verifyThat("#reception-patient-directory-view", isVisible());
 
     // Verify changes persisted
     assertEquals(
@@ -409,6 +434,8 @@ final class ReceptionistViewTest extends ApplicationTest {
   @Test
   void patientStatusTogglingWorksCorrectly() throws SQLException {
     loginAsReceptionist();
+    fire("#reception-patient-open-register");
+    selectCombo("#reception-register-identity-type", IdentityType.NRIC);
     selectCombo("#reception-register-sex", Sex.MALE);
     setText("#reception-register-first-name", "Active");
     setText("#reception-register-last-name", "Patient");
@@ -419,10 +446,11 @@ final class ReceptionistViewTest extends ApplicationTest {
     setText("#reception-register-address", "789 Pine Road");
     fire("#reception-patient-register");
 
-    selectPatientManagementTab();
-    fire("#reception-patient-search-clear");
-    selectFirstPatient();
-    waitForNode("#reception-patient-details-window");
+    verifyThat("#reception-patient-directory-view", isVisible());
+    Patient activePatient = patientTable().getItems().get(0);
+    preparePatientTable();
+    fire("#reception-patient-edit-" + activePatient.id());
+    waitForNode("#reception-patient-edit-view");
 
     // Verify initial status is "Deactivate patient"
     verifyThat("#reception-patient-deactivate", hasText("Deactivate patient"));
@@ -489,13 +517,6 @@ final class ReceptionistViewTest extends ApplicationTest {
     return LocalDate.of(yearCombo.getValue(), monthCombo.getValue(), dayCombo.getValue());
   }
 
-  private void closePatientDetails() {
-    interact(
-        () ->
-            ((Stage) lookup("#reception-patient-details-window").query().getScene().getWindow())
-                .close());
-  }
-
   @SuppressWarnings("unchecked")
   private <T> void selectCombo(String selector, T value) {
     interact(() -> lookup(selector).queryAs(ComboBox.class).setValue(value));
@@ -514,12 +535,6 @@ final class ReceptionistViewTest extends ApplicationTest {
     return CountryOption.fromCode(code).orElseThrow();
   }
 
-  private void selectRegistrationTab() {
-    interact(
-        () ->
-            lookup("#reception-patient-tabs").queryAs(TabPane.class).getSelectionModel().select(0));
-  }
-
   private void selectWorkspaceTab(int index) {
     interact(() -> workspaceTabs().getSelectionModel().select(index));
   }
@@ -528,24 +543,58 @@ final class ReceptionistViewTest extends ApplicationTest {
     return lookup("#reception-workspace-tabs").queryAs(TabPane.class);
   }
 
-  private void selectPatientManagementTab() {
-    interact(
-        () ->
-            lookup("#reception-patient-tabs").queryAs(TabPane.class).getSelectionModel().select(1));
-  }
-
-  private void selectFirstPatient() {
-    interact(() -> patientList().getSelectionModel().selectFirst());
-  }
-
   @SuppressWarnings("unchecked")
   private void selectFirstAppointment(String selector) {
     interact(() -> lookup(selector).queryAs(ListView.class).getSelectionModel().selectFirst());
   }
 
   @SuppressWarnings("unchecked")
-  private ListView<Patient> patientList() {
-    return lookup("#reception-patient-list").queryAs(ListView.class);
+  private TableView<Patient> patientTable() {
+    return lookup("#reception-patient-table").queryAs(TableView.class);
+  }
+
+  private void preparePatientTable() {
+    interact(
+        () -> {
+          TableView<Patient> table = patientTable();
+          table.scrollTo(0);
+          table.applyCss();
+          table.layout();
+        });
+    WaitForAsyncUtils.waitForFxEvents();
+  }
+
+  private void assertCompactPatientSelectors(String formPrefix) {
+    assertTrue(
+        lookup("#" + formPrefix + "-identity-type")
+            .queryAs(ComboBox.class)
+            .getStyleClass()
+            .contains("compact-selector"));
+    assertTrue(
+        lookup("#" + formPrefix + "-issuing-country")
+            .queryAs(ComboBox.class)
+            .getStyleClass()
+            .contains("compact-selector"));
+    assertTrue(
+        lookup("#" + formPrefix + "-date-of-birth-day")
+            .queryAs(ComboBox.class)
+            .getStyleClass()
+            .contains("compact-selector"));
+    assertTrue(
+        lookup("#" + formPrefix + "-date-of-birth-month")
+            .queryAs(ComboBox.class)
+            .getStyleClass()
+            .contains("compact-selector"));
+    assertTrue(
+        lookup("#" + formPrefix + "-date-of-birth-year")
+            .queryAs(ComboBox.class)
+            .getStyleClass()
+            .contains("compact-selector"));
+    assertTrue(
+        lookup("#" + formPrefix + "-sex")
+            .queryAs(ComboBox.class)
+            .getStyleClass()
+            .contains("compact-selector"));
   }
 
   private void fire(String selector) {

@@ -210,30 +210,41 @@ field groups, action bars, feedback, empty states, buttons, status badges, and
 the authenticated header. It has no service or persistence dependency.
 
 Views are built programmatically so semantic ids remain easy to assert. The
-patient area has independent
-`Register new patient` and `Search and manage patients` tabs. Country options
-come from `Locale.getISOCountries()`, use English display names, persist ISO
-two-letter codes, and order Singapore first. NRIC and FIN selection chooses
+patient area has one default directory view with search controls, a `TableView`
+with `Patient ID`, `Name`, `Date of birth`, `Phone`, `Email`, `Status`, and
+rightmost `Actions` columns, and a bottom `Register new patient` action. Each
+populated Actions cell has a stable `*-patient-edit-<id>` button. Registration
+and editing are separate managed page states with `Cancel`; successful
+registration clears the draft and search, while successful editing returns to
+the directory. Both refresh the directory and dependent selectors. Validation
+or persistence failure keeps the active form page open with feedback. Country
+options come from `Locale.getISOCountries()`, use English display names, persist
+ISO two-letter codes, and order Singapore first. NRIC and FIN selection chooses
 and locks Singapore automatically; service validation independently enforces
-the same rule. Patient forms use `DatePicker` plus synchronized month and year
-selectors; impossible day/month combinations clamp to the month's final day.
-Age is derived with the `Asia/Singapore` date, has no placeholder, and is never
-persisted. Male precedes Female in the sex selector. The telephone `+` is a
-fixed label outside the editable, digits-only country-code field. The search
-tab contains only search controls and results; selecting a result opens an
-owned modal details stage for editing and reversible active-status changes. The top-level
+the same rule. All identity, country, date, and sex `ComboBox` controls use the
+shared `.compact-selector` style; impossible day/month combinations clamp to
+the month's final day. Age is derived with the `Asia/Singapore` date, has no
+placeholder, and is never persisted. Male precedes Female in the sex selector.
+The telephone `+` is a fixed label outside the editable, digits-only country-code
+field. Clicking a table row does not open a window; its explicit Edit action
+shows the in-page administrative form and reversible active-status controls.
+The top-level
 `reception-workspace-tabs` separates patient data, appointments, checkout, and
 revenue. Actions and tab selection refresh affected data, so Receptionist view
 has no manual refresh control. Important ids include `login-submit`, `setup-submit`,
-`admin-account-submit`, `reception-patient-tabs`,
+`admin-account-submit`, `reception-patient-directory-view`,
+`reception-patient-open-register`, `reception-patient-register-view`,
+`reception-patient-register-cancel`,
 `reception-register-identity-type`, `reception-register-issuing-country`,
 `reception-register-phone-country-code`, `reception-register-phone-number`,
 `reception-register-phone-plus`, `reception-register-date-of-birth`,
 `reception-register-date-of-birth-month`, `reception-register-date-of-birth-year`,
-`reception-register-age`, `reception-patient-details-window`, `reception-patient-id`,
+`reception-register-age`, `reception-patient-edit-view`, `reception-patient-id`,
 `reception-patient-identity-type`, `reception-patient-identity-number`,
 `reception-patient-issuing-country`, `reception-patient-search`,
-`reception-patient-search-submit`, `reception-patient-update`,
+`reception-patient-search-submit`, `reception-patient-search-clear`,
+`reception-patient-table`, `reception-patient-edit-<id>`,
+`reception-patient-update`, `reception-patient-edit-cancel`,
 `reception-patient-deactivate`, `reception-book`, `reception-checkout`,
 `doctor-consultation-save`, and `logout-button`.
 
@@ -241,19 +252,19 @@ has no manual refresh control. Important ids include `login-submit`, `setup-subm
 Receptionist and Doctor workspaces. It receives the authenticated session,
 services, an ID prefix, a feedback label, and a callback for refreshing
 dependent selectors. Receptionist IDs retain the `reception-*` prefix; Doctor
-IDs use `doctor-*`. The selected-patient details window contains the
-administrative form, **Save patient changes**, **Activate/Deactivate patient**,
-and **Delete patient**. Eligible deletion opens an explicit confirmation
-window; a blocked deletion opens the owned `*-patient-delete-blocked-window`
-modal with category/count labels and deactivation guidance. Refreshes suppress
-automatic detail-window reopening so failed writes do not create duplicate
-windows or leave the list out of sync.
+IDs use `doctor-*`. The table's explicit Edit action replaces the directory with
+an in-page administrative form containing **Save patient changes**,
+**Activate/Deactivate patient**, **Delete patient**, and **Cancel**. Eligible
+deletion opens an explicit confirmation window; a blocked deletion opens the
+owned `*-patient-delete-blocked-window` modal with category/count labels and
+deactivation guidance. No ordinary patient-details window is created, and
+failed writes leave the edit page and its draft available for correction.
 
 The shared authenticated header has `workspace-header`, `app-brand`,
 `workspace-title`, `workspace-identity`, and `logout-button`. The Receptionist
 top-level `reception-workspace-tabs` remains a `TabPane`, but its tabs are
-shown as a left navigation rail; the patient and appointment subflows use
-compact secondary tabs. New layout markers include
+shown as a left navigation rail; the appointment subflow uses compact
+secondary tabs. New layout markers include
 `reception-patient-search-card`, `reception-patient-results-card`,
 `reception-booking-card`, `reception-appointment-results-card`,
 `reception-checkout-payment-card`, `reception-revenue-card`,
@@ -278,8 +289,10 @@ authorization and lifecycle validation.
 The Doctor shell keeps that content under the `Dashboard` destination and
 places the shared administrative directory under `Patients`;
 `doctor-nav-dashboard`, `doctor-nav-patients`, and `doctor-patients-page` are
-the navigation markers. The Patients destination has no clinical service or
-prescription controls.
+the navigation markers. The navigation `VBox` uses zero spacing and its two
+buttons are styled with infinite maximum width, flush edges, and full-panel
+alignment while retaining active, hover, and keyboard-focus states. The
+Patients destination has no clinical service or prescription controls.
 
 TestFX tests require a display. The CI workflow runs the Java suite through
 `xvfb-run --auto-servernum` on Ubuntu. For controls inside a scroll pane,
