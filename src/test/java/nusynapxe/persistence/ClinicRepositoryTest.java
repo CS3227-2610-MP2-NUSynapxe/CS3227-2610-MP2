@@ -130,6 +130,39 @@ final class ClinicRepositoryTest {
     }
   }
 
+  @Test
+  void searchesAppointmentsByDateDoctorPatientAndStatus() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      AccountRepository accounts = accountRepository(database);
+      Account doctor =
+          accounts.create("doctor", "Dr. Ada", Role.DOCTOR, new byte[] {1}, new byte[] {2});
+      Patient patient =
+          new PatientRepository(database)
+              .create(
+                  new Patient(
+                      0,
+                      "Grace",
+                      "Hopper",
+                      "1906-12-09",
+                      "555-0100",
+                      "grace@example.test",
+                      "1 Main Street"));
+      AppointmentRepository appointments = new AppointmentRepository(database);
+      appointments.create(
+          patient.id(),
+          doctor.id(),
+          LocalDateTime.of(2026, 9, 1, 9, 0),
+          LocalDateTime.of(2026, 9, 1, 9, 30),
+          AppointmentStatus.PENDING);
+      assertEquals(
+          1,
+          appointments
+              .search(LocalDate.of(2026, 9, 1), doctor.id(), "grace", AppointmentStatus.PENDING)
+              .size());
+      assertTrue(appointments.search(LocalDate.of(2026, 9, 2), null, null, null).isEmpty());
+    }
+  }
+
   private SqliteDatabase openDatabase() throws SQLException {
     SqliteDatabase database = new SqliteDatabase(temporaryDirectory.resolve("clinic.db"));
     database.open();

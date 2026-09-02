@@ -27,6 +27,7 @@ import javafx.scene.control.TextField;
 import javafx.stage.Stage;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
+import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.Role;
@@ -88,6 +89,10 @@ final class ReceptionistViewTest extends ApplicationTest {
     loginAsReceptionist();
     verifyThat("#receptionist-workspace", isVisible());
     assertEquals(4, workspaceTabs().getTabs().size());
+    assertTrue(lookup("#reception-schedule-date").tryQuery().isPresent());
+    assertTrue(lookup("#reception-schedule-doctor").tryQuery().isPresent());
+    assertTrue(lookup("#reception-schedule-status").tryQuery().isPresent());
+    assertTrue(lookup("#reception-schedule-summary").tryQuery().isPresent());
     assertFalse(lookup("#reception-refresh").tryQuery().isPresent());
     assertFalse(lookup("#reception-register-id").tryQuery().isPresent());
 
@@ -110,6 +115,10 @@ final class ReceptionistViewTest extends ApplicationTest {
     setText("#reception-end", end.format(DATE_TIME_FORMAT));
     fire("#reception-book");
     verifyThat("#reception-feedback", hasText("Appointment booked and awaiting Doctor acceptance"));
+    assertTrue(textLabel("#reception-schedule-summary").contains("Pending: 1"));
+    selectCombo("#reception-schedule-status", AppointmentStatus.PENDING);
+    assertEquals(1, appointmentList().getItems().size());
+    interact(() -> combo("#reception-schedule-status").setValue(null));
 
     Session receptionistSession =
         new Session(receptionist.id(), receptionist.username(), Role.RECEPTIONIST);
@@ -377,6 +386,15 @@ final class ReceptionistViewTest extends ApplicationTest {
 
   private TextField textField(String selector) {
     return lookup(selector).queryAs(TextField.class);
+  }
+
+  private String textLabel(String selector) {
+    return lookup(selector).queryAs(javafx.scene.control.Label.class).getText();
+  }
+
+  @SuppressWarnings("unchecked")
+  private ListView<Appointment> appointmentList() {
+    return lookup("#reception-appointment-list").queryAs(ListView.class);
   }
 
   @SuppressWarnings("unchecked")
