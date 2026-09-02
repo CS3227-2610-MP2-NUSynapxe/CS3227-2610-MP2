@@ -50,6 +50,7 @@ import nusynapxe.service.ValidationException;
 /** Builds the Receptionist scheduling, patient, checkout, and revenue workspace. */
 public final class ReceptionistView {
   private static final String APPOINTMENT_REQUIRED = "Select an appointment first";
+  private static final String DETAIL_SEPARATOR = " | ";
   private static final String DATE_TIME_PATTERN = "yyyy-MM-dd HH:mm";
   private static final DateTimeFormatter DATE_TIME_FORMAT =
       DateTimeFormatter.ofPattern(DATE_TIME_PATTERN);
@@ -71,14 +72,9 @@ public final class ReceptionistView {
     patientList.setId("reception-patient-list");
 
     ComboBox<Account> doctor = doctorSelector();
-    TextField startsAt = field("reception-start", DATE_TIME_PATTERN);
-    TextField endsAt = field("reception-end", DATE_TIME_PATTERN);
+    ComboBox<String> startsAt = timeSelector("reception-start");
+    ComboBox<String> endsAt = timeSelector("reception-end");
     Button book = button("Book appointment", "reception-book");
-    DatePicker rescheduleDate = new DatePicker();
-    rescheduleDate.setId("reception-reschedule-date");
-    rescheduleDate.setPromptText("New date");
-    TextField rescheduleStartsAt = field("reception-reschedule-start", DATE_TIME_PATTERN);
-    TextField rescheduleEndsAt = field("reception-reschedule-end", DATE_TIME_PATTERN);
     Button reschedule = button("Reschedule selected", "reception-reschedule");
     Button cancel = button("Cancel selected", "reception-cancel");
     ListView<Appointment> appointmentList = new ListView<>();
@@ -86,7 +82,7 @@ public final class ReceptionistView {
     DatePicker scheduleDate = new DatePicker();
     scheduleDate.setId("reception-schedule-date");
     scheduleDate.setPromptText("Any date");
-    ComboBox<Account> scheduleDoctor = new ComboBox<>();
+    ComboBox<Account> scheduleDoctor = doctorSelector();
     scheduleDoctor.setId("reception-schedule-doctor");
     scheduleDoctor.setPromptText("All Doctors");
     ComboBox<AppointmentStatus> scheduleStatus =
@@ -100,6 +96,7 @@ public final class ReceptionistView {
     appointmentDate.setId("reception-appointment-date");
     ComboBox<Patient> appointmentPatient = new ComboBox<>();
     appointmentPatient.setId("reception-appointment-patient");
+    makePatientSearchable(appointmentPatient);
     Button checkIn = button("Check in selected", "reception-check-in");
     TextField charge = field("reception-charge", "Amount");
     ComboBox<PaymentMethod> method =
@@ -288,30 +285,25 @@ public final class ReceptionistView {
         event -> {
           try {
             requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
-            services
-                .appointmentService()
-                .reschedule(
-                    session,
-                    selection.appointmentId,
-                    parseScheduleDateTime(rescheduleDate, rescheduleStartsAt, "New start time"),
-                    parseScheduleDateTime(rescheduleDate, rescheduleEndsAt, "New end time"));
-            feedback.setText("Appointment rescheduled");
-            refreshSchedule(
+            showRescheduleDialog(
                 services,
                 session,
-                appointmentList,
-                selection,
+                selection.appointmentId,
                 feedback,
-                scheduleDate.getValue(),
-                scheduleDoctor.getValue() == null ? null : scheduleDoctor.getValue().id(),
-                schedulePatient.getText(),
-                scheduleStatus.getValue(),
-                scheduleSummary);
-            refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
+                () ->
+                    refreshSchedule(
+                        services,
+                        session,
+                        appointmentList,
+                        selection,
+                        feedback,
+                        scheduleDate.getValue(),
+                        scheduleDoctor.getValue() == null ? null : scheduleDoctor.getValue().id(),
+                        schedulePatient.getText(),
+                        scheduleStatus.getValue(),
+                        scheduleSummary));
           } catch (ValidationException | AuthorizationException exception) {
             feedback.setText(exception.getMessage());
-          } catch (SQLException exception) {
-            feedback.setText("Appointment rescheduling is temporarily unavailable");
           }
         });
 
@@ -430,10 +422,7 @@ public final class ReceptionistView {
     appointmentForm.addRow(1, new Label("Doctor"), doctor);
     appointmentForm.addRow(2, new Label("Date"), appointmentDate);
     appointmentForm.addRow(3, new Label("Starts"), startsAt, new Label("Ends"), endsAt, book);
-    appointmentForm.addRow(4, new Label("New date"), rescheduleDate);
-    appointmentForm.addRow(
-        5, new Label("New start"), rescheduleStartsAt, new Label("New end"), rescheduleEndsAt);
-    appointmentForm.addRow(6, reschedule, cancel);
+    appointmentForm.addRow(4, reschedule, cancel);
     GridPane checkoutForm = new GridPane();
     checkoutForm.setHgap(8);
     checkoutForm.setVgap(8);
@@ -866,6 +855,8 @@ public final class ReceptionistView {
 
   private static ComboBox<Account> doctorSelector() {
     ComboBox<Account> doctor = new ComboBox<>();
+    doctor.setEditable(true);
+    doctor.setPromptText("Search Doctors");
     doctor.setId("reception-doctor");
     doctor.setConverter(
         new StringConverter<>() {
@@ -893,6 +884,45 @@ public final class ReceptionistView {
     } catch (SQLException exception) {
       feedback.setText("Doctors are temporarily unavailable");
     }
+  }
+
+  private static ComboBox<String> timeSelector(String id) {
+    ComboBox<String> selector = new ComboBox<>();
+    selector.setId(id);
+    selector.setEditable(true);
+    selector.setPromptText("HH:mm");
+    for (int hour = 0; hour < 24; hour++) {
+      selector.getItems().add(String.format(Locale.ROOT, "%02d:00", hour));
+      selector.getItems().add(String.format(Locale.ROOT, "%02d:30", hour));
+    }
+    selector.getSelectionModel().select(0);
+    return selector;
+  }
+
+  private static void makePatientSearchable(ComboBox<Patient> selector) {
+    selector.setEditable(true);
+    selector.setPromptText("Search patients");
+    selector.setConverter(
+        new StringConverter<>() {
+          @Override
+          public String toString(Patient patient) {
+            return patient == null
+                ? ""
+                : patient.displayedId()
+                    + " "
+                    + valueOrEmpty(patient.firstName())
+                    + " "
+                    + valueOrEmpty(patient.lastName());
+          }
+
+          @Override
+          public Patient fromString(String value) {
+            return selector.getItems().stream()
+                .filter(patient -> toString(patient).equalsIgnoreCase(value))
+                .findFirst()
+                .orElse(null);
+          }
+        });
   }
 
   private static void refreshPatients(
@@ -1019,9 +1049,121 @@ public final class ReceptionistView {
     }
   }
 
+  private static void showRescheduleDialog(
+      ClinicServices services,
+      Session session,
+      long appointmentId,
+      Label workspaceFeedback,
+      Runnable onUpdated) {
+    try {
+      Appointment appointment = services.appointmentService().get(appointmentId);
+      Patient patient =
+          services.patientService().getAdministrative(session, appointment.patientId());
+      DatePicker date = new DatePicker(appointment.startsAt().toLocalDate());
+      date.setId("reception-reschedule-dialog-date");
+      ComboBox<String> start = timeSelector("reception-reschedule-dialog-start");
+      ComboBox<String> end = timeSelector("reception-reschedule-dialog-end");
+      start.setValue(appointment.startsAt().toLocalTime().toString());
+      end.setValue(appointment.endsAt().toLocalTime().toString());
+      ComboBox<Patient> patients = new ComboBox<>();
+      patients.setId("reception-reschedule-dialog-patient");
+      List<Patient> availablePatients =
+          services.patientService().searchAdministrative(session, "").stream()
+              .filter(candidate -> candidate.active() || candidate.id() == patient.id())
+              .toList();
+      patients.getItems().setAll(availablePatients);
+      patients.getSelectionModel().select(patient);
+      makePatientSearchable(patients);
+      Label details =
+          new Label(
+              patient.displayedId()
+                  + DETAIL_SEPARATOR
+                  + valueOrEmpty(patient.firstName())
+                  + " "
+                  + valueOrEmpty(patient.lastName())
+                  + DETAIL_SEPARATOR
+                  + valueOrEmpty(patient.email()));
+      details.setId("reception-reschedule-dialog-patient-details");
+      Label feedback = new Label();
+      feedback.setId("reception-reschedule-dialog-feedback");
+      patients
+          .valueProperty()
+          .addListener(
+              (observable, previous, selected) -> {
+                if (selected != null) {
+                  details.setText(
+                      selected.displayedId()
+                          + DETAIL_SEPARATOR
+                          + valueOrEmpty(selected.firstName())
+                          + " "
+                          + valueOrEmpty(selected.lastName())
+                          + DETAIL_SEPARATOR
+                          + valueOrEmpty(selected.email()));
+                }
+              });
+      Button save = button("Reschedule appointment", "reception-reschedule-dialog-submit");
+      Button cancel = button("Cancel appointment", "reception-reschedule-dialog-cancel");
+      Stage dialog = new Stage();
+      save.setOnAction(
+          event -> {
+            try {
+              services
+                  .appointmentService()
+                  .reschedule(
+                      session,
+                      appointmentId,
+                      parseScheduleDateTime(date, start, "Start time"),
+                      parseScheduleDateTime(date, end, "End time"));
+              workspaceFeedback.setText("Appointment rescheduled");
+              onUpdated.run();
+              dialog.close();
+            } catch (ValidationException | AuthorizationException exception) {
+              feedback.setText(exception.getMessage());
+            } catch (SQLException exception) {
+              feedback.setText("Appointment rescheduling is temporarily unavailable");
+            }
+          });
+      cancel.setOnAction(
+          event -> {
+            try {
+              services.appointmentService().cancel(session, appointmentId);
+              workspaceFeedback.setText("Appointment cancelled");
+              onUpdated.run();
+              dialog.close();
+            } catch (ValidationException | AuthorizationException exception) {
+              feedback.setText(exception.getMessage());
+            } catch (SQLException exception) {
+              feedback.setText("Appointment cancellation is temporarily unavailable");
+            }
+          });
+      VBox content =
+          new VBox(
+              10,
+              new Label("Patient"),
+              patients,
+              details,
+              new Label("New date"),
+              date,
+              new Label("Start"),
+              start,
+              new Label("End"),
+              end,
+              new HBox(8, save, cancel),
+              feedback);
+      content.setPadding(new Insets(18));
+      dialog.initOwner(workspaceFeedback.getScene().getWindow());
+      dialog.initModality(Modality.WINDOW_MODAL);
+      dialog.setTitle("Reschedule appointment");
+      dialog.setScene(new Scene(content, 520, 500));
+      dialog.show();
+    } catch (SQLException | ValidationException | AuthorizationException exception) {
+      workspaceFeedback.setText(exception.getMessage());
+    }
+  }
+
   private static LocalDateTime parseScheduleDateTime(
-      DatePicker date, TextField time, String fieldName) {
-    String value = time.getText() == null ? "" : time.getText().trim();
+      DatePicker date, ComboBox<String> time, String fieldName) {
+    String value = time.getEditor().getText() == null ? "" : time.getEditor().getText().trim();
     if (value.contains(" ")) {
       return parseDateTime(value, fieldName);
     }
