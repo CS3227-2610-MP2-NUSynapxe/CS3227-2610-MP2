@@ -106,12 +106,19 @@ changes do not alter them.
 
 Open the separate **Appointments across all Doctors** feature tab.
 
+The scheduling dashboard shows a chronological all-Doctor list and summary
+counts for Pending, Accepted, Checked in, and Completed appointments. Use the
+optional date, Doctor, status, and patient name/Patient ID filters to narrow
+the list; changing a filter reloads the list automatically. Selecting a patient
+for a new booking only offers active patients. Existing appointments remain
+available for historical viewing if a patient is later deactivated.
+
 1. Choose a patient and a Doctor.
-2. Enter appointment times as `yyyy-MM-dd HH:mm` and select **Book
+2. Select the appointment date with the calendar and enter start/end times as
+   `HH:mm` (the full `yyyy-MM-dd HH:mm` form remains accepted). Select **Book
    appointment**. The new appointment starts as `PENDING` and awaits the
    assigned Doctor's acceptance.
-3. Reopen the appointment tab after another staff member changes an appointment;
-   its data reloads automatically. The scheduler covers every Doctor, but overlapping appointments and Doctor
+3. The scheduler covers every Doctor, but overlapping appointments and Doctor
    time-off are rejected. Adjacent appointments are allowed.
 
 To change an existing pending or accepted visit, select it, enter the new
