@@ -72,8 +72,8 @@ public final class ReceptionistView {
     patientList.setId("reception-patient-list");
 
     ComboBox<Account> doctor = doctorSelector();
-    ComboBox<String> startsAt = timeSelector("reception-start");
-    ComboBox<String> endsAt = timeSelector("reception-end");
+    TimeFields startsAt = timeSelector("reception-start");
+    TimeFields endsAt = timeSelector("reception-end");
     Button book = button("Book appointment", "reception-book");
     Button reschedule = button("Reschedule selected", "reception-reschedule");
     Button cancel = button("Cancel selected", "reception-cancel");
@@ -274,7 +274,9 @@ public final class ReceptionistView {
                 scheduleStatus.getValue(),
                 scheduleSummary);
             refreshAppointments(services, session, checkoutAppointmentList, selection, feedback);
-          } catch (ValidationException | AuthorizationException exception) {
+          } catch (ValidationException
+              | AuthorizationException
+              | IllegalArgumentException exception) {
             feedback.setText(exception.getMessage());
           } catch (SQLException exception) {
             feedback.setText("Appointment booking is temporarily unavailable");
@@ -421,8 +423,8 @@ public final class ReceptionistView {
     appointmentForm.addRow(0, new Label("Patient"), appointmentPatient);
     appointmentForm.addRow(1, new Label("Doctor"), doctor);
     appointmentForm.addRow(2, new Label("Date"), appointmentDate);
-    appointmentForm.addRow(3, new Label("Starts"), startsAt, new Label("Ends"), endsAt, book);
-    appointmentForm.addRow(4, reschedule, cancel);
+    appointmentForm.addRow(3, new Label("Starts"), startsAt.view, new Label("Ends"), endsAt.view);
+    appointmentForm.addRow(4, book);
     GridPane checkoutForm = new GridPane();
     checkoutForm.setHgap(8);
     checkoutForm.setVgap(8);
@@ -435,8 +437,17 @@ public final class ReceptionistView {
     HBox scheduleFilters =
         new HBox(
             8, new Label("Date"), scheduleDate, scheduleDoctor, scheduleStatus, schedulePatient);
-    VBox appointmentContent =
-        new VBox(12, scheduleFilters, scheduleSummary, appointmentForm, appointmentList, checkIn);
+    VBox bookingContent = new VBox(12, appointmentForm);
+    VBox appointmentManageContent =
+        new VBox(
+            12, scheduleFilters, scheduleSummary, appointmentList, new HBox(8, reschedule, cancel));
+    Tab bookingTab = new Tab("Book appointment", bookingContent);
+    bookingTab.setClosable(false);
+    Tab manageAppointmentsTab = new Tab("Search and manage appointments", appointmentManageContent);
+    manageAppointmentsTab.setClosable(false);
+    TabPane appointmentTabs = new TabPane(bookingTab, manageAppointmentsTab);
+    appointmentTabs.setId("reception-appointment-tabs");
+    VBox appointmentContent = new VBox(12, appointmentTabs);
     VBox checkoutContent = new VBox(12, checkoutAppointmentList, checkoutForm);
     VBox revenueContent = new VBox(12, revenueForm);
     Tab patientFeature = featureTab("Patient directory and basic data", patientContent);
@@ -886,17 +897,22 @@ public final class ReceptionistView {
     }
   }
 
-  private static ComboBox<String> timeSelector(String id) {
-    ComboBox<String> selector = new ComboBox<>();
-    selector.setId(id);
-    selector.setEditable(true);
-    selector.setPromptText("HH:mm");
+  private static TimeFields timeSelector(String id) {
+    ComboBox<String> hours = new ComboBox<>();
+    hours.setId(id + "-hour");
+    ComboBox<String> minutes = new ComboBox<>();
+    minutes.setId(id + "-minute");
+    hours.setPromptText("HH");
+    minutes.setPromptText("mm");
     for (int hour = 0; hour < 24; hour++) {
-      selector.getItems().add(String.format(Locale.ROOT, "%02d:00", hour));
-      selector.getItems().add(String.format(Locale.ROOT, "%02d:30", hour));
+      hours.getItems().add(String.format(Locale.ROOT, "%02d", hour));
     }
-    selector.getSelectionModel().select(0);
-    return selector;
+    minutes.getItems().addAll("00", "30");
+    hours.getSelectionModel().select(0);
+    minutes.getSelectionModel().select(0);
+    HBox view = new HBox(4, hours, new Label(":"), minutes);
+    view.setId(id);
+    return new TimeFields(hours, minutes, view);
   }
 
   private static void makePatientSearchable(ComboBox<Patient> selector) {
@@ -1061,10 +1077,10 @@ public final class ReceptionistView {
           services.patientService().getAdministrative(session, appointment.patientId());
       DatePicker date = new DatePicker(appointment.startsAt().toLocalDate());
       date.setId("reception-reschedule-dialog-date");
-      ComboBox<String> start = timeSelector("reception-reschedule-dialog-start");
-      ComboBox<String> end = timeSelector("reception-reschedule-dialog-end");
-      start.setValue(appointment.startsAt().toLocalTime().toString());
-      end.setValue(appointment.endsAt().toLocalTime().toString());
+      TimeFields start = timeSelector("reception-reschedule-dialog-start");
+      TimeFields end = timeSelector("reception-reschedule-dialog-end");
+      selectTime(start, appointment.startsAt().toLocalTime());
+      selectTime(end, appointment.endsAt().toLocalTime());
       ComboBox<Patient> patients = new ComboBox<>();
       patients.setId("reception-reschedule-dialog-patient");
       List<Patient> availablePatients =
@@ -1145,9 +1161,9 @@ public final class ReceptionistView {
               new Label("New date"),
               date,
               new Label("Start"),
-              start,
+              start.view,
               new Label("End"),
-              end,
+              end.view,
               new HBox(8, save, cancel),
               feedback);
       content.setPadding(new Insets(18));
@@ -1162,20 +1178,26 @@ public final class ReceptionistView {
   }
 
   private static LocalDateTime parseScheduleDateTime(
-      DatePicker date, ComboBox<String> time, String fieldName) {
-    String value = time.getEditor().getText() == null ? "" : time.getEditor().getText().trim();
-    if (value.contains(" ")) {
-      return parseDateTime(value, fieldName);
-    }
+      DatePicker date, TimeFields time, String fieldName) {
     if (date.getValue() == null) {
       throw new ValidationException("Appointment date is required");
     }
     try {
-      return LocalDateTime.of(date.getValue(), java.time.LocalTime.parse(value));
+      return LocalDateTime.of(
+          date.getValue(),
+          java.time.LocalTime.of(
+              Integer.parseInt(time.hours.getValue()), Integer.parseInt(time.minutes.getValue())));
     } catch (DateTimeParseException exception) {
-      throw new ValidationException(fieldName + " must use HH:mm", exception);
+      throw new ValidationException(fieldName + " must use a valid time", exception);
     }
   }
+
+  private static void selectTime(TimeFields fields, java.time.LocalTime time) {
+    fields.hours.setValue(String.format(Locale.ROOT, "%02d", time.getHour()));
+    fields.minutes.setValue(String.format(Locale.ROOT, "%02d", time.getMinute() < 30 ? 0 : 30));
+  }
+
+  private record TimeFields(ComboBox<String> hours, ComboBox<String> minutes, HBox view) {}
 
   private static String formatAppointment(
       ClinicServices services, Session session, Appointment appointment) {
