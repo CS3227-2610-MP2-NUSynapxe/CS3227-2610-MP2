@@ -136,6 +136,11 @@ dashboard.
 
 ### Check in, checkout, and revenue
 
+The **Revenue Reports** tab supports From/To date pickers, patient, Doctor,
+and payment-method filters. Generate a report to view receipt-backed totals,
+breakdowns, and payment details. Use **Export CSV** or **Export JSON** to save
+the current report.
+
 The **Check-in Queue** tab is the Receptionist's front-desk view for arrivals.
 It defaults to Singapore's current date and shows accepted appointments waiting
 for arrival together with appointments already checked in. Use the Doctor,
