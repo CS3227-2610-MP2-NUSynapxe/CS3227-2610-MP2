@@ -14,7 +14,7 @@ import nusynapxe.domain.Appointment;
 import nusynapxe.domain.ClinicalRecord;
 import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
-import nusynapxe.domain.Role;
+import nusynapxe.domain.PatientDeletionBlockers;
 import nusynapxe.domain.Session;
 import nusynapxe.persistence.AppointmentRepository;
 import nusynapxe.persistence.ClinicalRecordRepository;
@@ -48,9 +48,9 @@ public final class PatientService {
     this.clinicalRecords = Objects.requireNonNull(clinicalRecords, "clinicalRecords");
   }
 
-  /** Registers a patient using Receptionist-authorized basic fields. */
+  /** Registers a patient using Doctor- or Receptionist-authorized basic fields. */
   public Patient register(Session actor, Patient requestedPatient) throws SQLException {
-    Authorization.requireRole(actor, Role.RECEPTIONIST);
+    Authorization.requirePatientAdministration(actor);
     Patient patient = validate(requestedPatient, true);
     requireUniqueIdentity(patient, 0);
     try {
@@ -62,7 +62,7 @@ public final class PatientService {
 
   /** Atomically updates only a patient's non-clinical basic information. */
   public Patient updateAdministrative(Session actor, Patient requestedPatient) throws SQLException {
-    Authorization.requireRole(actor, Role.RECEPTIONIST);
+    Authorization.requirePatientAdministration(actor);
     Objects.requireNonNull(requestedPatient, "patient");
     if (requestedPatient.id() <= 0 || patients.findById(requestedPatient.id()).isEmpty()) {
       throw new ValidationException(PATIENT_NOT_FOUND_MESSAGE);
@@ -78,7 +78,7 @@ public final class PatientService {
 
   /** Deactivates a patient without deleting the Patient ID or retained history. */
   public Patient deactivateAdministrative(Session actor, long patientId) throws SQLException {
-    Authorization.requireRole(actor, Role.RECEPTIONIST);
+    Authorization.requirePatientAdministration(actor);
     if (patientId <= 0 || patients.findById(patientId).isEmpty()) {
       throw new ValidationException(PATIENT_NOT_FOUND_MESSAGE);
     }
@@ -87,30 +87,53 @@ public final class PatientService {
 
   /** Reactivates a patient without changing the Patient ID or retained history. */
   public Patient activateAdministrative(Session actor, long patientId) throws SQLException {
-    Authorization.requireRole(actor, Role.RECEPTIONIST);
+    Authorization.requirePatientAdministration(actor);
     if (patientId <= 0 || patients.findById(patientId).isEmpty()) {
       throw new ValidationException(PATIENT_NOT_FOUND_MESSAGE);
     }
     return patients.activate(patientId);
   }
 
-  /** Searches non-clinical patient information for a Receptionist. */
+  /** Searches non-clinical patient information for a Doctor or Receptionist. */
   public List<Patient> searchAdministrative(Session actor, String query) throws SQLException {
-    Authorization.requireRole(actor, Role.RECEPTIONIST);
+    Authorization.requirePatientAdministration(actor);
     return patients.search(query);
   }
 
-  /** Returns non-clinical patient information to reception staff. */
+  /** Returns non-clinical patient information to authorized administrative staff. */
   public List<Patient> listAdministrative(Session actor) throws SQLException {
     return searchAdministrative(actor, "");
   }
 
-  /** Returns non-clinical information for a Receptionist. */
+  /** Returns non-clinical information for a Doctor or Receptionist. */
   public Patient getAdministrative(Session actor, long patientId) throws SQLException {
-    Authorization.requireRole(actor, Role.RECEPTIONIST);
+    Authorization.requirePatientAdministration(actor);
     return patients
         .findById(patientId)
         .orElseThrow(() -> new ValidationException(PATIENT_NOT_FOUND_MESSAGE));
+  }
+
+  /** Returns relationship counts for an authorized patient deletion check. */
+  public PatientDeletionBlockers deletionBlockers(Session actor, long patientId)
+      throws SQLException {
+    Authorization.requirePatientAdministration(actor);
+    requirePatientId(patientId);
+    return patients
+        .findDeletionBlockers(patientId)
+        .orElseThrow(() -> new ValidationException(PATIENT_NOT_FOUND_MESSAGE));
+  }
+
+  /** Permanently deletes an authorized patient only when no related data exists. */
+  public void deleteAdministrative(Session actor, long patientId) throws SQLException {
+    Authorization.requirePatientAdministration(actor);
+    requirePatientId(patientId);
+    if (patients.findById(patientId).isEmpty()) {
+      throw new ValidationException(PATIENT_NOT_FOUND_MESSAGE);
+    }
+    Optional<PatientDeletionBlockers> blockers = patients.deleteIfUnrelated(patientId);
+    if (blockers.isPresent()) {
+      throw new PatientDeletionBlockedException(blockers.orElseThrow());
+    }
   }
 
   /** Returns the clinical record for an appointment owned by the Doctor. */
@@ -125,6 +148,12 @@ public final class PatientService {
     return appointments
         .findById(appointmentId)
         .orElseThrow(() -> new ValidationException("Appointment does not exist"));
+  }
+
+  private static void requirePatientId(long patientId) {
+    if (patientId <= 0) {
+      throw new ValidationException(PATIENT_NOT_FOUND_MESSAGE);
+    }
   }
 
   private void requireUniqueIdentity(Patient patient, long allowedPatientId) throws SQLException {

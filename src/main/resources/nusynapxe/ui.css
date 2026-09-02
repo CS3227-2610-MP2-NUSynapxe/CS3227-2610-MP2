@@ -399,6 +399,49 @@
     -fx-text-fill: white;
 }
 
+#doctor-navigation {
+    -fx-background-color: #102a43;
+    -fx-background-radius: 12px;
+    -fx-min-width: 136px;
+    -fx-pref-width: 136px;
+    -fx-padding: 16px 0;
+}
+
+#doctor-navigation > .label {
+    -fx-text-fill: #d8e5f0;
+    -fx-font-weight: bold;
+    -fx-padding: 0 16px 10px 16px;
+}
+
+#doctor-navigation > .button {
+    -fx-alignment: center-left;
+    -fx-background-color: transparent;
+    -fx-background-radius: 0;
+    -fx-border-color: transparent;
+    -fx-border-radius: 0;
+    -fx-max-width: infinity;
+    -fx-padding: 12px 16px;
+    -fx-text-fill: #d8e5f0;
+}
+
+#doctor-navigation > .button:hover {
+    -fx-background-color: #214361;
+}
+
+#doctor-navigation > .button:focused {
+    -fx-border-color: #a6d8d2;
+    -fx-border-width: 0 0 2px 0;
+}
+
+#doctor-navigation > .button.active-navigation {
+    -fx-background-color: #0f8f83;
+    -fx-text-fill: white;
+}
+
+#doctor-navigation > .button.active-navigation:hover {
+    -fx-background-color: #0b746b;
+}
+
 .sub-navigation > .tab-header-area > .tab-header-background {
     -fx-background-color: #e7eef5;
 }

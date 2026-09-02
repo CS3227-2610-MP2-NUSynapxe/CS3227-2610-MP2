@@ -21,6 +21,6 @@
 ## 4. Documentation and quality
 
 - [x] 4.1 Update User Guide and Developer Guide with the Check-in Queue workflow, eligibility rules, filters, and confidentiality boundary.
-- [x] 4.2 Add `logs/reception-check-in-queue.md` with an implementation summary that contains no real patient data.
+- [x] 4.2 Add `../../../../logs/2026-09-02-reception-check-in-queue.md` with an implementation summary that contains no real patient data.
 - [x] 4.3 Run Spotless, Checkstyle, PMD, SpotBugs, JaCoCo, Javadoc, the full test suite, and strict OpenSpec validation.
 - [x] 4.4 Commit implementation, tests, and documentation separately; do not push unless explicitly requested.

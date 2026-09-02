@@ -9,13 +9,17 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
+import nusynapxe.domain.PatientDeletionBlockers;
 import nusynapxe.domain.Sex;
 
 /** Persists the non-clinical portion of patient records. */
 public final class PatientRepository {
   private static final int EXPECTED_UPDATE_COUNT = 1;
+  private static final String PATIENT_MISSING_MESSAGE = "Patient does not exist: ";
+  private static final String PATIENTS_TABLE = "patients";
   private static final String PATIENT_COLUMNS =
       "id, identity_type, identity_number, issuing_country, first_name, last_name, "
           + "date_of_birth, sex, phone_country_code, phone_number, email, address, "
@@ -25,6 +29,20 @@ public final class PatientRepository {
   private static final String SELECT_PATIENT_BY_ID = SELECT_PATIENTS + " WHERE id = ?";
   private static final String SELECT_PATIENT_BY_IDENTITY =
       SELECT_PATIENTS + " WHERE identity_type = ? AND issuing_country = ? AND identity_number = ?";
+  private static final String COUNT_APPOINTMENTS =
+      "SELECT COUNT(*) FROM appointments WHERE patient_id = ?";
+  private static final String COUNT_CLINICAL_RECORDS =
+      "SELECT COUNT(*) FROM clinical_records WHERE patient_id = ?";
+  private static final String COUNT_PRESCRIPTIONS =
+      "SELECT COUNT(*) FROM prescriptions p "
+          + "JOIN clinical_records c ON c.id = p.clinical_record_id "
+          + "WHERE c.patient_id = ?";
+  private static final String COUNT_PAYMENTS = "SELECT COUNT(*) FROM payments WHERE patient_id = ?";
+  private static final String COUNT_RECEIPTS = "SELECT COUNT(*) FROM receipts WHERE patient_id = ?";
+  private static final String TABLE_NAMES =
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'";
+  private static final Set<String> EXPLICIT_PATIENT_REFERENCE_TABLES =
+      Set.of("appointments", "clinical_records", "payments", "receipts");
   private static final String SEARCH_PATIENTS =
       SELECT_PATIENTS
           + " WHERE (identity_type LIKE ? ESCAPE '\\' "
@@ -97,7 +115,7 @@ public final class PatientRepository {
             statement.setString(15, SqliteQueries.formatTimestamp(LocalDateTime.now()));
             statement.setLong(16, patient.id());
             if (statement.executeUpdate() != EXPECTED_UPDATE_COUNT) {
-              throw new SQLException("Patient does not exist: " + patient.id());
+              throw new SQLException(PATIENT_MISSING_MESSAGE + patient.id());
             }
             return patient;
           }
@@ -123,7 +141,7 @@ public final class PatientRepository {
             select.setLong(1, patientId);
             try (ResultSet resultSet = select.executeQuery()) {
               if (!resultSet.next()) {
-                throw new SQLException("Patient does not exist: " + patientId);
+                throw new SQLException(PATIENT_MISSING_MESSAGE + patientId);
               }
               patient = readPatient(resultSet);
             }
@@ -135,7 +153,7 @@ public final class PatientRepository {
             update.setString(2, SqliteQueries.formatTimestamp(LocalDateTime.now()));
             update.setLong(3, patientId);
             if (update.executeUpdate() != EXPECTED_UPDATE_COUNT) {
-              throw new SQLException("Patient does not exist: " + patientId);
+              throw new SQLException(PATIENT_MISSING_MESSAGE + patientId);
             }
           }
           return withActive(patient, active);
@@ -168,6 +186,53 @@ public final class PatientRepository {
         return resultSet.next() ? Optional.of(readPatient(resultSet)) : Optional.empty();
       }
     }
+  }
+
+  /** Returns non-sensitive relationship counts for a patient deletion check. */
+  public Optional<PatientDeletionBlockers> findDeletionBlockers(long patientId)
+      throws SQLException {
+    try (PreparedStatement statement =
+        database.connection().prepareStatement("SELECT 1 FROM patients WHERE id = ?")) {
+      statement.setLong(1, patientId);
+      try (ResultSet resultSet = statement.executeQuery()) {
+        if (!resultSet.next()) {
+          return Optional.empty();
+        }
+      }
+    }
+    return Optional.of(readDeletionBlockers(database.connection(), patientId));
+  }
+
+  /** Deletes an unused patient or returns the relationship counts that safely block deletion. */
+  public Optional<PatientDeletionBlockers> deleteIfUnrelated(long patientId) throws SQLException {
+    return SqliteTransactions.execute(
+        database,
+        connection -> {
+          if (!patientExists(connection, patientId)) {
+            throw new SQLException(PATIENT_MISSING_MESSAGE + patientId);
+          }
+          PatientDeletionBlockers blockers = readDeletionBlockers(connection, patientId);
+          if (!blockers.canDelete()) {
+            return Optional.of(blockers);
+          }
+          try (PreparedStatement statement =
+              connection.prepareStatement("DELETE FROM patients WHERE id = ?")) {
+            statement.setLong(1, patientId);
+            if (statement.executeUpdate() != EXPECTED_UPDATE_COUNT) {
+              throw new SQLException(PATIENT_MISSING_MESSAGE + patientId);
+            }
+          } catch (SQLException exception) {
+            if (!isForeignKeyViolation(exception)) {
+              throw exception;
+            }
+            PatientDeletionBlockers refreshed = readDeletionBlockers(connection, patientId);
+            if (refreshed.canDelete()) {
+              refreshed = refreshed.withAdditionalOtherReferences(1);
+            }
+            return Optional.of(refreshed);
+          }
+          return Optional.empty();
+        });
   }
 
   /** Returns all patients in deterministic name and Patient ID order. */
@@ -362,5 +427,102 @@ public final class PatientRepository {
         patient.heightCm(),
         patient.weightKg(),
         active);
+  }
+
+  private static PatientDeletionBlockers readDeletionBlockers(
+      java.sql.Connection connection, long patientId) throws SQLException {
+    return new PatientDeletionBlockers(
+        patientId,
+        count(connection, COUNT_APPOINTMENTS, patientId),
+        count(connection, COUNT_CLINICAL_RECORDS, patientId),
+        count(connection, COUNT_PRESCRIPTIONS, patientId),
+        count(connection, COUNT_PAYMENTS, patientId),
+        count(connection, COUNT_RECEIPTS, patientId),
+        countOtherPatientReferences(connection, patientId));
+  }
+
+  private static long count(java.sql.Connection connection, String sql, long patientId)
+      throws SQLException {
+    try (PreparedStatement statement = connection.prepareStatement(sql)) {
+      statement.setLong(1, patientId);
+      try (ResultSet resultSet = statement.executeQuery()) {
+        if (!resultSet.next()) {
+          throw new SQLException("SQLite did not return a relationship count");
+        }
+        return resultSet.getLong(1);
+      }
+    }
+  }
+
+  private static boolean patientExists(java.sql.Connection connection, long patientId)
+      throws SQLException {
+    try (PreparedStatement statement =
+        connection.prepareStatement("SELECT 1 FROM patients WHERE id = ?")) {
+      statement.setLong(1, patientId);
+      try (ResultSet resultSet = statement.executeQuery()) {
+        return resultSet.next();
+      }
+    }
+  }
+
+  private static long countOtherPatientReferences(java.sql.Connection connection, long patientId)
+      throws SQLException {
+    long count = 0;
+    try (PreparedStatement tables = connection.prepareStatement(TABLE_NAMES);
+        ResultSet tableResults = tables.executeQuery()) {
+      while (tableResults.next()) {
+        String table = tableResults.getString(1);
+        if (!EXPLICIT_PATIENT_REFERENCE_TABLES.contains(table.toLowerCase(Locale.ROOT))) {
+          count += countPatientForeignKeys(connection, table, patientId);
+        }
+      }
+    }
+    return count;
+  }
+
+  private static long countPatientForeignKeys(
+      java.sql.Connection connection, String table, long patientId) throws SQLException {
+    long count = 0;
+    String pragma = "PRAGMA foreign_key_list(" + quoteIdentifier(table) + ")";
+    try (PreparedStatement foreignKeys = connection.prepareStatement(pragma);
+        ResultSet foreignKeyResults = foreignKeys.executeQuery()) {
+      while (foreignKeyResults.next()) {
+        if (PATIENTS_TABLE.equalsIgnoreCase(foreignKeyResults.getString("table"))) {
+          String column = foreignKeyResults.getString("from");
+          if (column != null) {
+            count += countForeignKeyRows(connection, table, column, patientId);
+          }
+        }
+      }
+    }
+    return count;
+  }
+
+  private static long countForeignKeyRows(
+      java.sql.Connection connection, String table, String column, long patientId)
+      throws SQLException {
+    String sql =
+        "SELECT COUNT(*) FROM "
+            + quoteIdentifier(table)
+            + " WHERE "
+            + quoteIdentifier(column)
+            + " = ?";
+    return count(connection, sql, patientId);
+  }
+
+  private static String quoteIdentifier(String identifier) {
+    return "\"" + identifier.replace("\"", "\"\"") + "\"";
+  }
+
+  private static boolean isForeignKeyViolation(SQLException exception) {
+    Throwable current = exception;
+    while (current != null) {
+      String message = current.getMessage();
+      if (message != null && message.toLowerCase(Locale.ROOT).contains("foreign key")) {
+        return true;
+      }
+      current = current.getCause();
+    }
+    return false;
   }
 }

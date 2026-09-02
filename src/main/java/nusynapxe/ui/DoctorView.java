@@ -19,6 +19,7 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.ClinicalRecord;
@@ -34,6 +35,7 @@ public final class DoctorView {
   private static final String APPOINTMENT_REQUIRED = "Select an appointment first";
   private static final String DATE_TIME_PATTERN = "yyyy-MM-dd HH:mm";
   private static final String FIELD_SEPARATOR = " | ";
+  private static final String ACTIVE_NAVIGATION_STYLE = "active-navigation";
   private static final DateTimeFormatter DATE_TIME_FORMAT =
       DateTimeFormatter.ofPattern(DATE_TIME_PATTERN);
   private static final DateTimeFormatter SHORT_DATE_TIME_FORMAT =
@@ -411,11 +413,57 @@ public final class DoctorView {
     SplitPane masterDetail = new SplitPane(scheduleScroll, detailScroll);
     masterDetail.setId("doctor-master-detail");
     masterDetail.setDividerPositions(0.36);
-    BorderPane root = new BorderPane(masterDetail);
+
+    PatientDirectoryView patientDirectory =
+        PatientDirectoryView.create(
+            services,
+            session,
+            "doctor",
+            feedback,
+            ignoredPatientId ->
+                refreshSchedule(
+                    services,
+                    session,
+                    appointments,
+                    selection,
+                    diagnosis,
+                    consultationNotes,
+                    followUpNotes,
+                    prescriptions,
+                    feedback));
+    ScrollPane patientsPage = new ScrollPane(patientDirectory.view());
+    patientsPage.setId("doctor-patients-page");
+    patientsPage.setFitToWidth(true);
+
+    StackPane pages = new StackPane(masterDetail);
+    pages.setId("doctor-page-content");
+    Button dashboardNavigation = UiComponents.secondaryButton("Dashboard", "doctor-nav-dashboard");
+    Button patientsNavigation = UiComponents.secondaryButton("Patients", "doctor-nav-patients");
+    dashboardNavigation.getStyleClass().add(ACTIVE_NAVIGATION_STYLE);
+    VBox navigation = new VBox(0, new Label("Navigation"), dashboardNavigation, patientsNavigation);
+    navigation.setId("doctor-navigation");
+    dashboardNavigation.setOnAction(
+        event -> {
+          pages.getChildren().setAll(masterDetail);
+          dashboardNavigation.getStyleClass().add(ACTIVE_NAVIGATION_STYLE);
+          patientsNavigation.getStyleClass().remove(ACTIVE_NAVIGATION_STYLE);
+        });
+    patientsNavigation.setOnAction(
+        event -> {
+          patientDirectory.refresh();
+          pages.getChildren().setAll(patientsPage);
+          patientsNavigation.getStyleClass().add(ACTIVE_NAVIGATION_STYLE);
+          dashboardNavigation.getStyleClass().remove(ACTIVE_NAVIGATION_STYLE);
+        });
+
+    BorderPane root = new BorderPane();
     root.setId("doctor-workspace");
     root.getStyleClass().add("workspace-shell");
     root.setPadding(new Insets(24));
     root.setTop(header);
+    root.setLeft(navigation);
+    BorderPane.setMargin(navigation, new Insets(0, 16, 0, 0));
+    root.setCenter(pages);
     root.setBottom(feedback);
     refreshSchedule(
         services,
