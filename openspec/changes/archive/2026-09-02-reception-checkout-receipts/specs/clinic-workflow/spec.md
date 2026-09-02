@@ -24,6 +24,10 @@ After an appointment is completed, a Receptionist SHALL be able to record a vali
 - **WHEN** a Receptionist requests the revenue summary for a local clinic date
 - **THEN** the summary reports the count and total of successful payments recorded on that date, grouped from persisted checkout records
 
+#### Scenario: Revenue report reconciles to checkout records
+- **WHEN** a Receptionist requests a report for a selected date or date range
+- **THEN** the report totals and detail rows are derived from successful persisted payments and linked receipts
+
 #### Scenario: Revenue excludes cancelled or unsuccessful transactions
 - **WHEN** the selected date contains a cancelled appointment or an unsuccessful payment attempt
 - **THEN** those records contribute zero to the successful payment count and total

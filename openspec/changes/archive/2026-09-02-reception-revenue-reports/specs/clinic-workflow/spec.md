@@ -12,6 +12,10 @@ After an appointment is completed, a Receptionist SHALL be able to record a vali
 - **WHEN** a Receptionist submits a zero, negative, malformed, or missing payment amount
 - **THEN** checkout is rejected and no payment, receipt, or checked-out state is persisted
 
+#### Scenario: Receipt can be viewed
+- **WHEN** a Receptionist selects a receipt for a previously successful checkout
+- **THEN** the persisted receipt details are displayed without creating another payment or changing appointment state
+
 #### Scenario: Daily revenue includes successful payments for the selected date
 - **WHEN** a Receptionist requests the revenue summary for a local clinic date
 - **THEN** the summary reports the count and total of successful payments recorded on that date, grouped from persisted checkout records

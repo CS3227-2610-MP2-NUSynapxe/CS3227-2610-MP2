@@ -3,9 +3,7 @@
 ## Purpose
 
 Provides the shared patient, appointment, clinical consultation, and checkout workflow that lets Doctors and Receptionists coordinate care while preserving the boundary between administrative and medical information.
-
 ## Requirements
-
 ### Requirement: The system SHALL maintain patients with separate administrative and clinical information
 
 The system SHALL maintain a patient identity with contact and billing information separately from medical records, consultation notes, diagnoses, follow-up notes, and prescriptions. A Receptionist SHALL be able to register a patient and create or update administrative information. A Doctor SHALL be able to view and update clinical information for a patient linked to the Doctor's appointment. Receptionist operations SHALL NOT read or write clinical fields.
@@ -52,11 +50,19 @@ An authenticated Receptionist SHALL be able to book, cancel, and reschedule appo
 
 ### Requirement: The system SHALL enforce the appointment workflow from booking through checkout
 
-Appointments SHALL progress through pending, accepted, checked-in, completed, checked-out, and cancelled states. A Receptionist SHALL be able to check in an accepted appointment and perform checkout after completion. A Doctor SHALL be able to record the consultation and mark a checked-in appointment completed. Invalid state transitions SHALL be rejected without changing the appointment state.
+Appointments SHALL progress through pending, accepted, checked-in, completed, checked-out, and cancelled states. A Receptionist SHALL be able to check in an accepted appointment through the dedicated check-in queue at or after its scheduled time and perform checkout after completion. A Doctor SHALL be able to record the consultation and mark a checked-in appointment completed. Invalid state transitions SHALL be rejected without changing the appointment state.
+
+#### Scenario: Receptionist checks in an accepted appointment from the queue
+- **WHEN** a Receptionist checks in an accepted appointment from the Check-in Queue at or after its scheduled time
+- **THEN** the appointment changes to checked-in and becomes available to the assigned Doctor for consultation
 
 #### Scenario: Receptionist checks in an accepted appointment
 - **WHEN** a Receptionist checks in an accepted appointment at or after its scheduled time
 - **THEN** the appointment changes to checked-in and becomes available to the assigned Doctor for consultation
+
+#### Scenario: Receptionist attempts check-in before the scheduled time
+- **WHEN** a Receptionist attempts to check in an accepted appointment before its scheduled start
+- **THEN** the service rejects the transition and preserves the accepted state
 
 #### Scenario: Doctor completes a consultation
 - **WHEN** the assigned Doctor records the consultation and marks a checked-in appointment completed
@@ -88,20 +94,33 @@ Only the Doctor assigned to a consultation SHALL be able to create or edit its d
 
 ### Requirement: A Receptionist SHALL be able to record checkout payments and generate a daily revenue summary
 
-After an appointment is completed, a Receptionist SHALL be able to record a valid checkout charge and payment method for the patient. The service SHALL reject negative, zero, malformed, or otherwise invalid payment amounts. A daily revenue summary SHALL total successful checkout payments recorded on the selected local clinic date and SHALL exclude cancelled appointments and unsuccessful payment attempts.
+After an appointment is completed, a Receptionist SHALL be able to record a valid checkout charge and payment method for the patient. The service SHALL reject negative, zero, malformed, or otherwise invalid payment amounts and SHALL reject a second successful checkout for the same appointment. A successful checkout SHALL create a receipt with a unique Singapore-local daily sequence number and persisted receipt timestamp. Receptionists SHALL be able to retrieve and view receipts without creating another payment. A daily revenue summary SHALL total successful checkout payments recorded on the selected local clinic date and SHALL exclude cancelled appointments and unsuccessful payment attempts.
 
 #### Scenario: Receptionist completes checkout
 - **WHEN** a Receptionist records a valid positive payment for a completed appointment
-- **THEN** the payment is persisted, associated with the appointment and patient, and the appointment is marked checked out
+- **THEN** the payment is persisted, a receipt is generated, the payment is associated with the appointment and patient, and the appointment is marked checked out
 
 #### Scenario: Invalid payment amount is rejected
 - **WHEN** a Receptionist submits a zero, negative, malformed, or missing payment amount
-- **THEN** checkout is rejected and no payment or checked-out state is persisted
+- **THEN** checkout is rejected and no payment, receipt, or checked-out state is persisted
+
+#### Scenario: Duplicate checkout is rejected
+- **WHEN** a Receptionist submits checkout for an appointment with an existing successful payment
+- **THEN** checkout is rejected and the original payment, receipt, and checked-out state remain unchanged
+
+#### Scenario: Receipt can be viewed
+- **WHEN** a Receptionist selects a receipt for a previously successful checkout
+- **THEN** the persisted receipt details are displayed without creating another payment or changing appointment state
 
 #### Scenario: Daily revenue includes successful payments for the selected date
 - **WHEN** a Receptionist requests the revenue summary for a local clinic date
 - **THEN** the summary reports the count and total of successful payments recorded on that date, grouped from persisted checkout records
 
+#### Scenario: Revenue report reconciles to checkout records
+- **WHEN** a Receptionist requests a report for a selected date or date range
+- **THEN** the report totals and detail rows are derived from successful persisted payments and linked receipts
+
 #### Scenario: Revenue excludes cancelled or unsuccessful transactions
 - **WHEN** the selected date contains a cancelled appointment or an unsuccessful payment attempt
 - **THEN** those records contribute zero to the successful payment count and total
+
