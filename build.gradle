@@ -31,6 +31,35 @@ application {
     applicationDefaultJvmArgs = ['--enable-native-access=ALL-UNNAMED']
 }
 
+tasks.register('demoData', JavaExec) {
+    group = 'application'
+    description = 'Resets or seeds a database for demonstrations.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'nusynapxe.tools.DemoDataCli'
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+    doFirst {
+        String command = providers.gradleProperty('demoDataCommand').orElse('').get()
+        String databasePath = providers.gradleProperty('demoDatabasePath').orElse('').get()
+        if (command.isBlank() || databasePath.isBlank()) {
+            throw new GradleException(
+                'demoData requires -PdemoDataCommand and -PdemoDatabasePath')
+        }
+        args(command, databasePath)
+        if (providers.gradleProperty('demoDataForce').orElse('false').get() == 'true') {
+            args('--force')
+        } else if (providers.gradleProperty('demoDataReset').orElse('false').get() == 'true') {
+            args('--reset')
+        }
+    }
+}
+
+tasks.named('run', JavaExec) {
+    def demoDatabasePath = providers.gradleProperty('demoDatabasePath')
+    if (demoDatabasePath.isPresent()) {
+        systemProperty 'nusynapxe.database', demoDatabasePath.get()
+    }
+}
+
 javafx {
     version = '25.0.4'
     modules = ['javafx.controls']

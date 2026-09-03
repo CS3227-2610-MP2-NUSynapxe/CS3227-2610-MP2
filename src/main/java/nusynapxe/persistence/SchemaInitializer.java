@@ -11,7 +11,8 @@ final class SchemaInitializer {
   private static final int FIRST_VERSION = 1;
   private static final int SECOND_VERSION = 2;
   private static final int THIRD_VERSION = 3;
-  static final int CURRENT_VERSION = 4;
+  private static final int FOURTH_VERSION = 4;
+  static final int CURRENT_VERSION = 5;
 
   private static final String SCHEMA_VERSION_KEY = "schema_version";
   private static final String CREATE_METADATA =
@@ -19,6 +20,29 @@ final class SchemaInitializer {
       CREATE TABLE IF NOT EXISTS app_metadata (
           key TEXT PRIMARY KEY NOT NULL,
           value TEXT NOT NULL
+      )
+      """;
+  private static final String CREATE_DOCTOR_CALENDAR_SETTINGS =
+      """
+      CREATE TABLE IF NOT EXISTS doctor_calendar_settings (
+          doctor_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          first_day_of_week TEXT NOT NULL CHECK (
+              first_day_of_week IN ('MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY',
+                                    'FRIDAY', 'SATURDAY', 'SUNDAY')
+          )
+      )
+      """;
+  private static final String CREATE_DOCTOR_WORKING_INTERVALS =
+      """
+      CREATE TABLE IF NOT EXISTS doctor_working_intervals (
+          doctor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          day_of_week TEXT NOT NULL CHECK (
+              day_of_week IN ('MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY',
+                              'FRIDAY', 'SATURDAY', 'SUNDAY')
+          ),
+          start_minute INTEGER NOT NULL CHECK (start_minute >= 0 AND start_minute < 1440),
+          end_minute INTEGER NOT NULL CHECK (end_minute > start_minute AND end_minute <= 1440),
+          PRIMARY KEY (doctor_id, day_of_week, start_minute)
       )
       """;
   private static final List<String> SCHEMA_STATEMENTS =
@@ -146,7 +170,11 @@ final class SchemaInitializer {
           "CREATE INDEX IF NOT EXISTS idx_appointments_patient_time ON appointments(patient_id, starts_at)",
           "CREATE INDEX IF NOT EXISTS idx_time_off_doctor_time ON doctor_time_off(doctor_id, starts_at)",
           "CREATE INDEX IF NOT EXISTS idx_payments_recorded_status ON payments(recorded_at, status)",
-          "CREATE INDEX IF NOT EXISTS idx_receipts_date_sequence ON receipts(receipt_date, sequence_number)");
+          "CREATE INDEX IF NOT EXISTS idx_receipts_date_sequence ON receipts(receipt_date, sequence_number)",
+          CREATE_DOCTOR_CALENDAR_SETTINGS,
+          CREATE_DOCTOR_WORKING_INTERVALS,
+          "CREATE INDEX IF NOT EXISTS idx_calendar_intervals_doctor_day "
+              + "ON doctor_working_intervals(doctor_id, day_of_week, start_minute)");
   private static final List<String> VERSION_TWO_MIGRATION =
       List.of(
           "ALTER TABLE patients ADD COLUMN identity_type TEXT COLLATE NOCASE "
@@ -177,6 +205,23 @@ final class SchemaInitializer {
       List.of(
           "ALTER TABLE patients RENAME COLUMN phone TO phone_number",
           "ALTER TABLE patients ADD COLUMN phone_country_code TEXT");
+  private static final List<String> VERSION_FIVE_MIGRATION =
+      List.of(
+          CREATE_DOCTOR_CALENDAR_SETTINGS,
+          CREATE_DOCTOR_WORKING_INTERVALS,
+          "CREATE INDEX IF NOT EXISTS idx_calendar_intervals_doctor_day "
+              + "ON doctor_working_intervals(doctor_id, day_of_week, start_minute)");
+  private static final List<String> VERSION_FIVE_DEFAULTS =
+      List.of(
+          "INSERT OR IGNORE INTO doctor_calendar_settings(doctor_id, first_day_of_week) "
+              + "SELECT id, 'SUNDAY' FROM users WHERE role = 'DOCTOR'",
+          "INSERT OR IGNORE INTO doctor_working_intervals(doctor_id, day_of_week, "
+              + "start_minute, end_minute) "
+              + "SELECT id, 'MONDAY', 480, 1080 FROM users WHERE role = 'DOCTOR' "
+              + "UNION ALL SELECT id, 'TUESDAY', 480, 1080 FROM users WHERE role = 'DOCTOR' "
+              + "UNION ALL SELECT id, 'WEDNESDAY', 480, 1080 FROM users WHERE role = 'DOCTOR' "
+              + "UNION ALL SELECT id, 'THURSDAY', 480, 1080 FROM users WHERE role = 'DOCTOR' "
+              + "UNION ALL SELECT id, 'FRIDAY', 480, 1080 FROM users WHERE role = 'DOCTOR'");
 
   private SchemaInitializer() {
     throw new AssertionError("Utility class");
@@ -203,11 +248,18 @@ final class SchemaInitializer {
           executeAll(connection, VERSION_THREE_MIGRATION);
           version = THIRD_VERSION;
         }
-        if (version < CURRENT_VERSION) {
+        if (version < FOURTH_VERSION) {
           executeAll(connection, VERSION_FOUR_MIGRATION);
+          version = FOURTH_VERSION;
+        }
+        if (version < CURRENT_VERSION) {
+          executeAll(connection, VERSION_FIVE_MIGRATION);
         }
       }
       executeAll(connection, SCHEMA_STATEMENTS);
+      if (existingVersion != null && existingVersion < CURRENT_VERSION) {
+        executeAll(connection, VERSION_FIVE_DEFAULTS);
+      }
       writeVersion(connection, CURRENT_VERSION);
       connection.commit();
     } catch (SQLException exception) {

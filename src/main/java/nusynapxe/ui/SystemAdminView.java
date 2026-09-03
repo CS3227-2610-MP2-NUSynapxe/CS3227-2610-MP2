@@ -41,11 +41,10 @@ public final class SystemAdminView {
     displayName.setId("admin-account-display-name");
     PasswordField password = new PasswordField();
     password.setId("admin-account-password");
-    ComboBox<Role> role =
-        new ComboBox<>(FXCollections.observableArrayList(Role.DOCTOR, Role.RECEPTIONIST));
+    ComboBox<Role> role = UiComponents.compactSelector();
+    role.setItems(FXCollections.observableArrayList(Role.DOCTOR, Role.RECEPTIONIST));
     role.setId("admin-account-role");
     role.getSelectionModel().select(Role.DOCTOR);
-    role.getStyleClass().add("compact-selector");
     role.setCellFactory(view -> roleCell());
     role.setButtonCell(roleCell());
     Label feedback = UiComponents.feedback("admin-account-feedback");

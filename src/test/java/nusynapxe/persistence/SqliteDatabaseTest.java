@@ -26,9 +26,10 @@ final class SqliteDatabaseTest {
 
       assertTrue(database.isOpen());
       assertEquals(1, foreignKeysEnabled(database));
-      assertEquals("4", metadataValue(database, "schema_version"));
+      assertEquals("5", metadataValue(database, "schema_version"));
       assertTrue(tableNames(database).containsAll(expectedFeatureTables()));
       assertTrue(indexNames(database).contains("idx_appointments_doctor_time"));
+      assertTrue(indexNames(database).contains("idx_calendar_intervals_doctor_day"));
       assertTrue(indexNames(database).contains("idx_patients_document_identity"));
       assertTrue(columnNames(database, "patients").containsAll(expectedPatientColumns()));
     }
@@ -150,6 +151,8 @@ final class SqliteDatabaseTest {
         "patients",
         "appointments",
         "doctor_time_off",
+        "doctor_calendar_settings",
+        "doctor_working_intervals",
         "clinical_records",
         "prescriptions",
         "payments");

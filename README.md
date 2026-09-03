@@ -66,6 +66,34 @@ and initializes the versioned schema when it opens the database. The database
 contains account credentials as salted PBKDF2 verifiers, not plaintext
 passwords. Do not commit the database file or copy it into an issue or log.
 
+## Demo database
+
+The repository includes PowerShell scripts for preparing the local-development
+database used by `.\gradlew.bat run`. They default to the normal per-user
+database at `%USERPROFILE%\.nusynapxe\nusynapxe.db`:
+
+```powershell
+.\scripts\reset-demo-database.ps1 -Force
+.\scripts\seed-demo-data.ps1
+```
+
+To recreate the demo database in one step, use
+`.\scripts\seed-demo-data.ps1 -Reset`. The standalone reset script requires
+`-Force` for an existing database; seeding an existing database without
+`-Reset` fails safely. The seed contains two Doctors, a System Admin, a
+Receptionist, six patients, calendar settings with a lunch break, and enough
+future appointments to exercise the Schedule view's lazy loading.
+
+After seeding, launch the application normally:
+
+```powershell
+.\gradlew.bat run
+```
+
+The script prints the demo credentials after a successful seed. These accounts
+and passwords are for local demonstrations only and must not be used in a
+production database.
+
 The complete operating instructions are in the [User Guide](docs/UserGuide.md).
 The package, persistence, security, testing, and CI details are in the
 [Developer Guide](docs/DeveloperGuide.md).

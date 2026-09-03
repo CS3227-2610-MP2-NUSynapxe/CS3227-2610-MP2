@@ -27,4 +27,15 @@
         <Method name="countPatientForeignKeys"/>
         <Bug pattern="SQL_INJECTION_JDBC"/>
     </Match>
+    <!-- JavaFX pages intentionally expose their root node to the scene graph. -->
+    <Match>
+        <Class name="nusynapxe.ui.DoctorCalendarView"/>
+        <Method name="view"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Class name="nusynapxe.ui.DoctorCalendarSettingsView"/>
+        <Method name="view"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
 </FindBugsFilter>

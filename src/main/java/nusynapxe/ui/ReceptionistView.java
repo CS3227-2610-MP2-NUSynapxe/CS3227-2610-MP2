@@ -86,8 +86,8 @@ public final class ReceptionistView {
     ComboBox<Account> scheduleDoctor = doctorSelector();
     scheduleDoctor.setId("reception-schedule-doctor");
     scheduleDoctor.setPromptText(ALL_DOCTORS);
-    ComboBox<AppointmentStatus> scheduleStatus =
-        new ComboBox<>(FXCollections.observableArrayList(AppointmentStatus.values()));
+    ComboBox<AppointmentStatus> scheduleStatus = UiComponents.compactSelector();
+    scheduleStatus.setItems(FXCollections.observableArrayList(AppointmentStatus.values()));
     scheduleStatus.setId("reception-schedule-status");
     scheduleStatus.setPromptText("All statuses");
     TextField schedulePatient = field("reception-schedule-patient", "Patient name or ID");
@@ -101,16 +101,16 @@ public final class ReceptionistView {
     queueDoctor.setId("reception-check-in-queue-doctor");
     queueDoctor.setPromptText(ALL_DOCTORS);
     TextField queuePatient = field("reception-check-in-queue-patient", PATIENT_NAME_ID);
-    ComboBox<String> queueStatus =
-        new ComboBox<>(
-            FXCollections.observableArrayList(QUEUE_WAITING, QUEUE_CHECKED_IN, QUEUE_ALL));
+    ComboBox<String> queueStatus = UiComponents.compactSelector();
+    queueStatus.setItems(
+        FXCollections.observableArrayList(QUEUE_WAITING, QUEUE_CHECKED_IN, QUEUE_ALL));
     queueStatus.setId("reception-check-in-queue-status");
     queueStatus.getSelectionModel().select(QUEUE_ALL);
     Label queueSummary = new Label();
     queueSummary.setId("reception-check-in-queue-summary");
     DatePicker appointmentDate = new DatePicker(LocalDate.now());
     appointmentDate.setId("reception-appointment-date");
-    ComboBox<Patient> appointmentPatient = new ComboBox<>();
+    ComboBox<Patient> appointmentPatient = UiComponents.compactSelector();
     appointmentPatient.setId("reception-appointment-patient");
     PatientDirectoryView.makePatientSearchable(appointmentPatient);
     Button checkIn = button("Check in selected", "reception-check-in");
@@ -144,8 +144,8 @@ public final class ReceptionistView {
     ComboBox<Account> reportDoctor = doctorSelector();
     reportDoctor.setId("reception-revenue-report-doctor");
     reportDoctor.setPromptText(ALL_DOCTORS);
-    ComboBox<PaymentMethod> reportMethod =
-        new ComboBox<>(FXCollections.observableArrayList(PaymentMethod.values()));
+    ComboBox<PaymentMethod> reportMethod = UiComponents.compactSelector();
+    reportMethod.setItems(FXCollections.observableArrayList(PaymentMethod.values()));
     reportMethod.setId("reception-revenue-report-method");
     reportMethod.setPromptText("All methods");
     Button reportButton = button("Generate report", "reception-revenue-report");
@@ -896,7 +896,7 @@ public final class ReceptionistView {
   }
 
   private static ComboBox<Account> doctorSelector() {
-    ComboBox<Account> doctor = new ComboBox<>();
+    ComboBox<Account> doctor = UiComponents.compactSelector();
     doctor.setEditable(true);
     doctor.setPromptText("Search Doctors");
     doctor.setId("reception-doctor");
@@ -904,15 +904,30 @@ public final class ReceptionistView {
         new StringConverter<>() {
           @Override
           public String toString(Account account) {
-            return account == null ? "" : account.displayName() + " (" + account.username() + ")";
+            return doctorLabel(account);
           }
 
           @Override
           public Account fromString(String value) {
-            return null;
+            if (value == null || value.isBlank()) {
+              return null;
+            }
+            String normalized = value.trim();
+            return doctor.getItems().stream()
+                .filter(
+                    candidate ->
+                        doctorLabel(candidate).equals(normalized)
+                            || candidate.username().equalsIgnoreCase(normalized)
+                            || candidate.displayName().equalsIgnoreCase(normalized))
+                .findFirst()
+                .orElse(null);
           }
         });
     return doctor;
+  }
+
+  private static String doctorLabel(Account account) {
+    return account == null ? "" : account.displayName() + " (" + account.username() + ")";
   }
 
   private static void refreshDoctors(
@@ -929,9 +944,9 @@ public final class ReceptionistView {
   }
 
   private static TimeFields timeSelector(String id) {
-    ComboBox<String> hours = new ComboBox<>();
+    ComboBox<String> hours = UiComponents.compactSelector();
     hours.setId(id + "-hour");
-    ComboBox<String> minutes = new ComboBox<>();
+    ComboBox<String> minutes = UiComponents.compactSelector();
     minutes.setId(id + "-minute");
     hours.setPromptText("HH");
     minutes.setPromptText("mm");
@@ -1221,7 +1236,7 @@ public final class ReceptionistView {
       TimeFields end = timeSelector("reception-reschedule-dialog-end");
       selectTime(start, appointment.startsAt().toLocalTime());
       selectTime(end, appointment.endsAt().toLocalTime());
-      ComboBox<Patient> patients = new ComboBox<>();
+      ComboBox<Patient> patients = UiComponents.compactSelector();
       patients.setId("reception-reschedule-dialog-patient");
       List<Patient> availablePatients =
           services.patientService().searchAdministrative(session, "").stream()
@@ -1412,8 +1427,8 @@ public final class ReceptionistView {
                   + appointment.status());
       details.setId("reception-checkout-details");
       TextField charge = field("reception-charge", "Amount");
-      ComboBox<PaymentMethod> method =
-          new ComboBox<>(FXCollections.observableArrayList(PaymentMethod.values()));
+      ComboBox<PaymentMethod> method = UiComponents.compactSelector();
+      method.setItems(FXCollections.observableArrayList(PaymentMethod.values()));
       method.setId("reception-method");
       method.getSelectionModel().select(PaymentMethod.CASH);
       Button checkout = button("Complete checkout", "reception-checkout");

@@ -6,6 +6,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -112,6 +113,21 @@ final class UiComponents {
   /** Creates a destructive or state-changing action button. */
   static Button dangerButton(String text, String id) {
     return actionButton(text, id, "danger-action");
+  }
+
+  /** Creates a ComboBox using the compact selector style shared by application forms. */
+  static <T> ComboBox<T> compactSelector() {
+    ComboBox<T> selector = new ComboBox<>();
+    applyCompactSelector(selector);
+    return selector;
+  }
+
+  /** Applies the shared compact selector style to an existing ComboBox. */
+  static void applyCompactSelector(ComboBox<?> selector) {
+    Objects.requireNonNull(selector, "selector");
+    if (!selector.getStyleClass().contains("compact-selector")) {
+      selector.getStyleClass().add("compact-selector");
+    }
   }
 
   /** Creates a feedback banner that can be associated with nearby actions. */

@@ -42,7 +42,6 @@ import nusynapxe.service.ValidationException;
 
 /** Builds the shared administrative patient directory for Doctors and Receptionists. */
 final class PatientDirectoryView {
-  private static final String COMPACT_SELECTOR_STYLE = "compact-selector";
   private static final ZoneId SINGAPORE_ZONE = ZoneId.of("Asia/Singapore");
 
   private final ClinicServices services;
@@ -232,6 +231,7 @@ final class PatientDirectoryView {
 
   /** Makes a patient selector resolve its visible administrative label back to a patient. */
   static void makePatientSearchable(ComboBox<Patient> selector) {
+    UiComponents.applyCompactSelector(selector);
     selector.setEditable(true);
     selector.setPromptText("Search patients");
     selector.setConverter(
@@ -249,6 +249,9 @@ final class PatientDirectoryView {
 
           @Override
           public Patient fromString(String value) {
+            if (value == null || value.isBlank()) {
+              return null;
+            }
             return selector.getItems().stream()
                 .filter(patient -> toString(patient).equalsIgnoreCase(value))
                 .findFirst()
@@ -526,14 +529,12 @@ final class PatientDirectoryView {
     if (patientId != null) {
       patientId.setEditable(false);
     }
-    ComboBox<IdentityType> identityType =
-        new ComboBox<>(FXCollections.observableArrayList(IdentityType.values()));
+    ComboBox<IdentityType> identityType = UiComponents.compactSelector();
+    identityType.setItems(FXCollections.observableArrayList(IdentityType.values()));
     identityType.setId(prefix + "-identity-type");
-    identityType.getStyleClass().add(COMPACT_SELECTOR_STYLE);
-    ComboBox<CountryOption> issuingCountry =
-        new ComboBox<>(FXCollections.observableArrayList(CountryOption.allCountries()));
+    ComboBox<CountryOption> issuingCountry = UiComponents.compactSelector();
+    issuingCountry.setItems(FXCollections.observableArrayList(CountryOption.allCountries()));
     issuingCountry.setId(prefix + "-issuing-country");
-    issuingCountry.getStyleClass().add(COMPACT_SELECTOR_STYLE);
     TextField phoneCountryCode = field(prefix + "-phone-country-code", "65");
     issuingCountry
         .valueProperty()
@@ -556,24 +557,22 @@ final class PatientDirectoryView {
               issuingCountry.setDisable(singaporeIdentity);
             });
     identityType.getSelectionModel().select(IdentityType.NRIC);
-    ComboBox<Sex> sex = new ComboBox<>(FXCollections.observableArrayList(Sex.MALE, Sex.FEMALE));
+    ComboBox<Sex> sex = UiComponents.compactSelector();
+    sex.setItems(FXCollections.observableArrayList(Sex.MALE, Sex.FEMALE));
     sex.setId(prefix + "-sex");
-    sex.getStyleClass().add(COMPACT_SELECTOR_STYLE);
-    ComboBox<Integer> birthDay = new ComboBox<>();
+    ComboBox<Integer> birthDay = UiComponents.compactSelector();
     birthDay.setId(prefix + "-date-of-birth-day");
     birthDay.setPromptText("Day");
-    birthDay.getStyleClass().add(COMPACT_SELECTOR_STYLE);
     for (int day = 1; day <= 31; day++) {
       birthDay.getItems().add(day);
     }
-    ComboBox<Month> birthMonth = new ComboBox<>(FXCollections.observableArrayList(Month.values()));
+    ComboBox<Month> birthMonth = UiComponents.compactSelector();
+    birthMonth.setItems(FXCollections.observableArrayList(Month.values()));
     birthMonth.setId(prefix + "-date-of-birth-month");
     birthMonth.setPromptText("Month");
-    birthMonth.getStyleClass().add(COMPACT_SELECTOR_STYLE);
-    ComboBox<Integer> birthYear = new ComboBox<>();
+    ComboBox<Integer> birthYear = UiComponents.compactSelector();
     birthYear.setId(prefix + "-date-of-birth-year");
     birthYear.setPromptText("Year");
-    birthYear.getStyleClass().add(COMPACT_SELECTOR_STYLE);
     int currentYear = LocalDate.now(SINGAPORE_ZONE).getYear();
     for (int year = currentYear; year >= 1900; year--) {
       birthYear.getItems().add(year);
