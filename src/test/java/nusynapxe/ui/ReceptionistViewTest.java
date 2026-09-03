@@ -158,6 +158,44 @@ final class ReceptionistViewTest extends ApplicationTest {
   }
 
   @Test
+  void doctorSelectionSurvivesFocusChangesAndReceptionistDropdownsAreCompact() {
+    loginAsReceptionist();
+    selectWorkspaceTab(1);
+
+    String[] selectors = {
+      "#reception-doctor",
+      "#reception-start-hour",
+      "#reception-start-minute",
+      "#reception-end-hour",
+      "#reception-end-minute",
+      "#reception-schedule-doctor",
+      "#reception-schedule-status",
+      "#reception-check-in-queue-doctor",
+      "#reception-check-in-queue-status",
+      "#reception-appointment-patient",
+      "#reception-checkout-doctor",
+      "#reception-receipt-doctor",
+      "#reception-revenue-report-doctor",
+      "#reception-revenue-report-method"
+    };
+    for (String selector : selectors) {
+      assertTrue(
+          combo(selector).getStyleClass().contains("compact-selector"),
+          "Expected compact selector style for " + selector);
+    }
+
+    ComboBox<Account> doctorSelector = combo("#reception-doctor");
+    interact(
+        () -> {
+          doctorSelector.getSelectionModel().select(doctor);
+          doctorSelector.requestFocus();
+        });
+    interact(() -> combo("#reception-start-hour").requestFocus());
+    WaitForAsyncUtils.waitForFxEvents();
+    assertEquals(doctor, doctorSelector.getValue());
+  }
+
+  @Test
   void revenueReportSupportsFiltersAndEmptyState() {
     loginAsReceptionist();
     selectWorkspaceTab(4);

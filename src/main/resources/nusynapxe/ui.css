@@ -266,6 +266,24 @@
     -fx-alignment: center-left;
 }
 
+.compact-selector:editable > .text-field {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-background-radius: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 0 8px;
+    -fx-text-fill: #17324d;
+}
+
+.compact-selector:editable > .arrow-button {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-background-radius: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+
 .combo-box-popup .list-view .list-cell,
 .combo-box-popup .list-view .list-cell:filled {
     -fx-background-color: #ffffff;

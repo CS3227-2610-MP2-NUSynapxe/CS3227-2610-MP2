@@ -42,7 +42,7 @@ public final class DoctorCalendarSettingsView {
   private final Runnable onBack;
   private final Runnable onSaved;
   private final Label feedback;
-  private final ComboBox<DayOfWeek> firstDay = new ComboBox<>();
+  private final ComboBox<DayOfWeek> firstDay = UiComponents.compactSelector();
   private final Map<DayOfWeek, DayEditor> dayEditors = new EnumMap<>(DayOfWeek.class);
   private final BorderPane root;
 
@@ -97,8 +97,6 @@ public final class DoctorCalendarSettingsView {
                 : DayOfWeek.valueOf(value.toUpperCase(Locale.ROOT));
           }
         });
-    firstDay.getStyleClass().add("compact-selector");
-
     VBox preferences =
         UiComponents.card(
             "doctor-calendar-settings-preferences",
@@ -279,8 +277,8 @@ public final class DoctorCalendarSettingsView {
   }
 
   private final class IntervalEditor {
-    private final ComboBox<String> start = new ComboBox<>();
-    private final ComboBox<String> end = new ComboBox<>();
+    private final ComboBox<String> start = UiComponents.compactSelector();
+    private final ComboBox<String> end = UiComponents.compactSelector();
     private final Button removeButton = UiComponents.dangerButton("Remove", null);
     private final HBox row = new HBox(8);
 
@@ -296,8 +294,6 @@ public final class DoctorCalendarSettingsView {
           "Working interval end for " + day.getDisplayName(TextStyle.FULL, Locale.ENGLISH));
       removeButton.setAccessibleText(
           "Remove working interval for " + day.getDisplayName(TextStyle.FULL, Locale.ENGLISH));
-      start.getStyleClass().add("compact-selector");
-      end.getStyleClass().add("compact-selector");
       start.setValue(value == null ? "12:00" : formatMinute(value.startMinute()));
       end.setValue(value == null ? "13:00" : formatMinute(value.endMinute()));
       removeButton.setOnAction(event -> remove());
