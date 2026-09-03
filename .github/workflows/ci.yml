@@ -123,7 +123,6 @@ jobs:
           report_paths: build/test-results/test/TEST-*.xml
           comment: true
           detailed_summary: true
-          include_passed: true
           include_time_in_summary: true
           group_suite: true
           updateComment: true
