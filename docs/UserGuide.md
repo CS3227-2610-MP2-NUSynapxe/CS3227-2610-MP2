@@ -315,22 +315,24 @@ property to an isolated path.
 
 ### Showcase database
 
-For a local demo, the repository provides an isolated database workflow. From
-the repository root, run:
+For local development or a showcase, the repository provides a database
+workflow targeting the same per-user database used by `.\gradlew.bat run`.
+From the repository root, run:
 
 ```powershell
 .\scripts\seed-demo-data.ps1 -Reset
 ```
 
-This creates `build\demo\nusynapxe-demo.db` with demo staff, patients,
-calendar settings, a lunch break, and future appointments. The script prints
-the login credentials when it finishes. Start the application against it with:
+This replaces the default `%USERPROFILE%\.nusynapxe\nusynapxe.db` with demo
+staff, patients, calendar settings, a lunch break, and future appointments. The
+script prints the login credentials when it finishes. Start the application
+normally with:
 
 ```powershell
-.\gradlew.bat run "-PdemoDatabasePath=$(Join-Path (Get-Location) 'build\demo\nusynapxe-demo.db')"
+.\gradlew.bat run
 ```
 
 Use `.\scripts\reset-demo-database.ps1 -Force` when only an empty schema is
-needed. These scripts default to the isolated showcase file and do not modify
-the normal per-user database. The demo credentials and data are not suitable
-for production use.
+needed. Both scripts accept `-DatabasePath` when an alternate database is
+required. Close NUSynapxe before resetting or replacing the database. The demo
+credentials and data are not suitable for production use.

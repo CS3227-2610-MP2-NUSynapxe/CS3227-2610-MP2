@@ -31,7 +31,7 @@ import nusynapxe.persistence.PatientRepository;
 import nusynapxe.persistence.SqliteDatabase;
 import nusynapxe.service.AccountService;
 
-/** Creates and removes the isolated SQLite database used by the showcase scripts. */
+/** Creates and removes the local-development SQLite database used by the scripts. */
 public final class DemoDataSeeder {
   /** Singapore timezone used to place showcase appointments around the current week. */
   private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Singapore");
@@ -102,7 +102,7 @@ public final class DemoDataSeeder {
    * Seeds a fresh database with staff, patients, calendar preferences, and appointments.
    *
    * <p>Seeding refuses a database that already contains accounts, patients, or appointments. Use
-   * the reset script first when replacing an existing showcase database.
+   * the reset script first when replacing an existing local-development database.
    *
    * @param requestedPath database file to seed
    * @return counts of the created records

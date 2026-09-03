@@ -36,20 +36,21 @@ not useful for the TestFX harness.
 ### Demo database tooling
 
 `scripts/reset-demo-database.ps1` and `scripts/seed-demo-data.ps1` are the
-supported Windows workflow for creating a local showcase database. Both use
+supported Windows workflow for resetting and creating the local-development
+database used by `.\gradlew.bat run`. Both use
 the `demoData` Gradle `JavaExec` task, which delegates to
 `nusynapxe.tools.DemoDataSeeder` and the normal repositories and password
-hashing service. The default target is the ignored path
-`build/demo/nusynapxe-demo.db`; a different target can be supplied with
-`-DatabasePath`.
+hashing service. The default target is `%USERPROFILE%\.nusynapxe\nusynapxe.db`,
+which is also the application's default when no `nusynapxe.database` property
+is supplied. A different target can be supplied with `-DatabasePath`.
 
-Reset is destructive and requires `-Force`. Seeding only accepts an empty
-database, while `seed-demo-data.ps1 -Reset` explicitly replaces the target
-before seeding. The reset operation removes only the SQLite file and its
-adjacent `-wal`, `-shm`, and `-journal` files, then reinitializes the current
-schema. The generated data is time-relative to the Singapore clinic date so
-the current-week Calendar and future Schedule views remain useful during a
-showcase.
+Reset is destructive; the standalone reset script requires `-Force` for an
+existing database. Seeding only accepts an empty database, while
+`seed-demo-data.ps1 -Reset` explicitly replaces the target before seeding. The
+reset operation removes only the SQLite file and its adjacent `-wal`, `-shm`,
+and `-journal` files, then reinitializes the current schema. The generated data
+is time-relative to the Singapore clinic date so the current-week Calendar and
+future Schedule views remain useful during a local demonstration.
 
 ## Package layout and boundaries
 

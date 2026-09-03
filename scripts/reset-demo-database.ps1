@@ -9,7 +9,10 @@ Set-StrictMode -Version Latest
 
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if ([string]::IsNullOrWhiteSpace($DatabasePath)) {
-    $DatabasePath = Join-Path $repositoryRoot 'build\demo\nusynapxe-demo.db'
+    if ([string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+        throw 'USERPROFILE is not set; supply -DatabasePath explicitly'
+    }
+    $DatabasePath = Join-Path $env:USERPROFILE '.nusynapxe\nusynapxe.db'
 }
 
 $resolvedDatabasePath = [System.IO.Path]::GetFullPath($DatabasePath)

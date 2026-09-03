@@ -68,9 +68,9 @@ passwords. Do not commit the database file or copy it into an issue or log.
 
 ## Demo database
 
-The repository includes PowerShell scripts for preparing an isolated showcase
-database. They default to `build\demo\nusynapxe-demo.db`, so they do not touch
-the normal per-user database:
+The repository includes PowerShell scripts for preparing the local-development
+database used by `.\gradlew.bat run`. They default to the normal per-user
+database at `%USERPROFILE%\.nusynapxe\nusynapxe.db`:
 
 ```powershell
 .\scripts\reset-demo-database.ps1 -Force
@@ -78,16 +78,16 @@ the normal per-user database:
 ```
 
 To recreate the demo database in one step, use
-`.\scripts\seed-demo-data.ps1 -Reset`. Resetting an existing database requires
-`-Force`; seeding an existing database without `-Reset` fails safely. The seed
-contains two Doctors, a System Admin, a Receptionist, six patients, calendar
-settings with a lunch break, and enough future appointments to exercise the
-Schedule view's lazy loading.
+`.\scripts\seed-demo-data.ps1 -Reset`. The standalone reset script requires
+`-Force` for an existing database; seeding an existing database without
+`-Reset` fails safely. The seed contains two Doctors, a System Admin, a
+Receptionist, six patients, calendar settings with a lunch break, and enough
+future appointments to exercise the Schedule view's lazy loading.
 
-Launch the application against the seeded database with:
+After seeding, launch the application normally:
 
 ```powershell
-.\gradlew.bat run "-PdemoDatabasePath=$(Join-Path (Get-Location) 'build\demo\nusynapxe-demo.db')"
+.\gradlew.bat run
 ```
 
 The script prints the demo credentials after a successful seed. These accounts
