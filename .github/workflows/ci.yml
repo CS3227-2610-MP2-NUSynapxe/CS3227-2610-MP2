@@ -106,25 +106,24 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Calculate JaCoCo coverage summary
-        id: coverage
+      - name: Publish JaCoCo coverage report
         if: ${{ always() && hashFiles('build/reports/jacoco/test/jacocoTestReport.xml') != '' }}
         uses: madrapps/jacoco-report@v1.8.0
         with:
           paths: build/reports/jacoco/test/jacocoTestReport.xml
           token: ${{ github.token }}
-          comment-type: summary
+          title: '### Coverage Report'
+          update-comment: true
+          comment-type: both
 
-      - name: Publish combined JUnit and coverage report
-        id: tests
+      - name: Publish JUnit test report
         if: ${{ always() && hashFiles('build/test-results/test/TEST-*.xml') != '' }}
         uses: mikepenz/action-junit-report@v6
         with:
           report_paths: build/test-results/test/TEST-*.xml
           comment: true
           detailed_summary: true
+          include_passed: true
+          include_time_in_summary: true
+          group_suite: true
           updateComment: true
-          summary: |
-            ### Coverage
-            - Overall: ${{ steps.coverage.outputs['coverage-overall'] || 'unavailable' }}%
-            - Changed code: ${{ steps.coverage.outputs['coverage-changed-files'] || 'unavailable' }}%
