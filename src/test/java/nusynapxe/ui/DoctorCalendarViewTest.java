@@ -12,14 +12,20 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
 import javafx.scene.control.TextInputControl;
 import javafx.scene.layout.Region;
 import javafx.stage.Stage;
 import nusynapxe.domain.Account;
+import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.Role;
@@ -38,6 +44,8 @@ final class DoctorCalendarViewTest extends ApplicationTest {
   @TempDir private Path temporaryDirectory;
   private SqliteDatabase database;
   private ClinicServices services;
+  private long doctorId;
+  private List<Appointment> appointmentsBeforeSchedule;
 
   @Override
   public void start(Stage stage) throws SQLException {
@@ -62,6 +70,13 @@ final class DoctorCalendarViewTest extends ApplicationTest {
       LocalDateTime start = today.atTime(8 + index, 0);
       appointments.create(patient.id(), doctor.id(), start, start.plusMinutes(30), statuses[index]);
     }
+    for (int index = 0; index < 30; index++) {
+      LocalDateTime start = today.plusDays(index + 8).atTime(9, 0);
+      appointments.create(
+          patient.id(), doctor.id(), start, start.plusMinutes(30), AppointmentStatus.PENDING);
+    }
+    doctorId = doctor.id();
+    appointmentsBeforeSchedule = new AppointmentRepository(database).findByDoctor(doctorId);
     new ApplicationRouter(stage, database).showInitial();
     stage.show();
   }
@@ -126,8 +141,105 @@ final class DoctorCalendarViewTest extends ApplicationTest {
     waitForNode("#doctor-calendar-page");
   }
 
+  @Test
+  void switchesToChronologicalLazyScheduleAndReanchors() throws SQLException {
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    waitForNode("#doctor-calendar-page");
+
+    ComboBox<String> mode = calendarMode();
+    assertEquals("Week", mode.getValue());
+    assertEquals("Choose Calendar view", mode.getAccessibleText());
+    interact(() -> mode.setValue("Schedule"));
+    WaitForAsyncUtils.waitForFxEvents();
+
+    waitForNode("#doctor-calendar-schedule-list");
+    assertEquals(
+        today().format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy")),
+        lookup("#doctor-calendar-week-picker").queryAs(Button.class).getText());
+    ListView<?> schedule = scheduleList();
+    assertEquals(45, schedule.getItems().size());
+    assertTrue(lookup("#doctor-calendar-schedule-date-" + today()).tryQuery().isPresent());
+    assertTrue(lookup("#doctor-calendar-schedule-appointment-1").tryQuery().isPresent());
+    assertTrue(lookup(".calendar-schedule-status").tryQuery().isPresent());
+    assertTrue(
+        lookup("#doctor-calendar-schedule-date-" + today())
+            .query()
+            .getStyleClass()
+            .contains("calendar-schedule-today"));
+    assertEquals("Chronological future appointments", schedule.getAccessibleText());
+    for (int index = 1; index <= AppointmentStatus.values().length; index++) {
+      int rowIndex = index;
+      interact(() -> schedule.scrollTo(rowIndex));
+      WaitForAsyncUtils.waitForFxEvents();
+      waitForNode("#doctor-calendar-schedule-status-" + index);
+      assertEquals(
+          UiComponents.humanizeStatus(AppointmentStatus.values()[index - 1].name()),
+          lookup("#doctor-calendar-schedule-status-" + index).queryAs(Label.class).getText());
+    }
+    assertTrue(
+        lookup("#doctor-calendar-schedule-appointment-6")
+            .query()
+            .getStyleClass()
+            .contains("calendar-schedule-cancelled"));
+
+    interact(
+        () -> {
+          schedule.applyCss();
+          schedule.layout();
+          schedule.scrollTo(schedule.getItems().size() - 1);
+        });
+    waitForScheduleSize(46);
+    verifyThat("#doctor-calendar-schedule-end", isVisible());
+
+    int loadedScheduleEntryCount = scheduleList().getItems().size();
+    fire("#doctor-calendar-next");
+    assertEquals(50, scheduleList().getItems().size());
+    assertNotEquals(loadedScheduleEntryCount, scheduleList().getItems().size());
+    fire("#doctor-calendar-previous");
+    assertEquals(45, scheduleList().getItems().size());
+    fire("#doctor-calendar-today");
+    assertEquals(45, scheduleList().getItems().size());
+
+    fire("#doctor-calendar-week-picker");
+    waitForNode("#doctor-calendar-week-picker-popup");
+    verifyThat("#doctor-calendar-picker-month-grid", isVisible());
+    LocalDate targetDate = today().plusDays(8);
+    String targetMonth =
+        targetDate.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH));
+    for (int index = 0;
+        index < 12
+            && !targetMonth.equals(
+                lookup("#doctor-calendar-picker-month-label").queryAs(Label.class).getText());
+        index++) {
+      fire("#doctor-calendar-picker-next-month");
+    }
+    fire("#doctor-calendar-picker-date-" + targetDate);
+    assertEquals(50, scheduleList().getItems().size());
+    assertTrue(lookup("#doctor-calendar-schedule-date-" + targetDate).tryQuery().isPresent());
+    fire("#doctor-calendar-today");
+
+    interact(() -> mode.setValue("Week"));
+    WaitForAsyncUtils.waitForFxEvents();
+    assertEquals(7, lookup(".calendar-day-header").queryAll().size());
+    assertTrue(lookup("#doctor-calendar-schedule-list").tryQuery().isEmpty());
+    assertEquals(
+        appointmentsBeforeSchedule, new AppointmentRepository(database).findByDoctor(doctorId));
+  }
+
   private LocalDate today() {
     return LocalDate.now(ZoneId.of("Asia/Singapore"));
+  }
+
+  @SuppressWarnings("unchecked")
+  private ListView<?> scheduleList() {
+    return lookup("#doctor-calendar-schedule-list").queryAs(ListView.class);
+  }
+
+  @SuppressWarnings("unchecked")
+  private ComboBox<String> calendarMode() {
+    return (ComboBox<String>)
+        (ComboBox<?>) lookup("#doctor-calendar-view-mode").queryAs(ComboBox.class);
   }
 
   @SuppressWarnings("unchecked")
@@ -157,6 +269,19 @@ final class DoctorCalendarViewTest extends ApplicationTest {
           60, TimeUnit.SECONDS, () -> lookup(selector).tryQuery().isPresent());
     } catch (TimeoutException exception) {
       throw new AssertionError("Timed out waiting for " + selector, exception);
+    }
+  }
+
+  private void waitForScheduleSize(int minimumSize) {
+    try {
+      WaitForAsyncUtils.waitFor(
+          60,
+          TimeUnit.SECONDS,
+          () ->
+              lookup("#doctor-calendar-schedule-list").tryQuery().isPresent()
+                  && scheduleList().getItems().size() >= minimumSize);
+    } catch (TimeoutException exception) {
+      throw new AssertionError("Timed out waiting for schedule page append", exception);
     }
   }
 }

@@ -8,6 +8,8 @@ import java.util.Objects;
 import java.util.Optional;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.CalendarAppointment;
+import nusynapxe.domain.CalendarScheduleCursor;
+import nusynapxe.domain.CalendarSchedulePage;
 import nusynapxe.domain.DoctorCalendarSettings;
 import nusynapxe.domain.DoctorCalendarWeek;
 import nusynapxe.domain.Role;
@@ -64,6 +66,26 @@ public final class CalendarService {
     java.util.List<CalendarAppointment> calendarAppointments =
         appointments.findCalendarByDoctor(doctor.id(), rangeStart, rangeEnd);
     return new DoctorCalendarWeek(doctor.id(), weekStart, calendarSettings, calendarAppointments);
+  }
+
+  /**
+   * Returns one bounded page of the signed-in Doctor's appointments from an inclusive clinic date.
+   *
+   * <p>The schedule deliberately returns the existing administrative calendar projection only;
+   * clinical details are not part of this read.
+   */
+  public CalendarSchedulePage getSchedulePage(
+      Session actor, LocalDate anchor, CalendarScheduleCursor cursor, int pageSize)
+      throws SQLException {
+    Account doctor = requireDoctor(actor);
+    Objects.requireNonNull(anchor, "anchor");
+    try {
+      CalendarSchedulePage.validatePageSize(pageSize);
+    } catch (IllegalArgumentException exception) {
+      throw new ValidationException(exception.getMessage(), exception);
+    }
+    return appointments.findCalendarPageByDoctor(
+        doctor.id(), anchor.atStartOfDay(), cursor, pageSize);
   }
 
   private Account requireDoctor(Session actor) throws SQLException {

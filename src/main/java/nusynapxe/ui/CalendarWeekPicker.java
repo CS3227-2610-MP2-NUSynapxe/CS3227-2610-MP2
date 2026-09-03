@@ -1,5 +1,6 @@
 package nusynapxe.ui;
 
+import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.Month;
@@ -29,13 +30,19 @@ import nusynapxe.service.CalendarService;
 final class CalendarWeekPicker {
   private final Popup popup = new Popup();
   private final Consumer<LocalDate> onSelected;
+  private final Clock clock;
   private YearMonth displayedMonth;
   private int displayedYear;
   private CalendarWeek selectedWeek;
   private DayOfWeek firstDayOfWeek;
 
   CalendarWeekPicker(Consumer<LocalDate> onSelected) {
+    this(onSelected, Clock.system(CalendarService.CLINIC_ZONE));
+  }
+
+  CalendarWeekPicker(Consumer<LocalDate> onSelected, Clock clock) {
     this.onSelected = Objects.requireNonNull(onSelected, "onSelected");
+    this.clock = Objects.requireNonNull(clock, "clock").withZone(CalendarService.CLINIC_ZONE);
     popup.setAutoHide(true);
     popup.setAutoFix(true);
     popup.setHideOnEscape(true);
@@ -204,8 +211,7 @@ final class CalendarWeekPicker {
     today.setId("doctor-calendar-picker-today");
     today.setAccessibleText("Select the current week");
     today.getStyleClass().add("secondary-action");
-    today.setOnAction(
-        event -> select(LocalDate.now(java.time.Clock.system(CalendarService.CLINIC_ZONE))));
+    today.setOnAction(event -> select(LocalDate.now(clock)));
     return today;
   }
 

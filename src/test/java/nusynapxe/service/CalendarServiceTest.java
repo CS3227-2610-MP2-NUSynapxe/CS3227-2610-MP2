@@ -13,6 +13,7 @@ import java.util.EnumMap;
 import java.util.List;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.AppointmentStatus;
+import nusynapxe.domain.CalendarSchedulePage;
 import nusynapxe.domain.DoctorCalendarSettings;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
@@ -99,6 +100,77 @@ final class CalendarServiceTest {
               .appointments()
               .get(0)
               .appointmentId());
+    }
+  }
+
+  @Test
+  void returnsAuthorizedFutureSchedulePagesThroughClinicServices() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      Accounts fixture = accounts(database);
+      AppointmentRepository appointments = new AppointmentRepository(database);
+      LocalDateTime firstStart = LocalDateTime.of(2026, 9, 3, 9, 0);
+      appointments.create(
+          fixture.patientId(),
+          fixture.doctor().id(),
+          firstStart,
+          firstStart.plusMinutes(30),
+          AppointmentStatus.PENDING);
+      appointments.create(
+          fixture.patientId(),
+          fixture.doctor().id(),
+          firstStart.plusHours(1),
+          firstStart.plusHours(1).plusMinutes(30),
+          AppointmentStatus.CANCELLED);
+      appointments.create(
+          fixture.patientId(),
+          fixture.doctor().id(),
+          firstStart.plusHours(2),
+          firstStart.plusHours(2).plusMinutes(30),
+          AppointmentStatus.ACCEPTED);
+      appointments.create(
+          fixture.patientId(),
+          fixture.otherDoctor().id(),
+          firstStart,
+          firstStart.plusMinutes(30),
+          AppointmentStatus.ACCEPTED);
+
+      CalendarService service = ClinicServices.forDatabase(database).calendarService();
+      CalendarSchedulePage firstPage =
+          service.getSchedulePage(fixture.doctorSession(), LocalDate.of(2026, 9, 3), null, 2);
+      CalendarSchedulePage secondPage =
+          service.getSchedulePage(
+              fixture.doctorSession(), LocalDate.of(2026, 9, 3), firstPage.nextCursor(), 2);
+
+      assertEquals(2, firstPage.appointments().size());
+      assertTrue(firstPage.hasMore());
+      assertEquals(AppointmentStatus.CANCELLED, firstPage.appointments().get(1).status());
+      assertEquals(1, secondPage.appointments().size());
+      assertTrue(!secondPage.hasMore());
+      assertTrue(
+          firstPage.appointments().stream()
+              .allMatch(appointment -> appointment.patientDisplayName().contains("Grace Hopper")));
+      assertThrows(
+          AuthorizationException.class,
+          () ->
+              service.getSchedulePage(
+                  fixture.receptionistSession(), LocalDate.of(2026, 9, 3), null, 2));
+      assertThrows(
+          ValidationException.class,
+          () ->
+              service.getSchedulePage(fixture.doctorSession(), LocalDate.of(2026, 9, 3), null, 0));
+    }
+  }
+
+  @Test
+  void propagatesScheduleReadFailuresFromAnUnopenedDatabase() throws SQLException {
+    try (SqliteDatabase database =
+        new SqliteDatabase(temporaryDirectory.resolve("unopened-calendar-service.db"))) {
+      CalendarService service = ClinicServices.forDatabase(database).calendarService();
+      assertThrows(
+          IllegalStateException.class,
+          () ->
+              service.getSchedulePage(
+                  new Session(1, "doctor", Role.DOCTOR), LocalDate.of(2026, 9, 3), null, 1));
     }
   }
 

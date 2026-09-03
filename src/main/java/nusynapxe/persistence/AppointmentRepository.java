@@ -12,6 +12,8 @@ import java.util.Optional;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.CalendarAppointment;
+import nusynapxe.domain.CalendarScheduleCursor;
+import nusynapxe.domain.CalendarSchedulePage;
 import nusynapxe.domain.DoctorTimeOff;
 
 /** Persists appointments and doctor availability intervals. */
@@ -156,6 +158,57 @@ public final class AppointmentRepository {
       SqliteQueries.bindTimestamp(statement, 2, rangeEnd);
       SqliteQueries.bindTimestamp(statement, 3, rangeStart);
       return SqliteQueries.readAll(statement, AppointmentRepository::readCalendarAppointment);
+    }
+  }
+
+  /**
+   * Returns one bounded future-schedule page for a Doctor using a stable keyset cursor.
+   *
+   * <p>The anchor is inclusive. The extra look-ahead row is used to determine whether another page
+   * exists without issuing an unbounded read.
+   */
+  public CalendarSchedulePage findCalendarPageByDoctor(
+      long doctorId, LocalDateTime anchor, CalendarScheduleCursor cursor, int pageSize)
+      throws SQLException {
+    Objects.requireNonNull(anchor, "anchor");
+    CalendarSchedulePage.validatePageSize(pageSize);
+
+    StringBuilder sql =
+        new StringBuilder(
+            "SELECT a.id, a.patient_id, a.starts_at, a.ends_at, a.status, "
+                + "p.first_name, p.last_name FROM appointments a "
+                + "JOIN patients p ON p.id = a.patient_id "
+                + "WHERE a.doctor_id = ? AND a.starts_at >= ?");
+    if (cursor != null) {
+      sql.append(" AND (a.starts_at > ? OR (a.starts_at = ? AND a.id > ?))");
+    }
+    sql.append(" ORDER BY a.starts_at, a.id LIMIT ?");
+
+    try (PreparedStatement statement = database.connection().prepareStatement(sql.toString())) {
+      statement.setLong(1, doctorId);
+      SqliteQueries.bindTimestamp(statement, 2, anchor);
+      int parameter = 3;
+      if (cursor != null) {
+        SqliteQueries.bindTimestamp(statement, parameter, cursor.startsAt());
+        parameter++;
+        SqliteQueries.bindTimestamp(statement, parameter, cursor.startsAt());
+        parameter++;
+        statement.setLong(parameter, cursor.appointmentId());
+        parameter++;
+      }
+      statement.setInt(parameter, pageSize + 1);
+
+      List<CalendarAppointment> fetched =
+          SqliteQueries.readAll(statement, AppointmentRepository::readCalendarAppointment);
+      boolean hasMore = fetched.size() > pageSize;
+      List<CalendarAppointment> pageAppointments =
+          hasMore ? List.copyOf(fetched.subList(0, pageSize)) : fetched;
+      CalendarScheduleCursor nextCursor = null;
+      if (hasMore) {
+        CalendarAppointment last = pageAppointments.get(pageAppointments.size() - 1);
+        nextCursor = new CalendarScheduleCursor(last.startsAt(), last.appointmentId());
+      }
+      return new CalendarSchedulePage(pageAppointments, nextCursor, hasMore);
     }
   }
 

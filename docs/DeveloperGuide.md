@@ -33,11 +33,30 @@ JaCoCo. Production quality gates fail the build on violations; PMD and
 SpotBugs test tasks are disabled because their framework-specific analysis is
 not useful for the TestFX harness.
 
+### Demo database tooling
+
+`scripts/reset-demo-database.ps1` and `scripts/seed-demo-data.ps1` are the
+supported Windows workflow for creating a local showcase database. Both use
+the `demoData` Gradle `JavaExec` task, which delegates to
+`nusynapxe.tools.DemoDataSeeder` and the normal repositories and password
+hashing service. The default target is the ignored path
+`build/demo/nusynapxe-demo.db`; a different target can be supplied with
+`-DatabasePath`.
+
+Reset is destructive and requires `-Force`. Seeding only accepts an empty
+database, while `seed-demo-data.ps1 -Reset` explicitly replaces the target
+before seeding. The reset operation removes only the SQLite file and its
+adjacent `-wal`, `-shm`, and `-journal` files, then reinitializes the current
+schema. The generated data is time-relative to the Singapore clinic date so
+the current-week Calendar and future Schedule views remain useful during a
+showcase.
+
 ## Package layout and boundaries
 
 ```text
 src/main/java/nusynapxe/             Application entry point and database paths
 src/main/java/nusynapxe/domain/      Immutable records and workflow enums
+src/main/java/nusynapxe/tools/       Database reset and demo-data utilities
 src/main/java/nusynapxe/persistence/SQLite connection, schema, repositories
 src/main/java/nusynapxe/service/     Authorization and business-use-case rules
 src/main/java/nusynapxe/ui/          Programmatic JavaFX views and scene router
@@ -215,7 +234,17 @@ then returns only Patient ID/name, appointment timing, and `AppointmentStatus`;
 it does not load clinical records or prescriptions. Calendar preferences are
 owned by the authenticated Doctor and are persisted transactionally. The
 fixed clinic zone is `Asia/Singapore`; it is shown as informational text and
-is not configurable or stored as a preference.
+is not configurable or stored as a preference. Schedule mode uses the same
+administrative projection through `CalendarService.getSchedulePage`: it takes
+an inclusive Singapore-local date, a bounded page size, and an optional
+`CalendarScheduleCursor` containing `(startsAt, appointmentId)`. The repository
+orders by `starts_at, id` and reads one look-ahead row to derive `hasMore`, so
+equal timestamps cannot cause skips or duplicates. `CalendarScheduleList` is a
+virtualized, append-only JavaFX list; it groups each page by start date and
+does not add a duplicate date header when a page boundary splits a group.
+Schedule navigation clears the cursor and list, while a failed later page
+keeps prior rows and exposes Retry. Schedule working-hour and break shading is
+intentionally confined to the weekly grid; it never blocks appointment writes.
 
 ## UI and TestFX conventions
 
@@ -269,9 +298,15 @@ has no manual refresh control. Important ids include `login-submit`, `setup-subm
 
 Doctor navigation adds `doctor-nav-calendar`. The Calendar page uses
 `doctor-calendar-today`, `doctor-calendar-previous`, `doctor-calendar-next`,
-`doctor-calendar-week-picker`, and `doctor-calendar-settings`. Its custom
-picker exposes `doctor-calendar-week-picker-popup`, month/week controls, and
-keyboard-accessible labels. The settings page uses
+`doctor-calendar-week-picker`, `doctor-calendar-view-mode`, and
+`doctor-calendar-settings`. Its custom picker exposes
+`doctor-calendar-week-picker-popup`, month/week controls, and
+keyboard-accessible labels. Schedule mode uses
+`doctor-calendar-schedule-list`, `doctor-calendar-schedule-date-<date>`,
+`doctor-calendar-schedule-appointment-<id>`, and explicit
+`doctor-calendar-schedule-loading`, `doctor-calendar-schedule-empty`,
+`doctor-calendar-schedule-end`, `doctor-calendar-schedule-error`, and
+`doctor-calendar-schedule-retry` state markers. The settings page uses
 `doctor-calendar-settings-page`, `doctor-calendar-settings-first-day`,
 `doctor-calendar-settings-working-hours`, and
 `doctor-calendar-settings-save`. Working-interval rows are visual-only and

@@ -674,6 +674,119 @@
     -fx-font-size: 10px;
 }
 
+.calendar-schedule-list {
+    -fx-background-color: transparent;
+    -fx-border-color: #d9e3ed;
+    -fx-border-radius: 8px;
+    -fx-background-radius: 8px;
+}
+
+.calendar-schedule-list .list-cell {
+    -fx-padding: 10px 14px;
+}
+
+.calendar-schedule-date-header {
+    -fx-background-color: #e7eef5;
+    -fx-border-color: transparent transparent #d9e3ed transparent;
+    -fx-padding: 10px 14px;
+}
+
+.calendar-schedule-date-header.calendar-schedule-today {
+    -fx-background-color: #d9efed;
+    -fx-border-color: transparent transparent #9fcfc9 transparent;
+}
+
+.calendar-schedule-day-number {
+    -fx-min-width: 32px;
+    -fx-min-height: 32px;
+    -fx-alignment: center;
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 999px;
+    -fx-text-fill: #17324d;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+}
+
+.calendar-schedule-today .calendar-schedule-day-number {
+    -fx-background-color: #0f8f83;
+    -fx-text-fill: #ffffff;
+}
+
+.calendar-schedule-date-label {
+    -fx-text-fill: #17324d;
+    -fx-font-weight: bold;
+}
+
+.calendar-schedule-appointment-row {
+    -fx-background-color: #ffffff;
+}
+
+.calendar-schedule-appointment-row:hover {
+    -fx-background-color: #f0f8f7;
+}
+
+.calendar-schedule-time {
+    -fx-min-width: 126px;
+    -fx-text-fill: #36516a;
+    -fx-font-size: 12px;
+}
+
+.calendar-schedule-patient {
+    -fx-text-fill: #17324d;
+    -fx-font-weight: bold;
+}
+
+.calendar-schedule-status-marker {
+    -fx-background-radius: 999px;
+}
+
+.calendar-schedule-status-pending .calendar-schedule-status-marker {
+    -fx-background-color: #d4ae4d;
+}
+
+.calendar-schedule-status-accepted .calendar-schedule-status-marker,
+.calendar-schedule-status-checked-in .calendar-schedule-status-marker {
+    -fx-background-color: #0f8f83;
+}
+
+.calendar-schedule-status-completed .calendar-schedule-status-marker,
+.calendar-schedule-status-checked-out .calendar-schedule-status-marker {
+    -fx-background-color: #5e7fb5;
+}
+
+.calendar-schedule-status-cancelled .calendar-schedule-status-marker {
+    -fx-background-color: #b45d5d;
+}
+
+.calendar-schedule-past-cue {
+    -fx-text-fill: #7e8b97;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}
+
+.calendar-schedule-cancelled {
+    -fx-opacity: 0.68;
+}
+
+.calendar-schedule-elapsed .calendar-schedule-time,
+.calendar-schedule-elapsed .calendar-schedule-patient {
+    -fx-text-fill: #7e8b97;
+}
+
+.calendar-schedule-state {
+    -fx-text-fill: #52677b;
+}
+
+.calendar-schedule-loading,
+.calendar-schedule-end {
+    -fx-text-fill: #52677b;
+    -fx-font-size: 12px;
+}
+
+.calendar-schedule-error {
+    -fx-text-fill: #a33e48;
+}
+
 .calendar-week-picker {
     -fx-background-color: #ffffff;
     -fx-background-radius: 10px;

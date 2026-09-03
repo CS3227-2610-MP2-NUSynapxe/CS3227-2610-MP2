@@ -4,6 +4,8 @@ import java.sql.SQLException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.Objects;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
@@ -11,6 +13,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
@@ -23,12 +26,17 @@ import nusynapxe.domain.DoctorCalendarSettings;
 import nusynapxe.domain.DoctorCalendarWeek;
 import nusynapxe.domain.Session;
 import nusynapxe.service.AuthorizationException;
+import nusynapxe.service.CalendarScheduleCalculations;
 import nusynapxe.service.CalendarService;
 import nusynapxe.service.ClinicServices;
 import nusynapxe.service.ValidationException;
 
-/** Builds and manages the read-only weekly Calendar page for a Doctor. */
+/** Builds and manages the read-only Week and Schedule Calendar views for a Doctor. */
 public final class DoctorCalendarView {
+  private static final String WEEK_MODE = "Week";
+  private static final String SCHEDULE_MODE = "Schedule";
+  private static final DateTimeFormatter SCHEDULE_LABEL_FORMATTER =
+      DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH);
   private final ClinicServices services;
   private final Session session;
   private final Runnable onSettings;
@@ -36,10 +44,13 @@ public final class DoctorCalendarView {
   private final Clock clock;
   private final BorderPane root;
   private final Button rangeButton;
+  private final ComboBox<String> viewMode;
   private final Timeline currentTimeTicker;
   private final CalendarWeekPicker weekPicker;
   private CalendarWeek week;
+  private LocalDate scheduleAnchor;
   private CalendarTimeGrid grid;
+  private CalendarScheduleList scheduleList;
   private boolean shown;
 
   /** Creates a Calendar page using the Singapore clinic system clock. */
@@ -54,11 +65,13 @@ public final class DoctorCalendarView {
     this.session = Objects.requireNonNull(session, "session");
     this.onSettings = Objects.requireNonNull(onSettings, "onSettings");
     this.feedback = Objects.requireNonNull(feedback, "feedback");
-    this.clock = Objects.requireNonNull(clock, "clock");
+    this.clock = Objects.requireNonNull(clock, "clock").withZone(CalendarService.CLINIC_ZONE);
     DoctorCalendarSettings settings = loadSettings();
     week = CalendarWeek.today(clock, settings.firstDayOfWeek());
+    scheduleAnchor = CalendarScheduleCalculations.today(clock);
     rangeButton = new Button(week.label());
-    weekPicker = new CalendarWeekPicker(this::selectDate);
+    viewMode = UiComponents.compactSelector();
+    weekPicker = new CalendarWeekPicker(this::selectDate, clock);
     root = buildRoot();
     currentTimeTicker =
         new Timeline(new KeyFrame(Duration.minutes(1), event -> updateCurrentTime()));
@@ -71,15 +84,24 @@ public final class DoctorCalendarView {
     return root;
   }
 
-  /** Refreshes the selected week and its saved display settings. */
+  /** Refreshes the active Calendar mode and its saved display settings. */
+  @SuppressWarnings("PMD.NullAssignment")
   public void refresh() {
     try {
       DoctorCalendarSettings settings = services.calendarService().getSettings(session);
-      week = CalendarWeek.containing(week.start(), settings.firstDayOfWeek());
-      DoctorCalendarWeek data = services.calendarService().getWeek(session, week.start());
-      rangeButton.setText(week.label());
-      grid = new CalendarTimeGrid(week, data, clock);
-      root.setCenter(grid);
+      if (isWeekMode()) {
+        disposeScheduleList();
+        week = CalendarWeek.containing(week.start(), settings.firstDayOfWeek());
+        DoctorCalendarWeek data = services.calendarService().getWeek(session, week.start());
+        grid = new CalendarTimeGrid(week, data, clock);
+        root.setCenter(grid);
+      } else {
+        grid = null;
+        disposeScheduleList();
+        scheduleList = new CalendarScheduleList(services, session, scheduleAnchor, clock);
+        root.setCenter(scheduleList);
+      }
+      updateRangeLabel();
       if (shown) {
         currentTimeTicker.play();
       }
@@ -100,6 +122,7 @@ public final class DoctorCalendarView {
     shown = false;
     currentTimeTicker.pause();
     weekPicker.hide();
+    disposeScheduleList();
   }
 
   /** Stops all page-owned resources when the Doctor workspace is discarded. */
@@ -107,22 +130,29 @@ public final class DoctorCalendarView {
     shown = false;
     currentTimeTicker.stop();
     weekPicker.hide();
+    disposeScheduleList();
   }
 
   private BorderPane buildRoot() {
     Button today = UiComponents.secondaryButton("Today", "doctor-calendar-today");
-    today.setAccessibleText("Go to the current week");
-    today.setOnAction(event -> goTo(CalendarWeek.today(clock, currentSettings().firstDayOfWeek())));
+    today.setAccessibleText("Go to today");
+    today.setOnAction(event -> goToToday());
     Button previous = UiComponents.secondaryButton("‹", "doctor-calendar-previous");
     previous.setAccessibleText("Previous week");
-    previous.setOnAction(event -> goTo(week.previous()));
+    previous.setOnAction(event -> goToPrevious());
     Button next = UiComponents.secondaryButton("›", "doctor-calendar-next");
     next.setAccessibleText("Next week");
-    next.setOnAction(event -> goTo(week.next()));
+    next.setOnAction(event -> goToNext());
     rangeButton.setId("doctor-calendar-week-picker");
     rangeButton.setAccessibleText("Choose a week");
     rangeButton.getStyleClass().add("calendar-range-button");
-    rangeButton.setOnAction(event -> weekPicker.show(rangeButton, week));
+    rangeButton.setOnAction(event -> weekPicker.show(rangeButton, pickerWeek()));
+    viewMode.setId("doctor-calendar-view-mode");
+    viewMode.setAccessibleText("Choose Calendar view");
+    viewMode.getItems().addAll(WEEK_MODE, SCHEDULE_MODE);
+    viewMode.setEditable(false);
+    viewMode.setValue(WEEK_MODE);
+    viewMode.setOnAction(event -> changeMode(viewMode.getValue()));
     Button settings = new Button("⚙");
     settings.setId("doctor-calendar-settings");
     settings.setAccessibleText("Open Calendar settings");
@@ -135,7 +165,7 @@ public final class DoctorCalendarView {
         });
     Region spacer = new Region();
     HBox.setHgrow(spacer, Priority.ALWAYS);
-    HBox toolbar = new HBox(8, today, previous, next, rangeButton, spacer, settings);
+    HBox toolbar = new HBox(8, today, previous, next, rangeButton, viewMode, spacer, settings);
     toolbar.setId("doctor-calendar-toolbar");
     toolbar.getStyleClass().add("calendar-toolbar");
     toolbar.setAlignment(Pos.CENTER_LEFT);
@@ -158,9 +188,82 @@ public final class DoctorCalendarView {
     refresh();
   }
 
+  private void goToToday() {
+    if (isScheduleMode()) {
+      scheduleAnchor = CalendarScheduleCalculations.today(clock);
+      refresh();
+    } else {
+      goTo(CalendarWeek.today(clock, currentSettings().firstDayOfWeek()));
+    }
+  }
+
+  private void goToPrevious() {
+    if (isScheduleMode()) {
+      scheduleAnchor = CalendarScheduleCalculations.moveAnchor(scheduleAnchor, -1);
+      refresh();
+    } else {
+      goTo(week.previous());
+    }
+  }
+
+  private void goToNext() {
+    if (isScheduleMode()) {
+      scheduleAnchor = CalendarScheduleCalculations.moveAnchor(scheduleAnchor, 1);
+      refresh();
+    } else {
+      goTo(week.next());
+    }
+  }
+
   private void selectDate(LocalDate date) {
-    DoctorCalendarSettings settings = currentSettings();
-    goTo(CalendarWeek.containing(date, settings.firstDayOfWeek()));
+    if (isScheduleMode()) {
+      scheduleAnchor = Objects.requireNonNull(date, "date");
+      refresh();
+    } else {
+      DoctorCalendarSettings settings = currentSettings();
+      goTo(CalendarWeek.containing(date, settings.firstDayOfWeek()));
+    }
+  }
+
+  private void changeMode(String selectedMode) {
+    if (selectedMode == null) {
+      return;
+    }
+    weekPicker.hide();
+    refresh();
+  }
+
+  private boolean isWeekMode() {
+    return WEEK_MODE.equals(viewMode.getValue());
+  }
+
+  private boolean isScheduleMode() {
+    return SCHEDULE_MODE.equals(viewMode.getValue());
+  }
+
+  private CalendarWeek pickerWeek() {
+    if (isScheduleMode()) {
+      return CalendarWeek.containing(scheduleAnchor, currentSettings().firstDayOfWeek());
+    }
+    return week;
+  }
+
+  private void updateRangeLabel() {
+    if (isScheduleMode()) {
+      rangeButton.setText(SCHEDULE_LABEL_FORMATTER.format(scheduleAnchor));
+      rangeButton.setAccessibleText("Choose a Schedule start date");
+    } else {
+      rangeButton.setText(week.label());
+      rangeButton.setAccessibleText("Choose a week");
+    }
+  }
+
+  @SuppressWarnings("PMD.NullAssignment")
+  private void disposeScheduleList() {
+    if (scheduleList != null) {
+      scheduleList.dispose();
+      scheduleList = null;
+    }
   }
 
   private DoctorCalendarSettings currentSettings() {
@@ -177,8 +280,12 @@ public final class DoctorCalendarView {
   }
 
   private void updateCurrentTime() {
+    LocalDateTime currentTime = LocalDateTime.now(clock);
     if (grid != null) {
-      grid.updateCurrentTime(LocalDateTime.now(clock));
+      grid.updateCurrentTime(currentTime);
+    }
+    if (scheduleList != null) {
+      scheduleList.updateCurrentTime(currentTime);
     }
   }
 

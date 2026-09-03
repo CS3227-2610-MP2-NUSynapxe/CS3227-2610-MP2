@@ -247,11 +247,18 @@ opening a feature tab reloads information that another workflow may have changed
    with week numbers, a selected-week highlight, month navigation, a year and
    month grid, and a **Today** action. The week is ordered using the saved
    first day of the week.
-4. Calendar blocks show the Patient ID/name, scheduled times, and appointment
-   status. All six statuses remain readable in the block, including cancelled
-   visits, and Calendar does not show diagnoses, notes, follow-up information,
-   or prescriptions. Calendar blocks are read-only; use **Dashboard** for
-   appointment and clinical actions.
+4. Use the compact **Week** / **Schedule** selector to switch views. **Week**
+   keeps the seven-day time grid. **Schedule** starts at today's Singapore
+   clinic date and loads all later appointments in chronological pages as you
+   scroll, without stopping at the selected week. It groups rows by date and
+   shows the time range, Patient ID/name, and a written appointment status.
+   Cancelled rows remain visible but are muted, while a **Past** cue identifies
+   elapsed appointments. Today, previous/next, and the custom picker re-anchor
+   the Schedule stream; its range button shows the selected anchor month and
+   year. Empty schedules, the end of the stream, and retryable loading failures
+   have their own messages. Schedule rows are read-only and never show
+   diagnoses, consultation notes, follow-up notes, prescriptions, locations,
+   or invented all-day events.
 5. Calendar greys dates and periods that have elapsed, disabled days, and time
    outside the configured working intervals. A red current-time line appears
    on the current date when that date is in the displayed week. Appointments
@@ -305,3 +312,25 @@ reports and screenshots should not expose real identity numbers. Close
 NUSynapxe before copying, backing up, or removing the file.
 For a development-only database, set the `nusynapxe.database` Java system
 property to an isolated path.
+
+### Showcase database
+
+For a local demo, the repository provides an isolated database workflow. From
+the repository root, run:
+
+```powershell
+.\scripts\seed-demo-data.ps1 -Reset
+```
+
+This creates `build\demo\nusynapxe-demo.db` with demo staff, patients,
+calendar settings, a lunch break, and future appointments. The script prints
+the login credentials when it finishes. Start the application against it with:
+
+```powershell
+.\gradlew.bat run "-PdemoDatabasePath=$(Join-Path (Get-Location) 'build\demo\nusynapxe-demo.db')"
+```
+
+Use `.\scripts\reset-demo-database.ps1 -Force` when only an empty schema is
+needed. These scripts default to the isolated showcase file and do not modify
+the normal per-user database. The demo credentials and data are not suitable
+for production use.
