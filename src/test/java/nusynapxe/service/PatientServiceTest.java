@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
@@ -35,6 +36,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 final class PatientServiceTest {
+  private static final ZoneId SINGAPORE_ZONE = ZoneId.of("Asia/Singapore");
+
   @TempDir private Path temporaryDirectory;
 
   @Test
@@ -244,7 +247,7 @@ final class PatientServiceTest {
       assertInvalid(fixture, withDate(validPatient(), "01/09/1990"), "Date of birth must use");
       assertInvalid(
           fixture,
-          withDate(validPatient(), LocalDate.now().plusDays(1).toString()),
+          withDate(validPatient(), LocalDate.now(SINGAPORE_ZONE).plusDays(1).toString()),
           "cannot be in the future");
       assertInvalid(fixture, withEmail(validPatient(), "invalid"), "Email must contain @");
       assertInvalid(fixture, withAddress(validPatient(), " "), "Address is required");
