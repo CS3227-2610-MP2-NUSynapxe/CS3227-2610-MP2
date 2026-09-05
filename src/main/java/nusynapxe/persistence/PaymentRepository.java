@@ -22,24 +22,47 @@ public final class PaymentRepository {
   private final SqliteDatabase database;
   private final ReceiptRepository receipts;
 
-  /** Creates a payment repository backed by an opened database. */
+  /**
+   * Creates a payment repository backed by an opened database.
+   *
+   * @param database database used for payment persistence
+   * @throws NullPointerException if {@code database} is {@code null}
+   */
   public PaymentRepository(SqliteDatabase database) {
     this.database = Objects.requireNonNull(database, "database");
     this.receipts = new ReceiptRepository(database);
   }
 
-  /** Returns the backing database for related billing projections. */
+  /**
+   * Returns the backing database for related billing projections.
+   *
+   * @return database shared by this repository and its receipt repository
+   */
   public SqliteDatabase backingDatabase() {
     return database;
   }
 
-  /** Records a payment attempt and returns its assigned identifier. */
+  /**
+   * Records a payment attempt and returns its assigned identifier.
+   *
+   * @param payment payment projection to persist
+   * @return payment with its generated identifier
+   * @throws NullPointerException if {@code payment} is {@code null}
+   * @throws SQLException if the insert fails
+   */
   public Payment create(Payment payment) throws SQLException {
     Objects.requireNonNull(payment, "payment");
     return SqliteTransactions.execute(database, connection -> insert(connection, payment));
   }
 
-  /** Records a successful checkout and marks its completed appointment atomically. */
+  /**
+   * Records a successful checkout and marks its completed appointment atomically.
+   *
+   * @param payment successful payment projection to persist
+   * @return payment with its generated identifier
+   * @throws NullPointerException if {@code payment} is {@code null}
+   * @throws SQLException if payment, appointment, or receipt persistence fails
+   */
   public Payment createCheckout(Payment payment) throws SQLException {
     Objects.requireNonNull(payment, "payment");
     return SqliteTransactions.execute(
@@ -69,7 +92,13 @@ public final class PaymentRepository {
         });
   }
 
-  /** Finds a payment associated with an appointment. */
+  /**
+   * Finds a payment associated with an appointment.
+   *
+   * @param appointmentId appointment identifier
+   * @return matching payment, or empty when the appointment has no payment
+   * @throws SQLException if the query fails
+   */
   public Optional<Payment> findByAppointment(long appointmentId) throws SQLException {
     try (PreparedStatement statement =
         database
@@ -83,7 +112,14 @@ public final class PaymentRepository {
     }
   }
 
-  /** Calculates successful payment count and total for a local clinic date. */
+  /**
+   * Calculates successful payment count and total for a local clinic date.
+   *
+   * @param date Singapore-local clinic date
+   * @return successful transaction count and total
+   * @throws NullPointerException if {@code date} is {@code null}
+   * @throws SQLException if the revenue query fails
+   */
   public RevenueSummary revenueFor(LocalDate date) throws SQLException {
     Objects.requireNonNull(date, "date");
     LocalDateTime start = date.atStartOfDay();

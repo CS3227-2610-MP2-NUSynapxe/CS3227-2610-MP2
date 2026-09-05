@@ -12,7 +12,9 @@ final class SchemaInitializer {
   private static final int SECOND_VERSION = 2;
   private static final int THIRD_VERSION = 3;
   private static final int FOURTH_VERSION = 4;
-  static final int CURRENT_VERSION = 5;
+  private static final int FIFTH_VERSION = 5;
+  private static final int SIXTH_VERSION = 6;
+  static final int CURRENT_VERSION = SIXTH_VERSION;
 
   private static final String SCHEMA_VERSION_KEY = "schema_version";
   private static final String CREATE_METADATA =
@@ -43,6 +45,23 @@ final class SchemaInitializer {
           start_minute INTEGER NOT NULL CHECK (start_minute >= 0 AND start_minute < 1440),
           end_minute INTEGER NOT NULL CHECK (end_minute > start_minute AND end_minute <= 1440),
           PRIMARY KEY (doctor_id, day_of_week, start_minute)
+      )
+      """;
+  private static final String CREATE_APPOINTMENTS =
+      """
+      CREATE TABLE IF NOT EXISTS appointments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          patient_id INTEGER NOT NULL REFERENCES patients(id),
+          doctor_id INTEGER NOT NULL REFERENCES users(id),
+          starts_at TEXT NOT NULL,
+          ends_at TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (
+              status IN ('PENDING', 'ACCEPTED', 'DECLINED', 'CHECKED_IN', 'COMPLETED',
+                         'CHECKED_OUT', 'CANCELLED')
+          ),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (ends_at > starts_at)
       )
       """;
   private static final List<String> SCHEMA_STATEMENTS =
@@ -84,22 +103,7 @@ final class SchemaInitializer {
               updated_at TEXT NOT NULL
           )
           """,
-          """
-          CREATE TABLE IF NOT EXISTS appointments (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              patient_id INTEGER NOT NULL REFERENCES patients(id),
-              doctor_id INTEGER NOT NULL REFERENCES users(id),
-              starts_at TEXT NOT NULL,
-              ends_at TEXT NOT NULL,
-              status TEXT NOT NULL CHECK (
-                  status IN ('PENDING', 'ACCEPTED', 'CHECKED_IN', 'COMPLETED',
-                             'CHECKED_OUT', 'CANCELLED')
-              ),
-              created_at TEXT NOT NULL,
-              updated_at TEXT NOT NULL,
-              CHECK (ends_at > starts_at)
-          )
-          """,
+          CREATE_APPOINTMENTS,
           """
           CREATE TABLE IF NOT EXISTS doctor_time_off (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -222,6 +226,18 @@ final class SchemaInitializer {
               + "UNION ALL SELECT id, 'WEDNESDAY', 480, 1080 FROM users WHERE role = 'DOCTOR' "
               + "UNION ALL SELECT id, 'THURSDAY', 480, 1080 FROM users WHERE role = 'DOCTOR' "
               + "UNION ALL SELECT id, 'FRIDAY', 480, 1080 FROM users WHERE role = 'DOCTOR'");
+  private static final List<String> VERSION_SIX_MIGRATION =
+      List.of(
+          "DROP INDEX IF EXISTS idx_appointments_doctor_time",
+          "DROP INDEX IF EXISTS idx_appointments_patient_time",
+          "PRAGMA legacy_alter_table = ON",
+          "ALTER TABLE appointments RENAME TO appointments_before_declined",
+          CREATE_APPOINTMENTS,
+          "INSERT INTO appointments(id, patient_id, doctor_id, starts_at, ends_at, status, "
+              + "created_at, updated_at) SELECT id, patient_id, doctor_id, starts_at, ends_at, "
+              + "status, created_at, updated_at FROM appointments_before_declined",
+          "DROP TABLE appointments_before_declined",
+          "PRAGMA legacy_alter_table = OFF");
 
   private SchemaInitializer() {
     throw new AssertionError("Utility class");
@@ -230,14 +246,25 @@ final class SchemaInitializer {
   /** Initializes or migrates the schema in one transaction. */
   static void initialize(Connection connection) throws SQLException {
     boolean originalAutoCommit = connection.getAutoCommit();
+    boolean originalForeignKeys = foreignKeysEnabled(connection);
+    boolean foreignKeysDisabled = false;
+    Integer existingVersion;
     try {
-      connection.setAutoCommit(false);
       execute(connection, CREATE_METADATA);
-      Integer existingVersion = readVersion(connection);
+      existingVersion = readVersion(connection);
       if (existingVersion != null
           && (existingVersion < FIRST_VERSION || existingVersion > CURRENT_VERSION)) {
         throw new SQLException("Unsupported schema version: " + existingVersion);
       }
+      boolean rebuildsAppointments =
+          existingVersion != null
+              && existingVersion < SIXTH_VERSION
+              && tableExists(connection, "appointments");
+      if (rebuildsAppointments && originalForeignKeys) {
+        setForeignKeys(connection, false);
+        foreignKeysDisabled = true;
+      }
+      connection.setAutoCommit(false);
       if (existingVersion != null) {
         int version = existingVersion;
         if (version < SECOND_VERSION) {
@@ -252,8 +279,16 @@ final class SchemaInitializer {
           executeAll(connection, VERSION_FOUR_MIGRATION);
           version = FOURTH_VERSION;
         }
-        if (version < CURRENT_VERSION) {
+        if (version < FIFTH_VERSION) {
           executeAll(connection, VERSION_FIVE_MIGRATION);
+          version = FIFTH_VERSION;
+        }
+        if (version < SIXTH_VERSION) {
+          if (tableExists(connection, "appointments")) {
+            executeAll(connection, VERSION_SIX_MIGRATION);
+          } else {
+            execute(connection, CREATE_APPOINTMENTS);
+          }
         }
       }
       executeAll(connection, SCHEMA_STATEMENTS);
@@ -266,7 +301,36 @@ final class SchemaInitializer {
       connection.rollback();
       throw exception;
     } finally {
-      connection.setAutoCommit(originalAutoCommit);
+      if (connection.getAutoCommit() != originalAutoCommit) {
+        connection.setAutoCommit(originalAutoCommit);
+      }
+      if (foreignKeysDisabled) {
+        setForeignKeys(connection, originalForeignKeys);
+      }
+    }
+  }
+
+  private static boolean tableExists(Connection connection, String tableName) throws SQLException {
+    try (var statement =
+        connection.prepareStatement(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")) {
+      statement.setString(1, tableName);
+      try (ResultSet resultSet = statement.executeQuery()) {
+        return resultSet.next();
+      }
+    }
+  }
+
+  private static boolean foreignKeysEnabled(Connection connection) throws SQLException {
+    try (Statement statement = connection.createStatement();
+        ResultSet resultSet = statement.executeQuery("PRAGMA foreign_keys")) {
+      return resultSet.next() && resultSet.getInt(1) != 0;
+    }
+  }
+
+  private static void setForeignKeys(Connection connection, boolean enabled) throws SQLException {
+    try (Statement statement = connection.createStatement()) {
+      statement.execute("PRAGMA foreign_keys = " + (enabled ? "ON" : "OFF"));
     }
   }
 

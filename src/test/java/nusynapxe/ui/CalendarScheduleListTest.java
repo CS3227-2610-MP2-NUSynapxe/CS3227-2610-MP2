@@ -20,6 +20,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ListView;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.stage.Stage;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.CalendarAppointment;
@@ -37,11 +39,13 @@ final class CalendarScheduleListTest extends ApplicationTest {
   private CalendarScheduleList schedule;
   private AtomicBoolean failNextPage;
   private AtomicInteger loadCalls;
+  private AtomicInteger selectedAppointmentId;
 
   @Override
   public void start(Stage stage) {
     failNextPage = new AtomicBoolean();
     loadCalls = new AtomicInteger();
+    selectedAppointmentId = new AtomicInteger();
     List<CalendarAppointment> firstAppointments = appointments(25);
     CalendarAppointment last = firstAppointments.get(firstAppointments.size() - 1);
     CalendarSchedulePage firstPage =
@@ -58,7 +62,8 @@ final class CalendarScheduleListTest extends ApplicationTest {
             loader,
             ANCHOR,
             Clock.fixed(
-                LocalDateTime.of(2026, 9, 3, 12, 0).atZone(CLINIC_ZONE).toInstant(), CLINIC_ZONE));
+                LocalDateTime.of(2026, 9, 3, 12, 0).atZone(CLINIC_ZONE).toInstant(), CLINIC_ZONE),
+            appointment -> selectedAppointmentId.set((int) appointment.appointmentId()));
     Scene scene = new Scene(schedule, 900, 650);
     UiComponents.applyStylesheet(scene);
     stage.setScene(scene);
@@ -114,6 +119,37 @@ final class CalendarScheduleListTest extends ApplicationTest {
   }
 
   @Test
+  void selectingAnAppointmentRowInvokesTheOwnerCallback() {
+    interact(
+        () -> {
+          ListView<?> list = scheduleList();
+          list.getSelectionModel().select(1);
+          list.getOnMouseClicked()
+              .handle(
+                  new MouseEvent(
+                      MouseEvent.MOUSE_CLICKED,
+                      5,
+                      5,
+                      5,
+                      5,
+                      MouseButton.PRIMARY,
+                      1,
+                      false,
+                      false,
+                      false,
+                      false,
+                      true,
+                      false,
+                      false,
+                      false,
+                      false,
+                      false,
+                      null));
+        });
+    assertEquals(1, selectedAppointmentId.get());
+  }
+
+  @Test
   void disposeStopsFurtherLoadsAndClearsRows() {
     int callsBeforeDispose = loadCalls.get();
     interact(schedule::dispose);
@@ -157,12 +193,7 @@ final class CalendarScheduleListTest extends ApplicationTest {
   private static CalendarAppointment appointment(long id, int hour, int minuteOffset) {
     LocalDateTime startsAt = ANCHOR.atTime(hour, 0).plusMinutes(minuteOffset);
     return new CalendarAppointment(
-        id,
-        11,
-        "P000011 - Test Patient",
-        startsAt,
-        startsAt.plusMinutes(20),
-        AppointmentStatus.PENDING);
+        id, 11, "Test Patient", startsAt, startsAt.plusMinutes(20), AppointmentStatus.PENDING);
   }
 
   @SuppressWarnings("unchecked")

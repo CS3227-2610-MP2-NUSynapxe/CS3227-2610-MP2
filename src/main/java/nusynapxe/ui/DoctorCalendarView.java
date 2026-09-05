@@ -21,6 +21,8 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
+import nusynapxe.domain.AppointmentStatus;
+import nusynapxe.domain.CalendarAppointment;
 import nusynapxe.domain.CalendarWeek;
 import nusynapxe.domain.DoctorCalendarSettings;
 import nusynapxe.domain.DoctorCalendarWeek;
@@ -31,7 +33,7 @@ import nusynapxe.service.CalendarService;
 import nusynapxe.service.ClinicServices;
 import nusynapxe.service.ValidationException;
 
-/** Builds and manages the read-only Week and Schedule Calendar views for a Doctor. */
+/** Builds and manages the Week and Schedule Calendar views for a Doctor. */
 public final class DoctorCalendarView {
   private static final String WEEK_MODE = "Week";
   private static final String SCHEDULE_MODE = "Schedule";
@@ -53,7 +55,15 @@ public final class DoctorCalendarView {
   private CalendarScheduleList scheduleList;
   private boolean shown;
 
-  /** Creates a Calendar page using the Singapore clinic system clock. */
+  /**
+   * Creates a Calendar page using the Singapore clinic system clock.
+   *
+   * @param services application services used for Calendar operations
+   * @param session authenticated Doctor session
+   * @param onSettings callback used to open Calendar settings
+   * @param feedback label used for user-facing operation messages
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public DoctorCalendarView(
       ClinicServices services, Session session, Runnable onSettings, Label feedback) {
     this(services, session, onSettings, feedback, Clock.system(CalendarService.CLINIC_ZONE));
@@ -79,7 +89,11 @@ public final class DoctorCalendarView {
     refresh();
   }
 
-  /** Returns the Calendar page node. */
+  /**
+   * Returns the Calendar page node.
+   *
+   * @return root node for the Calendar page
+   */
   public Parent view() {
     return root;
   }
@@ -93,12 +107,20 @@ public final class DoctorCalendarView {
         disposeScheduleList();
         week = CalendarWeek.containing(week.start(), settings.firstDayOfWeek());
         DoctorCalendarWeek data = services.calendarService().getWeek(session, week.start());
-        grid = new CalendarTimeGrid(week, data, clock);
+        grid =
+            new CalendarTimeGrid(
+                week,
+                data,
+                clock,
+                new CalendarTimeGrid.InteractionHandlers(
+                    this::openAppointment, this::changeDecision, this::openCreateAppointment));
         root.setCenter(grid);
       } else {
         grid = null;
         disposeScheduleList();
-        scheduleList = new CalendarScheduleList(services, session, scheduleAnchor, clock);
+        scheduleList =
+            new CalendarScheduleList(
+                services, session, scheduleAnchor, clock, this::openAppointment);
         root.setCenter(scheduleList);
       }
       updateRangeLabel();
@@ -143,6 +165,10 @@ public final class DoctorCalendarView {
     Button next = UiComponents.secondaryButton("›", "doctor-calendar-next");
     next.setAccessibleText("Next week");
     next.setOnAction(event -> goToNext());
+    Button addAppointment =
+        UiComponents.primaryButton("Add appointment", "doctor-calendar-add-appointment");
+    addAppointment.setAccessibleText("Add appointment to my schedule");
+    addAppointment.setOnAction(event -> openCreateAppointment(null));
     rangeButton.setId("doctor-calendar-week-picker");
     rangeButton.setAccessibleText("Choose a week");
     rangeButton.getStyleClass().add("calendar-range-button");
@@ -165,7 +191,8 @@ public final class DoctorCalendarView {
         });
     Region spacer = new Region();
     HBox.setHgrow(spacer, Priority.ALWAYS);
-    HBox toolbar = new HBox(8, today, previous, next, rangeButton, viewMode, spacer, settings);
+    HBox toolbar =
+        new HBox(8, today, previous, next, rangeButton, viewMode, addAppointment, spacer, settings);
     toolbar.setId("doctor-calendar-toolbar");
     toolbar.getStyleClass().add("calendar-toolbar");
     toolbar.setAlignment(Pos.CENTER_LEFT);
@@ -286,6 +313,35 @@ public final class DoctorCalendarView {
     }
     if (scheduleList != null) {
       scheduleList.updateCurrentTime(currentTime);
+    }
+  }
+
+  private void openCreateAppointment(LocalDateTime initialStart) {
+    AppointmentDialog.showCreate(
+        services, session, session.accountId(), initialStart, feedback, this::refresh);
+  }
+
+  private void openAppointment(CalendarAppointment appointment) {
+    if (appointment.status() == AppointmentStatus.PENDING
+        || appointment.status() == AppointmentStatus.ACCEPTED) {
+      AppointmentDialog.showDoctorEdit(
+          services, session, appointment.appointmentId(), feedback, this::refresh);
+    }
+  }
+
+  private void changeDecision(CalendarAppointment appointment, AppointmentStatus decision) {
+    try {
+      if (decision == AppointmentStatus.ACCEPTED) {
+        services.appointmentService().accept(session, appointment.appointmentId());
+        feedback.setText("Appointment accepted");
+      } else if (decision == AppointmentStatus.DECLINED) {
+        services.appointmentService().decline(session, appointment.appointmentId());
+        feedback.setText("Appointment declined");
+      }
+      refresh();
+    } catch (SQLException | AuthorizationException | ValidationException exception) {
+      feedback.setText(userMessage(exception, "Appointment decision is temporarily unavailable"));
+      refresh();
     }
   }
 

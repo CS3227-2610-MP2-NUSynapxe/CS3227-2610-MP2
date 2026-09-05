@@ -27,7 +27,13 @@ public final class BillingService {
   private final Clock clock;
   private final ReceiptRepository receipts;
 
-  /** Creates billing service using the system clock. */
+  /**
+   * Creates billing service using the system clock.
+   *
+   * @param payments repository used to persist payments
+   * @param appointments service used to validate appointment state
+   * @throws NullPointerException if a dependency is {@code null}
+   */
   public BillingService(PaymentRepository payments, AppointmentService appointments) {
     this(payments, appointments, Clock.systemDefaultZone());
   }
@@ -39,7 +45,18 @@ public final class BillingService {
     this.receipts = new ReceiptRepository(payments.backingDatabase());
   }
 
-  /** Records a successful payment and checks out a completed appointment. */
+  /**
+   * Records a successful payment and checks out a completed appointment.
+   *
+   * @param actor authenticated Receptionist session
+   * @param appointmentId completed appointment identifier
+   * @param amountMinor payment amount in minor currency units
+   * @param method payment method
+   * @return the persisted successful payment
+   * @throws AuthorizationException if the actor is not a Receptionist
+   * @throws SQLException if payment persistence fails
+   * @throws ValidationException if the amount, method, or appointment state is invalid
+   */
   public Payment checkout(Session actor, long appointmentId, long amountMinor, PaymentMethod method)
       throws SQLException {
     Authorization.requireRole(actor, Role.RECEPTIONIST);
@@ -70,7 +87,16 @@ public final class BillingService {
     }
   }
 
-  /** Returns successful checkout revenue for a local clinic date. */
+  /**
+   * Returns successful checkout revenue for a local clinic date.
+   *
+   * @param actor authenticated Receptionist session
+   * @param date Singapore-local clinic date
+   * @return revenue totals for the date
+   * @throws AuthorizationException if the actor is not a Receptionist
+   * @throws SQLException if the revenue query fails
+   * @throws ValidationException if {@code date} is {@code null}
+   */
   public RevenueSummary dailyRevenue(Session actor, LocalDate date) throws SQLException {
     Authorization.requireRole(actor, Role.RECEPTIONIST);
     if (date == null) {
@@ -79,7 +105,20 @@ public final class BillingService {
     return payments.revenueFor(date);
   }
 
-  /** Returns a receipt-backed report for an inclusive local date range. */
+  /**
+   * Returns a receipt-backed report for an inclusive local date range.
+   *
+   * @param actor authenticated Receptionist session
+   * @param from inclusive Singapore-local start date
+   * @param to inclusive Singapore-local end date
+   * @param patientQuery optional patient search text
+   * @param doctorId optional doctor identifier
+   * @param method optional payment method filter
+   * @return immutable receipt-backed revenue report
+   * @throws AuthorizationException if the actor is not a Receptionist
+   * @throws SQLException if receipt queries fail
+   * @throws ValidationException if the dates are missing or the range is reversed
+   */
   public RevenueReport revenueReport(
       Session actor,
       LocalDate from,
@@ -104,14 +143,32 @@ public final class BillingService {
     return new RevenueReport(result);
   }
 
-  /** Returns Receptionist-visible receipt history. */
+  /**
+   * Returns Receptionist-visible receipt history.
+   *
+   * @param actor authenticated Receptionist session
+   * @param patientQuery optional patient search text
+   * @param doctorId optional doctor identifier
+   * @param date optional Singapore-local receipt date
+   * @return immutable matching receipt list
+   * @throws AuthorizationException if the actor is not a Receptionist
+   * @throws SQLException if the receipt query fails
+   */
   public java.util.List<Receipt> receiptHistory(
       Session actor, String patientQuery, Long doctorId, LocalDate date) throws SQLException {
     Authorization.requireRole(actor, Role.RECEPTIONIST);
     return receipts.findAll(patientQuery, doctorId, date);
   }
 
-  /** Returns one persisted receipt for reprinting. */
+  /**
+   * Returns one persisted receipt for reprinting.
+   *
+   * @param actor authenticated Receptionist session
+   * @param receiptId receipt identifier
+   * @return the matching receipt
+   * @throws AuthorizationException if the actor is not a Receptionist
+   * @throws SQLException if the receipt does not exist or the query fails
+   */
   public Receipt receipt(Session actor, long receiptId) throws SQLException {
     Authorization.requireRole(actor, Role.RECEPTIONIST);
     return receipts.findById(receiptId);

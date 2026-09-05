@@ -70,11 +70,19 @@ public final class ReceptionistView {
     throw new AssertionError("Utility class");
   }
 
-  /** Creates the Receptionist workspace. */
+  /**
+   * Creates the Receptionist workspace.
+   *
+   * @param services application services used by the workspace
+   * @param session authenticated Receptionist session
+   * @param onLogout callback invoked when the Receptionist logs out
+   * @return root node for the Receptionist workspace
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public static Parent create(ClinicServices services, Session session, Runnable onLogout) {
     ComboBox<Account> doctor = doctorSelector();
-    TimeFields startsAt = timeSelector("reception-start");
-    TimeFields endsAt = timeSelector("reception-end");
+    AppointmentDialog.TimeFields startsAt = AppointmentDialog.timeSelector("reception-start");
+    AppointmentDialog.TimeFields endsAt = AppointmentDialog.timeSelector("reception-end");
     Button book = button("Book appointment", "reception-book");
     Button reschedule = button("Reschedule selected", "reception-reschedule");
     Button cancel = button("Cancel selected", "reception-cancel");
@@ -181,7 +189,8 @@ public final class ReceptionistView {
               boolean editable =
                   selected != null
                       && (selected.status() == AppointmentStatus.PENDING
-                          || selected.status() == AppointmentStatus.ACCEPTED);
+                          || selected.status() == AppointmentStatus.ACCEPTED
+                          || selected.status() == AppointmentStatus.DECLINED);
               reschedule.setDisable(!editable);
               cancel.setDisable(!editable);
               checkIn.setDisable(
@@ -674,7 +683,8 @@ public final class ReceptionistView {
     appointmentForm.addRow(0, new Label(PATIENT_LABEL), appointmentPatient);
     appointmentForm.addRow(1, new Label("Doctor"), doctor);
     appointmentForm.addRow(2, new Label(DATE_LABEL), appointmentDate);
-    appointmentForm.addRow(3, new Label("Starts"), startsAt.view, new Label("Ends"), endsAt.view);
+    appointmentForm.addRow(
+        3, new Label("Starts"), startsAt.view(), new Label("Ends"), endsAt.view());
     appointmentForm.addRow(4, book);
     HBox scheduleFilters =
         new HBox(
@@ -943,24 +953,6 @@ public final class ReceptionistView {
     }
   }
 
-  private static TimeFields timeSelector(String id) {
-    ComboBox<String> hours = UiComponents.compactSelector();
-    hours.setId(id + "-hour");
-    ComboBox<String> minutes = UiComponents.compactSelector();
-    minutes.setId(id + "-minute");
-    hours.setPromptText("HH");
-    minutes.setPromptText("mm");
-    for (int hour = 0; hour < 24; hour++) {
-      hours.getItems().add(String.format(Locale.ROOT, "%02d", hour));
-    }
-    minutes.getItems().addAll("00", "30");
-    hours.getSelectionModel().select(0);
-    minutes.getSelectionModel().select(0);
-    HBox view = new HBox(4, hours, new Label(":"), minutes);
-    view.setId(id);
-    return new TimeFields(hours, minutes, view);
-  }
-
   private static void refreshCheckoutReady(
       ClinicServices services,
       Session session,
@@ -1147,12 +1139,16 @@ public final class ReceptionistView {
           appointments.stream().filter(a -> a.status() == AppointmentStatus.CHECKED_IN).count();
       long completed =
           appointments.stream().filter(a -> a.status() == AppointmentStatus.COMPLETED).count();
+      long declined =
+          appointments.stream().filter(a -> a.status() == AppointmentStatus.DECLINED).count();
       summary.setText(
           appointments.size()
               + " appointment(s) | Pending: "
               + pending
               + " | Accepted: "
               + accepted
+              + " | Declined: "
+              + declined
               + " | Checked in: "
               + checkedIn
               + " | Completed: "
@@ -1226,110 +1222,8 @@ public final class ReceptionistView {
       long appointmentId,
       Label workspaceFeedback,
       Runnable onUpdated) {
-    try {
-      Appointment appointment = services.appointmentService().get(appointmentId);
-      Patient patient =
-          services.patientService().getAdministrative(session, appointment.patientId());
-      DatePicker date = new DatePicker(appointment.startsAt().toLocalDate());
-      date.setId("reception-reschedule-dialog-date");
-      TimeFields start = timeSelector("reception-reschedule-dialog-start");
-      TimeFields end = timeSelector("reception-reschedule-dialog-end");
-      selectTime(start, appointment.startsAt().toLocalTime());
-      selectTime(end, appointment.endsAt().toLocalTime());
-      ComboBox<Patient> patients = UiComponents.compactSelector();
-      patients.setId("reception-reschedule-dialog-patient");
-      List<Patient> availablePatients =
-          services.patientService().searchAdministrative(session, "").stream()
-              .filter(candidate -> candidate.active() || candidate.id() == patient.id())
-              .toList();
-      patients.getItems().setAll(availablePatients);
-      patients.getSelectionModel().select(patient);
-      PatientDirectoryView.makePatientSearchable(patients);
-      Label details =
-          new Label(
-              patient.displayedId()
-                  + DETAIL_SEPARATOR
-                  + valueOrEmpty(patient.firstName())
-                  + " "
-                  + valueOrEmpty(patient.lastName())
-                  + DETAIL_SEPARATOR
-                  + valueOrEmpty(patient.email()));
-      details.setId("reception-reschedule-dialog-patient-details");
-      Label feedback = new Label();
-      feedback.setId("reception-reschedule-dialog-feedback");
-      patients
-          .valueProperty()
-          .addListener(
-              (observable, previous, selected) -> {
-                if (selected != null) {
-                  details.setText(
-                      selected.displayedId()
-                          + DETAIL_SEPARATOR
-                          + valueOrEmpty(selected.firstName())
-                          + " "
-                          + valueOrEmpty(selected.lastName())
-                          + DETAIL_SEPARATOR
-                          + valueOrEmpty(selected.email()));
-                }
-              });
-      Button save = button("Reschedule appointment", "reception-reschedule-dialog-submit");
-      Button cancel = button("Cancel appointment", "reception-reschedule-dialog-cancel");
-      Stage dialog = new Stage();
-      save.setOnAction(
-          event -> {
-            try {
-              services
-                  .appointmentService()
-                  .reschedule(
-                      session,
-                      appointmentId,
-                      parseScheduleDateTime(date, start, "Start time"),
-                      parseScheduleDateTime(date, end, "End time"));
-              workspaceFeedback.setText("Appointment rescheduled");
-              onUpdated.run();
-              dialog.close();
-            } catch (ValidationException | AuthorizationException exception) {
-              feedback.setText(exception.getMessage());
-            } catch (SQLException exception) {
-              feedback.setText("Appointment rescheduling is temporarily unavailable");
-            }
-          });
-      cancel.setOnAction(
-          event -> {
-            try {
-              services.appointmentService().cancel(session, appointmentId);
-              workspaceFeedback.setText("Appointment cancelled");
-              onUpdated.run();
-              dialog.close();
-            } catch (ValidationException | AuthorizationException exception) {
-              feedback.setText(exception.getMessage());
-            } catch (SQLException exception) {
-              feedback.setText("Appointment cancellation is temporarily unavailable");
-            }
-          });
-      VBox content =
-          new VBox(
-              10,
-              new Label(PATIENT_LABEL),
-              patients,
-              details,
-              new Label("New date"),
-              date,
-              new Label("Start"),
-              start.view,
-              new Label("End"),
-              end.view,
-              new HBox(8, save, cancel),
-              feedback);
-      content.setPadding(new Insets(18));
-      dialog.initOwner(workspaceFeedback.getScene().getWindow());
-      dialog.initModality(Modality.WINDOW_MODAL);
-      dialog.setTitle("Reschedule appointment");
-      dialog.setScene(new Scene(content, 520, 500));
-      dialog.show();
-    } catch (SQLException | ValidationException | AuthorizationException exception) {
-      workspaceFeedback.setText(exception.getMessage());
-    }
+    AppointmentDialog.showReceptionistEdit(
+        services, session, appointmentId, workspaceFeedback, onUpdated);
   }
 
   private static void showCheckInDetailsDialog(
@@ -1474,31 +1368,8 @@ public final class ReceptionistView {
   }
 
   private static LocalDateTime parseScheduleDateTime(
-      DatePicker date, TimeFields time, String fieldName) {
-    if (date.getValue() == null) {
-      throw new ValidationException("Appointment date is required");
-    }
-    try {
-      return LocalDateTime.of(
-          date.getValue(),
-          java.time.LocalTime.of(
-              Integer.parseInt(time.hours.getValue()), Integer.parseInt(time.minutes.getValue())));
-    } catch (DateTimeParseException exception) {
-      throw new ValidationException(fieldName + " must use a valid time", exception);
-    }
-  }
-
-  private static void selectTime(TimeFields fields, java.time.LocalTime time) {
-    fields.hours.setValue(String.format(Locale.ROOT, "%02d", time.getHour()));
-    fields.minutes.setValue(String.format(Locale.ROOT, "%02d", time.getMinute() < 30 ? 0 : 30));
-  }
-
-  private record TimeFields(ComboBox<String> hours, ComboBox<String> minutes, HBox view) {
-    private TimeFields {
-      if (hours == null || minutes == null || view == null) {
-        throw new IllegalArgumentException("Time controls are required");
-      }
-    }
+      DatePicker date, AppointmentDialog.TimeFields time, String fieldName) {
+    return AppointmentDialog.parseDateTime(date, time, fieldName);
   }
 
   private static String formatAppointment(

@@ -46,7 +46,16 @@ public final class DoctorCalendarSettingsView {
   private final Map<DayOfWeek, DayEditor> dayEditors = new EnumMap<>(DayOfWeek.class);
   private final BorderPane root;
 
-  /** Creates a Calendar settings page for one authenticated Doctor. */
+  /**
+   * Creates a Calendar settings page for one authenticated Doctor.
+   *
+   * @param services application services used to load and save settings
+   * @param session authenticated Doctor session
+   * @param onBack callback used to return to the Calendar
+   * @param onSaved callback invoked after settings are saved
+   * @param feedback label used for user-facing operation messages
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public DoctorCalendarSettingsView(
       ClinicServices services, Session session, Runnable onBack, Runnable onSaved, Label feedback) {
     this.services = Objects.requireNonNull(services, "services");
@@ -58,7 +67,11 @@ public final class DoctorCalendarSettingsView {
     reload();
   }
 
-  /** Returns the settings page node. */
+  /**
+   * Returns the settings page node.
+   *
+   * @return root node for the Calendar settings page
+   */
   public Parent view() {
     return root;
   }

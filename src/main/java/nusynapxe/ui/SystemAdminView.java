@@ -33,7 +33,15 @@ public final class SystemAdminView {
     throw new AssertionError("Utility class");
   }
 
-  /** Creates the account-management workspace. */
+  /**
+   * Creates the account-management workspace.
+   *
+   * @param accounts service used to list and create staff accounts
+   * @param session authenticated System Admin session
+   * @param onLogout callback invoked when the administrator logs out
+   * @return root node for the System Admin workspace
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public static Parent create(AccountService accounts, Session session, Runnable onLogout) {
     TextField username = new TextField();
     username.setId("admin-account-username");

@@ -30,6 +30,11 @@ public record Receipt(
     LocalDate receiptDate,
     long sequenceNumber,
     LocalDateTime recordedAt) {
+  /**
+   * Validates the daily receipt sequence.
+   *
+   * @throws IllegalArgumentException if {@code sequenceNumber} is not positive
+   */
   public Receipt {
     if (sequenceNumber <= 0) {
       throw new IllegalArgumentException("Receipt sequence must be positive");

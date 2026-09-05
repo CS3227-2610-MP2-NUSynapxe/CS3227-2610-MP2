@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.function.Consumer;
 import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import javafx.collections.FXCollections;
@@ -20,6 +21,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollBar;
+import javafx.scene.input.KeyCode;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
@@ -46,6 +48,7 @@ final class CalendarScheduleList extends BorderPane {
 
   private final CalendarSchedulePageLoader pageLoader;
   private final Clock clock;
+  private final Consumer<CalendarAppointment> onSelected;
   private final ListView<ScheduleEntry> list = new ListView<>();
   private final ObservableList<ScheduleEntry> entries = FXCollections.observableArrayList();
   private final Label loading = new Label("Loading more appointments…");
@@ -67,12 +70,30 @@ final class CalendarScheduleList extends BorderPane {
   private boolean disposed;
 
   CalendarScheduleList(ClinicServices services, Session session, LocalDate anchor, Clock clock) {
-    this(loaderFor(services, session), anchor, clock);
+    this(loaderFor(services, session), anchor, clock, null);
+  }
+
+  CalendarScheduleList(
+      ClinicServices services,
+      Session session,
+      LocalDate anchor,
+      Clock clock,
+      Consumer<CalendarAppointment> onSelected) {
+    this(loaderFor(services, session), anchor, clock, onSelected);
   }
 
   CalendarScheduleList(CalendarSchedulePageLoader pageLoader, LocalDate anchor, Clock clock) {
+    this(pageLoader, anchor, clock, null);
+  }
+
+  CalendarScheduleList(
+      CalendarSchedulePageLoader pageLoader,
+      LocalDate anchor,
+      Clock clock,
+      Consumer<CalendarAppointment> onSelected) {
     this.pageLoader = Objects.requireNonNull(pageLoader, "pageLoader");
     this.clock = Objects.requireNonNull(clock, "clock").withZone(CalendarService.CLINIC_ZONE);
+    this.onSelected = onSelected;
     this.now = LocalDateTime.now(this.clock);
     sceneListener =
         (observable, oldScene, newScene) -> {
@@ -143,6 +164,27 @@ final class CalendarScheduleList extends BorderPane {
             "doctor-calendar-schedule-empty", "No future appointments are scheduled."));
     list.setCellFactory(view -> createCell());
     list.addEventFilter(ScrollEvent.SCROLL, event -> handleFallbackScroll(event.getDeltaY()));
+    list.setOnMouseClicked(
+        event -> {
+          if (onSelected == null) {
+            return;
+          }
+          ScheduleEntry selected = list.getSelectionModel().getSelectedItem();
+          if (selected instanceof AppointmentEntry appointmentEntry) {
+            onSelected.accept(appointmentEntry.appointment());
+          }
+        });
+    list.setOnKeyPressed(
+        event -> {
+          if ((event.getCode() == KeyCode.ENTER || event.getCode() == KeyCode.SPACE)
+              && onSelected != null) {
+            ScheduleEntry selected = list.getSelectionModel().getSelectedItem();
+            if (selected instanceof AppointmentEntry appointmentEntry) {
+              onSelected.accept(appointmentEntry.appointment());
+              event.consume();
+            }
+          }
+        });
   }
 
   private void configureState() {

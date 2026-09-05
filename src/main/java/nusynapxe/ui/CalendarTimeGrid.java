@@ -11,18 +11,25 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.MouseButton;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.ColumnConstraints;
-import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.shape.Rectangle;
+import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.CalendarAppointment;
 import nusynapxe.domain.CalendarAppointmentBlock;
 import nusynapxe.domain.CalendarTimeSegment.SegmentKind;
@@ -34,8 +41,12 @@ import nusynapxe.service.CalendarService;
 
 /** Renders the scrollable seven-day time grid used by the Doctor Calendar. */
 final class CalendarTimeGrid extends BorderPane {
-  private static final double HALF_HOUR_HEIGHT = 32;
-  private static final double TIME_AXIS_WIDTH = 76;
+  /** Height of one 30-minute calendar slot, including room for card content. */
+  private static final double HALF_HOUR_HEIGHT = 100;
+
+  private static final double APPOINTMENT_INSET = 2;
+  private static final double TIME_AXIS_WIDTH = 44;
+  private static final double MIN_DAY_COLUMN_WIDTH = 120;
   private static final double DAY_COLUMN_WIDTH = 168;
   private static final int HALF_HOURS_PER_DAY = 48;
   private static final DateTimeFormatter TIME_FORMAT =
@@ -46,12 +57,19 @@ final class CalendarTimeGrid extends BorderPane {
   private final CalendarWeek week;
   private final DoctorCalendarWeek data;
   private final Clock clock;
+  private final InteractionHandlers handlers;
   private final Map<LocalDate, DayColumn> columns = new LinkedHashMap<>();
 
   CalendarTimeGrid(CalendarWeek week, DoctorCalendarWeek data, Clock clock) {
+    this(week, data, clock, InteractionHandlers.none());
+  }
+
+  CalendarTimeGrid(
+      CalendarWeek week, DoctorCalendarWeek data, Clock clock, InteractionHandlers handlers) {
     this.week = week;
     this.data = data;
     this.clock = clock;
+    this.handlers = Objects.requireNonNull(handlers, "handlers");
     setId("doctor-calendar-time-grid");
     getStyleClass().add("calendar-time-grid");
     build();
@@ -81,21 +99,38 @@ final class CalendarTimeGrid extends BorderPane {
   }
 
   private void build() {
-    GridPane grid = new GridPane();
+    VBox grid = new VBox();
     grid.setId("doctor-calendar-grid-content");
     grid.getStyleClass().add("calendar-grid-content");
-    grid.getColumnConstraints().add(new ColumnConstraints(TIME_AXIS_WIDTH));
-    for (int index = 0; index < 7; index++) {
-      grid.getColumnConstraints().add(new ColumnConstraints(DAY_COLUMN_WIDTH));
-    }
-    grid.add(header("Time", "doctor-calendar-time-header"), 0, 0);
+    grid.setMinWidth(TIME_AXIS_WIDTH + (7 * MIN_DAY_COLUMN_WIDTH));
+    grid.setPrefWidth(TIME_AXIS_WIDTH + (7 * DAY_COLUMN_WIDTH));
+    grid.setMaxWidth(Double.MAX_VALUE);
+    grid.setFillWidth(true);
+    grid.setSnapToPixel(false);
     List<LocalDate> dates = week.dates();
-    for (int index = 0; index < dates.size(); index++) {
-      grid.add(dayHeader(dates.get(index)), index + 1, 0);
+    HBox headerRow = new HBox();
+    headerRow.setMinWidth(TIME_AXIS_WIDTH + (7 * MIN_DAY_COLUMN_WIDTH));
+    headerRow.setPrefWidth(TIME_AXIS_WIDTH + (7 * DAY_COLUMN_WIDTH));
+    headerRow.setMaxWidth(Double.MAX_VALUE);
+    headerRow.setSnapToPixel(false);
+    Label timeHeader = header("Time", "doctor-calendar-time-header");
+    timeHeader.setMinWidth(TIME_AXIS_WIDTH);
+    timeHeader.setPrefWidth(TIME_AXIS_WIDTH);
+    timeHeader.setMaxWidth(TIME_AXIS_WIDTH);
+    headerRow.getChildren().add(timeHeader);
+    for (LocalDate date : dates) {
+      Region dayHeader = dayHeader(date);
+      dayHeader.minWidth(MIN_DAY_COLUMN_WIDTH);
+      dayHeader.prefWidth(DAY_COLUMN_WIDTH);
+      dayHeader.maxWidth(Double.MAX_VALUE);
+      HBox.setHgrow(dayHeader, Priority.ALWAYS);
+      headerRow.getChildren().add(dayHeader);
     }
     VBox timeAxis = new VBox();
     timeAxis.setId("doctor-calendar-time-axis");
+    timeAxis.setMinWidth(TIME_AXIS_WIDTH);
     timeAxis.setPrefWidth(TIME_AXIS_WIDTH);
+    timeAxis.setMaxWidth(TIME_AXIS_WIDTH);
     for (int index = 0; index < HALF_HOURS_PER_DAY; index++) {
       Label label =
           new Label(TIME_FORMAT.format(java.time.LocalTime.MIDNIGHT.plusMinutes(index * 30L)));
@@ -104,20 +139,27 @@ final class CalendarTimeGrid extends BorderPane {
       label.setPrefHeight(HALF_HOUR_HEIGHT);
       label.setMinHeight(HALF_HOUR_HEIGHT);
       label.setMaxHeight(HALF_HOUR_HEIGHT);
-      label.setAlignment(Pos.TOP_RIGHT);
+      label.setAlignment(Pos.TOP_LEFT);
       timeAxis.getChildren().add(label);
     }
-    grid.add(timeAxis, 0, 1);
-    for (int index = 0; index < dates.size(); index++) {
-      DayColumn column = buildDayColumn(dates.get(index), data.appointments());
-      columns.put(dates.get(index), column);
-      grid.add(column.surface, index + 1, 1);
+    HBox bodyRow = new HBox();
+    bodyRow.setMinWidth(TIME_AXIS_WIDTH + (7 * MIN_DAY_COLUMN_WIDTH));
+    bodyRow.setPrefWidth(TIME_AXIS_WIDTH + (7 * DAY_COLUMN_WIDTH));
+    bodyRow.setMaxWidth(Double.MAX_VALUE);
+    bodyRow.setSnapToPixel(false);
+    bodyRow.getChildren().add(timeAxis);
+    for (LocalDate date : dates) {
+      DayColumn column = buildDayColumn(date, data.appointments());
+      columns.put(date, column);
+      HBox.setHgrow(column.surface, Priority.ALWAYS);
+      bodyRow.getChildren().add(column.surface);
     }
+    grid.getChildren().addAll(headerRow, bodyRow);
     ScrollPane scroll = new ScrollPane(grid);
     scroll.setId("doctor-calendar-scroll");
     scroll.setPannable(true);
     scroll.setFitToHeight(false);
-    scroll.setFitToWidth(false);
+    scroll.setFitToWidth(true);
     VBox center = new VBox(8);
     if (data.appointments().isEmpty()) {
       Label empty = UiComponents.emptyState("doctor-calendar-empty", "No appointments this week.");
@@ -132,8 +174,9 @@ final class CalendarTimeGrid extends BorderPane {
     StackPane surface = new StackPane();
     surface.setId("doctor-calendar-day-column-" + day);
     surface.getStyleClass().add("calendar-day-column");
-    surface.setMinWidth(DAY_COLUMN_WIDTH);
+    surface.setMinWidth(MIN_DAY_COLUMN_WIDTH);
     surface.setPrefWidth(DAY_COLUMN_WIDTH);
+    surface.setMaxWidth(Double.MAX_VALUE);
     surface.setMinHeight(HALF_HOUR_HEIGHT * HALF_HOURS_PER_DAY);
     surface.setPrefHeight(HALF_HOUR_HEIGHT * HALF_HOURS_PER_DAY);
     VBox periods = new VBox();
@@ -152,10 +195,16 @@ final class CalendarTimeGrid extends BorderPane {
     }
     Pane eventPane = new Pane();
     eventPane.setId("doctor-calendar-events-" + day);
-    eventPane.setMouseTransparent(true);
+    eventPane.setPickOnBounds(true);
     eventPane.setPrefHeight(HALF_HOUR_HEIGHT * HALF_HOURS_PER_DAY);
     eventPane.setMinHeight(HALF_HOUR_HEIGHT * HALF_HOURS_PER_DAY);
     eventPane.setPrefWidth(DAY_COLUMN_WIDTH);
+    eventPane.setMinWidth(MIN_DAY_COLUMN_WIDTH);
+    eventPane.setMaxWidth(Double.MAX_VALUE);
+    Rectangle clip = new Rectangle();
+    clip.widthProperty().bind(eventPane.widthProperty());
+    clip.heightProperty().bind(eventPane.heightProperty());
+    eventPane.setClip(clip);
     List<EventPlacement> placements = new ArrayList<>();
     for (CalendarAppointmentBlock block : CalendarCalculations.blocksForDay(day, appointments)) {
       Node node = appointmentNode(block);
@@ -165,6 +214,14 @@ final class CalendarTimeGrid extends BorderPane {
     eventPane
         .widthProperty()
         .addListener((observable, previous, current) -> layoutEvents(eventPane, placements));
+    eventPane.setOnMouseClicked(
+        event -> {
+          if (event.getButton() == MouseButton.PRIMARY && handlers.emptySlot() != null) {
+            handlers
+                .emptySlot()
+                .accept(day.atStartOfDay().plusMinutes(clickedMinute(event.getY())));
+          }
+        });
     layoutEvents(eventPane, placements);
     Region currentLine = new Region();
     currentLine.setId("doctor-calendar-current-time-line-" + day);
@@ -187,9 +244,13 @@ final class CalendarTimeGrid extends BorderPane {
   private Node appointmentNode(CalendarAppointmentBlock block) {
     VBox content = new VBox(2);
     content.getStyleClass().add("calendar-appointment-content");
+    content.setFillWidth(true);
     Label patient = new Label(block.appointment().patientDisplayName());
     patient.getStyleClass().add("calendar-appointment-patient");
     patient.setWrapText(true);
+    patient.setMinWidth(0);
+    patient.setMaxWidth(Double.MAX_VALUE);
+    patient.setEllipsisString("…");
     Label time =
         new Label(
             formatTime(block.appointment().startsAt())
@@ -199,7 +260,45 @@ final class CalendarTimeGrid extends BorderPane {
     Label status = UiComponents.statusBadge(block.appointment().status().name());
     status.getStyleClass().add("calendar-appointment-status");
     content.getChildren().addAll(patient, time, status);
+    AppointmentStatus appointmentStatus = block.appointment().status();
+    if (handlers.decision() != null
+        && (appointmentStatus == AppointmentStatus.PENDING
+            || appointmentStatus == AppointmentStatus.ACCEPTED)) {
+      Button accept =
+          UiComponents.primaryButton(
+              "Accept", "doctor-calendar-accept-" + block.appointment().appointmentId());
+      accept.getStyleClass().add("calendar-appointment-action");
+      accept.setAccessibleText("Accept appointment " + block.appointment().appointmentId());
+      accept.setDisable(appointmentStatus == AppointmentStatus.ACCEPTED);
+      accept.setOnAction(
+          event -> {
+            handlers.decision().accept(block.appointment(), AppointmentStatus.ACCEPTED);
+            event.consume();
+          });
+      Button decline =
+          UiComponents.dangerButton(
+              "Decline", "doctor-calendar-decline-" + block.appointment().appointmentId());
+      decline.getStyleClass().add("calendar-appointment-action");
+      decline.setAccessibleText("Decline appointment " + block.appointment().appointmentId());
+      decline.setOnAction(
+          event -> {
+            handlers.decision().accept(block.appointment(), AppointmentStatus.DECLINED);
+            event.consume();
+          });
+      HBox actions = new HBox(3, accept, decline);
+      actions.setAlignment(Pos.BOTTOM_RIGHT);
+      actions.getStyleClass().add("calendar-appointment-actions");
+      Region actionSpacer = new Region();
+      VBox.setVgrow(actionSpacer, Priority.ALWAYS);
+      content.getChildren().add(actionSpacer);
+      content.getChildren().add(actions);
+    }
     StackPane blockNode = new StackPane(content);
+    blockNode.setManaged(false);
+    blockNode.setMinWidth(0);
+    blockNode.setMaxWidth(Double.MAX_VALUE);
+    blockNode.setMinHeight(0);
+    blockNode.setMaxHeight(Double.MAX_VALUE);
     blockNode.setId(
         "doctor-calendar-appointment-" + block.appointment().appointmentId() + "-" + block.day());
     blockNode.getStyleClass().add("calendar-appointment-block");
@@ -208,7 +307,7 @@ final class CalendarTimeGrid extends BorderPane {
         .add(
             "calendar-appointment-status-"
                 + block.appointment().status().name().toLowerCase(Locale.ROOT).replace('_', '-'));
-    if (block.appointment().status() == nusynapxe.domain.AppointmentStatus.CANCELLED) {
+    if (block.appointment().status() == AppointmentStatus.CANCELLED) {
       blockNode.getStyleClass().add("calendar-appointment-cancelled");
     }
     blockNode.setAccessibleText(
@@ -219,6 +318,22 @@ final class CalendarTimeGrid extends BorderPane {
             + formatTime(block.appointment().endsAt())
             + ", "
             + UiComponents.humanizeStatus(block.appointment().status().name()));
+    blockNode.setFocusTraversable(handlers.selected() != null);
+    blockNode.setOnMouseClicked(
+        event -> {
+          if (event.getButton() == MouseButton.PRIMARY && handlers.selected() != null) {
+            handlers.selected().accept(block.appointment());
+            event.consume();
+          }
+        });
+    blockNode.setOnKeyPressed(
+        event -> {
+          if ((event.getCode() == KeyCode.ENTER || event.getCode() == KeyCode.SPACE)
+              && handlers.selected() != null) {
+            handlers.selected().accept(block.appointment());
+            event.consume();
+          }
+        });
     return blockNode;
   }
 
@@ -230,14 +345,23 @@ final class CalendarTimeGrid extends BorderPane {
     for (EventPlacement placement : placements) {
       CalendarAppointmentBlock block = placement.block();
       double laneWidth = width / block.laneCount();
-      double eventWidth = Math.max(46, laneWidth - 8);
       Node node = placement.node();
+      double slotHeight =
+          Math.max(
+              1,
+              (block.endMinute() - block.startMinute()) * HALF_HOUR_HEIGHT / 30.0
+                  - (2 * APPOINTMENT_INSET));
       node.resizeRelocate(
-          block.lane() * laneWidth + 4,
-          block.startMinute() * HALF_HOUR_HEIGHT / 30.0 + 2,
-          eventWidth,
-          Math.max(24, (block.endMinute() - block.startMinute()) * HALF_HOUR_HEIGHT / 30.0 - 4));
+          block.lane() * laneWidth,
+          block.startMinute() * HALF_HOUR_HEIGHT / 30.0 + APPOINTMENT_INSET,
+          laneWidth,
+          slotHeight);
     }
+  }
+
+  private static int clickedMinute(double y) {
+    int halfHour = (int) Math.floor(Math.max(0, y) / HALF_HOUR_HEIGHT);
+    return Math.min((HALF_HOURS_PER_DAY - 2) * 30, halfHour * 30);
   }
 
   private static String formatTime(java.time.LocalDateTime timestamp) {
@@ -270,7 +394,7 @@ final class CalendarTimeGrid extends BorderPane {
     return TIME_FORMAT.format(java.time.LocalTime.MIDNIGHT.plusMinutes(minute));
   }
 
-  private Node dayHeader(LocalDate date) {
+  private Region dayHeader(LocalDate date) {
     DayOfWeek day = date.getDayOfWeek();
     Label name = new Label(day.getDisplayName(TextStyle.SHORT, Locale.ENGLISH));
     name.getStyleClass().add("calendar-day-name");
@@ -279,6 +403,7 @@ final class CalendarTimeGrid extends BorderPane {
     VBox header = new VBox(2, name, dateLabel);
     header.setId("doctor-calendar-day-header-" + date);
     header.setAlignment(Pos.CENTER);
+    header.setMaxWidth(Double.MAX_VALUE);
     header.getStyleClass().add("calendar-day-header");
     if (date.equals(LocalDate.now(clock.withZone(CalendarService.CLINIC_ZONE)))) {
       header.getStyleClass().add("calendar-current-day");
@@ -290,7 +415,8 @@ final class CalendarTimeGrid extends BorderPane {
     Label label = new Label(text);
     label.setId(id);
     label.getStyleClass().add("calendar-time-header");
-    label.setAlignment(Pos.CENTER_RIGHT);
+    label.setMaxWidth(Double.MAX_VALUE);
+    label.setAlignment(Pos.CENTER_LEFT);
     return label;
   }
 
@@ -300,5 +426,15 @@ final class CalendarTimeGrid extends BorderPane {
 
   private record EventPlacement(Node node, CalendarAppointmentBlock block) {
     // Immutable association used during layout.
+  }
+
+  /** Callbacks supplied by the owning Doctor Calendar page. */
+  record InteractionHandlers(
+      Consumer<CalendarAppointment> selected,
+      BiConsumer<CalendarAppointment, AppointmentStatus> decision,
+      Consumer<LocalDateTime> emptySlot) {
+    static InteractionHandlers none() {
+      return new InteractionHandlers(null, null, null);
+    }
   }
 }

@@ -22,11 +22,13 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import nusynapxe.domain.Appointment;
+import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.ClinicalRecord;
 import nusynapxe.domain.DoctorTimeOff;
 import nusynapxe.domain.Prescription;
 import nusynapxe.domain.Session;
 import nusynapxe.service.AuthorizationException;
+import nusynapxe.service.CalendarService;
 import nusynapxe.service.ClinicServices;
 import nusynapxe.service.ValidationException;
 
@@ -45,7 +47,15 @@ public final class DoctorView {
     throw new AssertionError("Utility class");
   }
 
-  /** Creates the Doctor workspace. */
+  /**
+   * Creates the Doctor workspace.
+   *
+   * @param services application services used by the workspace
+   * @param session authenticated Doctor session
+   * @param onLogout callback invoked when the Doctor logs out
+   * @return root node for the Doctor workspace
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public static Parent create(ClinicServices services, Session session, Runnable onLogout) {
     ListView<Appointment> appointments = new ListView<>();
     appointments.setId("doctor-appointment-list");
@@ -81,6 +91,7 @@ public final class DoctorView {
     TextField rescheduleStart = field("doctor-reschedule-start", DATE_TIME_PATTERN);
     TextField rescheduleEnd = field("doctor-reschedule-end", DATE_TIME_PATTERN);
     Button accept = UiComponents.primaryButton("Accept selected", "doctor-accept");
+    Button checkIn = UiComponents.primaryButton("Check in selected", "doctor-check-in");
     Button reschedule = UiComponents.secondaryButton("Reschedule selected", "doctor-reschedule");
     Button refresh = UiComponents.secondaryButton("Refresh schedule", "doctor-refresh");
 
@@ -147,6 +158,7 @@ public final class DoctorView {
                   selectionSummary,
                   noSelection,
                   selected,
+                  checkIn,
                   accept,
                   reschedule,
                   saveConsultation,
@@ -168,6 +180,7 @@ public final class DoctorView {
         selectionSummary,
         noSelection,
         null,
+        checkIn,
         accept,
         reschedule,
         saveConsultation,
@@ -195,6 +208,26 @@ public final class DoctorView {
                   requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
                   services.appointmentService().accept(session, selection.appointmentId);
                   feedback.setText("Appointment accepted");
+                  refreshSchedule(
+                      services,
+                      session,
+                      appointments,
+                      selection,
+                      diagnosis,
+                      consultationNotes,
+                      followUpNotes,
+                      prescriptions,
+                      feedback);
+                }));
+
+    checkIn.setOnAction(
+        event ->
+            run(
+                feedback,
+                () -> {
+                  requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
+                  services.appointmentService().checkIn(session, selection.appointmentId);
+                  feedback.setText("Patient checked in");
                   refreshSchedule(
                       services,
                       session,
@@ -368,6 +401,7 @@ public final class DoctorView {
             UiComponents.pageTitle("My appointment schedule"),
             UiComponents.supportingText("Select a visit to open its clinical context."),
             UiComponents.actionBar(refresh),
+            UiComponents.actionBar(checkIn),
             appointments,
             scheduleActions);
     appointments.setPrefHeight(420);
@@ -538,8 +572,14 @@ public final class DoctorView {
       Label selectionSummary,
       Label noSelection,
       Appointment appointment,
+      Button checkIn,
       Button... actions) {
     boolean selected = appointment != null && selection.appointmentId != 0;
+    boolean checkInEligible =
+        selected
+            && appointment.status() == AppointmentStatus.ACCEPTED
+            && !LocalDateTime.now(CalendarService.CLINIC_ZONE).isBefore(appointment.startsAt());
+    checkIn.setDisable(!checkInEligible);
     for (Button action : actions) {
       action.setDisable(!selected);
     }

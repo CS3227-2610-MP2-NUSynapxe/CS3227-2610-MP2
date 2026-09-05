@@ -8,12 +8,24 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Doctor-owned preferences that control Calendar ordering and visual working-hour shading. */
+/**
+ * Doctor-owned preferences that control Calendar ordering and visual working-hour shading.
+ *
+ * @param doctorId owning doctor identifier
+ * @param firstDayOfWeek first day shown in the weekly calendar
+ * @param workingIntervals configured intervals by day; an empty list disables that day
+ */
 public record DoctorCalendarSettings(
     long doctorId,
     DayOfWeek firstDayOfWeek,
     Map<DayOfWeek, List<WorkingInterval>> workingIntervals) {
-  /** Creates validated, immutable calendar settings. */
+  /**
+   * Creates validated, immutable calendar settings.
+   *
+   * @throws IllegalArgumentException if the doctor identifier is invalid, intervals overlap, or a
+   *     configured day is invalid
+   * @throws NullPointerException if a required component is {@code null}
+   */
   public DoctorCalendarSettings {
     if (doctorId <= 0) {
       throw new IllegalArgumentException("Doctor identifier must be positive");
@@ -48,18 +60,36 @@ public record DoctorCalendarSettings(
     workingIntervals = Collections.unmodifiableMap(normalized);
   }
 
-  /** Returns the intervals configured for one day, or an empty list for a disabled day. */
+  /**
+   * Returns the intervals configured for one day, or an empty list for a disabled day.
+   *
+   * @param day day to inspect
+   * @return an immutable list of working intervals
+   * @throws NullPointerException if {@code day} is {@code null}
+   */
   public List<WorkingInterval> intervals(DayOfWeek day) {
     Objects.requireNonNull(day, "day");
     return workingIntervals.getOrDefault(day, List.of());
   }
 
-  /** Returns whether the day has at least one enabled working interval. */
+  /**
+   * Returns whether the day has at least one enabled working interval.
+   *
+   * @param day day to inspect
+   * @return {@code true} when at least one interval is configured
+   * @throws NullPointerException if {@code day} is {@code null}
+   */
   public boolean isEnabled(DayOfWeek day) {
     return !intervals(day).isEmpty();
   }
 
-  /** Returns the deterministic initial profile used for a Doctor without saved settings. */
+  /**
+   * Returns the deterministic initial profile used for a Doctor without saved settings.
+   *
+   * @param doctorId owning doctor identifier
+   * @return default Sunday-first settings with weekday working hours
+   * @throws IllegalArgumentException if {@code doctorId} is not positive
+   */
   public static DoctorCalendarSettings defaults(long doctorId) {
     Map<DayOfWeek, List<WorkingInterval>> intervals = new EnumMap<>(DayOfWeek.class);
     for (DayOfWeek day : DayOfWeek.values()) {

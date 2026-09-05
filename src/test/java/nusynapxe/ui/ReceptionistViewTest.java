@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.DatePicker;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TableView;
@@ -36,6 +37,7 @@ import nusynapxe.domain.RevenueReport;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
 import nusynapxe.domain.Sex;
+import nusynapxe.persistence.PatientRepository;
 import nusynapxe.persistence.SqliteDatabase;
 import nusynapxe.service.ClinicServices;
 import org.junit.jupiter.api.AfterEach;
@@ -193,6 +195,51 @@ final class ReceptionistViewTest extends ApplicationTest {
     interact(() -> combo("#reception-start-hour").requestFocus());
     WaitForAsyncUtils.waitForFxEvents();
     assertEquals(doctor, doctorSelector.getValue());
+  }
+
+  @Test
+  void receptionistCanRescheduleADeclinedAppointmentFromTheDashboard() throws SQLException {
+    Patient patient =
+        new PatientRepository(database)
+            .create(new Patient(0, "Pat", "Lee", "1900-01-01", "555-0100", "", ""));
+    Session receptionistSession =
+        new Session(receptionist.id(), receptionist.username(), Role.RECEPTIONIST);
+    Session doctorSession = new Session(doctor.id(), doctor.username(), Role.DOCTOR);
+    LocalDate date = LocalDate.now(java.time.ZoneId.of("Asia/Singapore")).plusDays(1);
+    Appointment appointment =
+        services
+            .appointmentService()
+            .book(
+                receptionistSession,
+                patient.id(),
+                doctor.id(),
+                date.atTime(9, 0),
+                date.atTime(9, 30));
+    services.appointmentService().decline(doctorSession, appointment.id());
+
+    loginAsReceptionist();
+    selectWorkspaceTab(1);
+    selectCombo("#reception-schedule-status", AppointmentStatus.DECLINED);
+    assertEquals(1, appointmentList().getItems().size());
+    selectFirstAppointment("#reception-appointment-list");
+    fire("#reception-reschedule");
+    waitForNode("#reception-reschedule-dialog-content");
+    LocalDate replacementDate = date.plusDays(1);
+    interact(
+        () ->
+            lookup("#reception-reschedule-dialog-date")
+                .queryAs(DatePicker.class)
+                .setValue(replacementDate));
+    selectCombo("#reception-reschedule-dialog-start-hour", "10");
+    selectCombo("#reception-reschedule-dialog-start-minute", "00");
+    selectCombo("#reception-reschedule-dialog-end-hour", "10");
+    selectCombo("#reception-reschedule-dialog-end-minute", "30");
+    fire("#reception-reschedule-dialog-submit");
+
+    assertEquals(
+        AppointmentStatus.PENDING, services.appointmentService().get(appointment.id()).status());
+    interact(() -> combo("#reception-schedule-status").setValue(null));
+    assertEquals(AppointmentStatus.PENDING, appointmentList().getItems().get(0).status());
   }
 
   @Test

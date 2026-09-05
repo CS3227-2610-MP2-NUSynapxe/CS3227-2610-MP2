@@ -8,17 +8,36 @@ import nusynapxe.domain.Session;
 public final class SessionManager {
   private Session currentSession;
 
-  /** Returns the current session, when a user is authenticated. */
+  /** Creates an empty in-memory session manager. */
+  public SessionManager() {
+    // Starts without an authenticated session.
+  }
+
+  /**
+   * Returns the current session, when a user is authenticated.
+   *
+   * @return current session, or empty when no session is active
+   */
   public Optional<Session> current() {
     return Optional.ofNullable(currentSession);
   }
 
-  /** Starts a session for an authenticated account. */
+  /**
+   * Starts a session for an authenticated account.
+   *
+   * @param session authenticated session to store
+   * @throws NullPointerException if {@code session} is {@code null}
+   */
   public void start(Session session) {
     currentSession = Objects.requireNonNull(session, "session");
   }
 
-  /** Requires and returns the current authenticated session. */
+  /**
+   * Requires and returns the current authenticated session.
+   *
+   * @return current authenticated session
+   * @throws AuthorizationException if no session is active
+   */
   public Session requireCurrent() {
     return currentSession == null ? throwNotAuthenticated() : currentSession;
   }

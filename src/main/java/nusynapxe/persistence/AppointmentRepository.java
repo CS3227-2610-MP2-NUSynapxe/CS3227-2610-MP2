@@ -4,6 +4,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Types;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -25,12 +26,29 @@ public final class AppointmentRepository {
   private static final String TIME_OFF_COLUMNS = "id, doctor_id, starts_at, ends_at";
   private final SqliteDatabase database;
 
-  /** Creates an appointment repository backed by an opened database. */
+  /**
+   * Creates an appointment repository backed by an opened database.
+   *
+   * @param database database used for appointment persistence
+   * @throws NullPointerException if {@code database} is {@code null}
+   */
   public AppointmentRepository(SqliteDatabase database) {
     this.database = Objects.requireNonNull(database, "database");
   }
 
-  /** Creates an appointment after checking the doctor's availability. */
+  /**
+   * Creates an appointment after checking the doctor's availability.
+   *
+   * @param patientId patient identifier
+   * @param doctorId assigned doctor identifier
+   * @param startsAt local appointment start timestamp
+   * @param endsAt local appointment end timestamp
+   * @param status initial lifecycle status
+   * @return the newly created appointment
+   * @throws IllegalArgumentException if the interval does not end after it starts
+   * @throws NullPointerException if a timestamp or status is {@code null}
+   * @throws SQLException if the insert fails or the interval conflicts with the doctor's schedule
+   */
   public Appointment create(
       long patientId,
       long doctorId,
@@ -69,22 +87,65 @@ public final class AppointmentRepository {
         });
   }
 
-  /** Reschedules an appointment after checking the replacement interval. */
+  /**
+   * Reschedules an appointment after checking the replacement interval.
+   *
+   * @param id appointment identifier
+   * @param startsAt replacement local start timestamp
+   * @param endsAt replacement local end timestamp
+   * @return the rescheduled appointment with its existing status
+   * @throws IllegalArgumentException if the interval does not end after it starts
+   * @throws NullPointerException if a timestamp is {@code null}
+   * @throws SQLException if the appointment is missing, conflicts, or cannot be updated
+   */
   public Appointment reschedule(long id, LocalDateTime startsAt, LocalDateTime endsAt)
       throws SQLException {
     validateInterval(startsAt, endsAt);
+    return rescheduleInternal(id, startsAt, endsAt, null);
+  }
+
+  /**
+   * Reschedules an appointment and sets its resulting lifecycle status atomically.
+   *
+   * @param id appointment identifier
+   * @param startsAt replacement local start timestamp
+   * @param endsAt replacement local end timestamp
+   * @param status replacement lifecycle status
+   * @return the rescheduled appointment with the requested status
+   * @throws IllegalArgumentException if the interval does not end after it starts
+   * @throws NullPointerException if a timestamp or status is {@code null}
+   * @throws SQLException if the appointment is missing, conflicts, or cannot be updated
+   */
+  public Appointment reschedule(
+      long id, LocalDateTime startsAt, LocalDateTime endsAt, AppointmentStatus status)
+      throws SQLException {
+    validateInterval(startsAt, endsAt);
+    Objects.requireNonNull(status, STATUS_COLUMN);
+    return rescheduleInternal(id, startsAt, endsAt, status);
+  }
+
+  private Appointment rescheduleInternal(
+      long id, LocalDateTime startsAt, LocalDateTime endsAt, AppointmentStatus status)
+      throws SQLException {
     return SqliteTransactions.execute(
         database,
         connection -> {
           Appointment current = findById(connection, id).orElseThrow(() -> missing(id));
           ensureAvailable(connection, current.doctorId(), startsAt, endsAt, id);
+          AppointmentStatus resultingStatus = status == null ? current.status() : status;
           try (PreparedStatement statement =
               connection.prepareStatement(
-                  "UPDATE appointments SET starts_at = ?, ends_at = ?, updated_at = ? WHERE id = ?")) {
+                  "UPDATE appointments SET starts_at = ?, ends_at = ?, "
+                      + "status = COALESCE(?, status), updated_at = ? WHERE id = ?")) {
             SqliteQueries.bindTimestamp(statement, 1, startsAt);
             SqliteQueries.bindTimestamp(statement, 2, endsAt);
-            statement.setString(3, SqliteQueries.formatTimestamp(LocalDateTime.now()));
-            statement.setLong(4, id);
+            if (status != null) {
+              statement.setString(3, status.name());
+            } else {
+              statement.setNull(3, Types.VARCHAR);
+            }
+            statement.setString(4, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+            statement.setLong(5, id);
             statement.executeUpdate();
           }
           return new Appointment(
@@ -93,11 +154,19 @@ public final class AppointmentRepository {
               current.doctorId(),
               startsAt,
               endsAt,
-              current.status());
+              resultingStatus);
         });
   }
 
-  /** Changes an appointment's lifecycle status. */
+  /**
+   * Changes an appointment's lifecycle status.
+   *
+   * @param id appointment identifier
+   * @param status new lifecycle status
+   * @return the appointment with the updated status
+   * @throws NullPointerException if {@code status} is {@code null}
+   * @throws SQLException if the appointment is missing or cannot be updated
+   */
   public Appointment updateStatus(long id, AppointmentStatus status) throws SQLException {
     Objects.requireNonNull(status, STATUS_COLUMN);
     return SqliteTransactions.execute(
@@ -122,12 +191,24 @@ public final class AppointmentRepository {
         });
   }
 
-  /** Finds an appointment by identifier. */
+  /**
+   * Finds an appointment by identifier.
+   *
+   * @param id appointment identifier
+   * @return matching appointment, or empty when it does not exist
+   * @throws SQLException if the query fails
+   */
   public Optional<Appointment> findById(long id) throws SQLException {
     return findById(database.connection(), id);
   }
 
-  /** Returns all appointments assigned to one doctor in chronological order. */
+  /**
+   * Returns all appointments assigned to one doctor in chronological order.
+   *
+   * @param doctorId doctor identifier
+   * @return immutable appointment list ordered by start timestamp
+   * @throws SQLException if the query fails
+   */
   public List<Appointment> findByDoctor(long doctorId) throws SQLException {
     try (PreparedStatement statement =
         database
@@ -141,7 +222,17 @@ public final class AppointmentRepository {
     }
   }
 
-  /** Returns a Doctor's non-clinical appointment projections overlapping a time range. */
+  /**
+   * Returns a Doctor's non-clinical appointment projections overlapping a time range.
+   *
+   * @param doctorId doctor identifier
+   * @param rangeStart inclusive range start timestamp
+   * @param rangeEnd exclusive range end timestamp
+   * @return immutable administrative appointment projections ordered by start and identifier
+   * @throws IllegalArgumentException if the range does not end after it starts
+   * @throws NullPointerException if a range timestamp is {@code null}
+   * @throws SQLException if the query fails
+   */
   public List<CalendarAppointment> findCalendarByDoctor(
       long doctorId, LocalDateTime rangeStart, LocalDateTime rangeEnd) throws SQLException {
     validateInterval(rangeStart, rangeEnd);
@@ -153,6 +244,7 @@ public final class AppointmentRepository {
                     + "p.first_name, p.last_name FROM appointments a "
                     + "JOIN patients p ON p.id = a.patient_id "
                     + "WHERE a.doctor_id = ? AND a.starts_at < ? AND a.ends_at > ? "
+                    + "AND a.status NOT IN ('DECLINED', 'CANCELLED') "
                     + "ORDER BY a.starts_at, a.id")) {
       statement.setLong(1, doctorId);
       SqliteQueries.bindTimestamp(statement, 2, rangeEnd);
@@ -166,6 +258,15 @@ public final class AppointmentRepository {
    *
    * <p>The anchor is inclusive. The extra look-ahead row is used to determine whether another page
    * exists without issuing an unbounded read.
+   *
+   * @param doctorId doctor identifier
+   * @param anchor inclusive lower-bound start timestamp
+   * @param cursor optional keyset position from the previous page
+   * @param pageSize number of appointments requested
+   * @return a bounded schedule page and, when applicable, its next cursor
+   * @throws IllegalArgumentException if {@code pageSize} is outside the supported range
+   * @throws NullPointerException if {@code anchor} is {@code null}
+   * @throws SQLException if the query fails
    */
   public CalendarSchedulePage findCalendarPageByDoctor(
       long doctorId, LocalDateTime anchor, CalendarScheduleCursor cursor, int pageSize)
@@ -178,7 +279,8 @@ public final class AppointmentRepository {
             "SELECT a.id, a.patient_id, a.starts_at, a.ends_at, a.status, "
                 + "p.first_name, p.last_name FROM appointments a "
                 + "JOIN patients p ON p.id = a.patient_id "
-                + "WHERE a.doctor_id = ? AND a.starts_at >= ?");
+                + "WHERE a.doctor_id = ? AND a.starts_at >= ? "
+                + "AND a.status NOT IN ('DECLINED', 'CANCELLED')");
     if (cursor != null) {
       sql.append(" AND (a.starts_at > ? OR (a.starts_at = ? AND a.id > ?))");
     }
@@ -212,12 +314,26 @@ public final class AppointmentRepository {
     }
   }
 
-  /** Returns all appointments in chronological order. */
+  /**
+   * Returns all appointments in chronological order.
+   *
+   * @return immutable appointment list ordered by start timestamp and identifier
+   * @throws SQLException if the query fails
+   */
   public List<Appointment> findAll() throws SQLException {
     return search(null, null, null, null);
   }
 
-  /** Searches appointments using optional date, Doctor, patient, and status filters. */
+  /**
+   * Searches appointments using optional date, Doctor, patient, and status filters.
+   *
+   * @param date optional Singapore-local appointment date
+   * @param doctorId optional doctor identifier
+   * @param patientQuery optional case-insensitive patient search text
+   * @param status optional lifecycle status
+   * @return immutable matching appointment list ordered by start timestamp and identifier
+   * @throws SQLException if the query fails
+   */
   public List<Appointment> search(
       LocalDate date, Long doctorId, String patientQuery, AppointmentStatus status)
       throws SQLException {
@@ -262,7 +378,17 @@ public final class AppointmentRepository {
     }
   }
 
-  /** Adds a doctor time-off interval after checking existing availability. */
+  /**
+   * Adds a doctor time-off interval after checking existing availability.
+   *
+   * @param doctorId doctor identifier
+   * @param startsAt local interval start timestamp
+   * @param endsAt local interval end timestamp
+   * @return the newly created time-off interval
+   * @throws IllegalArgumentException if the interval does not end after it starts
+   * @throws NullPointerException if a timestamp is {@code null}
+   * @throws SQLException if the interval conflicts or cannot be inserted
+   */
   public DoctorTimeOff createTimeOff(long doctorId, LocalDateTime startsAt, LocalDateTime endsAt)
       throws SQLException {
     validateInterval(startsAt, endsAt);
@@ -288,7 +414,13 @@ public final class AppointmentRepository {
         });
   }
 
-  /** Returns time-off intervals for one doctor. */
+  /**
+   * Returns time-off intervals for one doctor.
+   *
+   * @param doctorId doctor identifier
+   * @return immutable time-off list ordered by start timestamp
+   * @throws SQLException if the query fails
+   */
   public List<DoctorTimeOff> findTimeOffByDoctor(long doctorId) throws SQLException {
     try (PreparedStatement statement =
         database
@@ -396,13 +528,7 @@ public final class AppointmentRepository {
   private static CalendarAppointment readCalendarAppointment(ResultSet resultSet)
       throws SQLException {
     long patientId = resultSet.getLong("patient_id");
-    String patientName =
-        String.format(
-            java.util.Locale.ROOT,
-            "P%06d - %s %s",
-            patientId,
-            resultSet.getString("first_name"),
-            resultSet.getString("last_name"));
+    String patientName = resultSet.getString("first_name") + " " + resultSet.getString("last_name");
     return new CalendarAppointment(
         resultSet.getLong("id"),
         patientId,

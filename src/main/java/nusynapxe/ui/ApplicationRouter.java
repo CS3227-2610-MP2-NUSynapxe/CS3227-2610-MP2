@@ -24,7 +24,13 @@ public final class ApplicationRouter {
   private final Stage stage;
   private final ClinicServices services;
 
-  /** Creates a router for one opened database and JavaFX stage. */
+  /**
+   * Creates a router for one opened database and JavaFX stage.
+   *
+   * @param stage JavaFX stage to control
+   * @param database opened application database
+   * @throws NullPointerException if either argument is {@code null}
+   */
   public ApplicationRouter(Stage stage, SqliteDatabase database) {
     this(stage, ClinicServices.forDatabase(Objects.requireNonNull(database, "database")));
   }
@@ -34,7 +40,11 @@ public final class ApplicationRouter {
     this.services = Objects.requireNonNull(services, "services");
   }
 
-  /** Shows first-run setup or login depending on persisted account state. */
+  /**
+   * Shows first-run setup or login depending on persisted account state.
+   *
+   * @throws SQLException if the account state cannot be read
+   */
   public void showInitial() throws SQLException {
     if (services.accountService().needsInitialSetup()) {
       showSetup();
@@ -59,7 +69,12 @@ public final class ApplicationRouter {
     setContent(SetupView.create(services.accountService(), this::showLogin));
   }
 
-  /** Shows the initial role marker until the full role workspace is constructed. */
+  /**
+   * Shows the initial role marker until the full role workspace is constructed.
+   *
+   * @param session authenticated session that determines the destination
+   * @throws NullPointerException if {@code session} is {@code null}
+   */
   public void showWorkspace(Session session) {
     Objects.requireNonNull(session, "session");
     if (session.role() == Role.SYSTEM_ADMIN) {

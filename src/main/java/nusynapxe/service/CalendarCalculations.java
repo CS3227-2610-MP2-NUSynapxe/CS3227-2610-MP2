@@ -22,7 +22,15 @@ public final class CalendarCalculations {
     throw new AssertionError("Utility class");
   }
 
-  /** Classifies the 30-minute segments in one displayed day. */
+  /**
+   * Classifies the 30-minute segments in one displayed day.
+   *
+   * @param day displayed Singapore-local date
+   * @param settings Doctor-owned working-hour settings
+   * @param now current local clinic timestamp
+   * @return immutable adjacent segments with equal classifications merged
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public static List<CalendarTimeSegment> segmentsForDay(
       LocalDate day, DoctorCalendarSettings settings, LocalDateTime now) {
     Objects.requireNonNull(day, DAY_ARGUMENT);
@@ -42,7 +50,16 @@ public final class CalendarCalculations {
     return List.copyOf(segments);
   }
 
-  /** Returns the background state at a minute in a displayed day. */
+  /**
+   * Returns the background state at a minute in a displayed day.
+   *
+   * @param day displayed Singapore-local date
+   * @param minute minute to classify
+   * @param settings Doctor-owned working-hour settings
+   * @param now current local clinic timestamp
+   * @return elapsed, non-working, or working visual state
+   * @throws NullPointerException if an object argument is {@code null}
+   */
   public static SegmentKind classify(
       LocalDate day, int minute, DoctorCalendarSettings settings, LocalDateTime now) {
     Objects.requireNonNull(day, DAY_ARGUMENT);
@@ -60,7 +77,14 @@ public final class CalendarCalculations {
     return SegmentKind.WORKING;
   }
 
-  /** Returns the current minute offset when the current date is displayed. */
+  /**
+   * Returns the current minute offset when the current date is displayed.
+   *
+   * @param day displayed Singapore-local date
+   * @param now current local clinic timestamp
+   * @return current minute offset, or {@code -1} when {@code day} is not today
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public static int currentMinute(LocalDate day, LocalDateTime now) {
     Objects.requireNonNull(day, DAY_ARGUMENT);
     Objects.requireNonNull(now, "now");
@@ -70,7 +94,14 @@ public final class CalendarCalculations {
     return minuteOf(now.toLocalTime());
   }
 
-  /** Creates non-overlapping daily blocks for each appointment visible in a week. */
+  /**
+   * Creates non-overlapping daily blocks for each appointment visible in a week.
+   *
+   * @param day displayed Singapore-local date
+   * @param appointments appointments whose visible portions should be laid out
+   * @return immutable appointment blocks assigned to overlap lanes
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public static List<CalendarAppointmentBlock> blocksForDay(
       LocalDate day, List<CalendarAppointment> appointments) {
     Objects.requireNonNull(day, DAY_ARGUMENT);

@@ -10,14 +10,26 @@ public final class Authorization {
     throw new AssertionError("Utility class");
   }
 
-  /** Requires a non-null authenticated session. */
+  /**
+   * Requires a non-null authenticated session.
+   *
+   * @param session session to validate
+   * @throws AuthorizationException if {@code session} is {@code null}
+   */
   public static void requireAuthenticated(Session session) {
     if (session == null) {
       throw new AuthorizationException("Authentication is required");
     }
   }
 
-  /** Requires an authenticated session with one specific role. */
+  /**
+   * Requires an authenticated session with one specific role.
+   *
+   * @param session session to validate
+   * @param requiredRole role required by the operation
+   * @throws AuthorizationException if the session is missing or has another role
+   * @throws NullPointerException if {@code requiredRole} is {@code null}
+   */
   public static void requireRole(Session session, Role requiredRole) {
     requireAuthenticated(session);
     Objects.requireNonNull(requiredRole, "requiredRole");
@@ -26,7 +38,12 @@ public final class Authorization {
     }
   }
 
-  /** Requires an authenticated Doctor or Receptionist for administrative patient operations. */
+  /**
+   * Requires an authenticated Doctor or Receptionist for administrative patient operations.
+   *
+   * @param session session to validate
+   * @throws AuthorizationException if the session is missing or has another role
+   */
   public static void requirePatientAdministration(Session session) {
     requireAuthenticated(session);
     if (session.role() != Role.DOCTOR && session.role() != Role.RECEPTIONIST) {
@@ -34,7 +51,13 @@ public final class Authorization {
     }
   }
 
-  /** Requires that a Doctor session owns the referenced doctor resource. */
+  /**
+   * Requires that a Doctor session owns the referenced doctor resource.
+   *
+   * @param session session to validate
+   * @param doctorId doctor identifier that must match the session owner
+   * @throws AuthorizationException if the session is not the owning Doctor
+   */
   public static void requireDoctorOwnership(Session session, long doctorId) {
     requireRole(session, Role.DOCTOR);
     if (session.accountId() != doctorId) {
