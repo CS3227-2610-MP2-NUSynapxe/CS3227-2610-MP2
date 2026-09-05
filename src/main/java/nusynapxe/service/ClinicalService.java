@@ -17,14 +17,29 @@ public final class ClinicalService {
   private final AppointmentRepository appointments;
   private final ClinicalRecordRepository clinicalRecords;
 
-  /** Creates a clinical service with appointment and clinical persistence. */
+  /**
+   * Creates a clinical service with appointment and clinical persistence.
+   *
+   * @param appointments repository used to validate appointment ownership and state
+   * @param clinicalRecords repository used for consultation data
+   * @throws NullPointerException if a repository is {@code null}
+   */
   public ClinicalService(
       AppointmentRepository appointments, ClinicalRecordRepository clinicalRecords) {
     this.appointments = Objects.requireNonNull(appointments, "appointments");
     this.clinicalRecords = Objects.requireNonNull(clinicalRecords, "clinicalRecords");
   }
 
-  /** Returns an assigned Doctor's clinical record for an appointment. */
+  /**
+   * Returns an assigned Doctor's clinical record for an appointment.
+   *
+   * @param actor assigned Doctor session
+   * @param appointmentId appointment identifier
+   * @return the clinical record, or empty when consultation notes have not been saved
+   * @throws AuthorizationException if the actor is not the assigned Doctor
+   * @throws SQLException if the appointment or clinical record query fails
+   * @throws ValidationException if the appointment does not exist
+   */
   public Optional<ClinicalRecord> findForDoctor(Session actor, long appointmentId)
       throws SQLException {
     Appointment appointment = appointment(appointmentId);
@@ -32,7 +47,19 @@ public final class ClinicalService {
     return clinicalRecords.findByAppointment(appointmentId);
   }
 
-  /** Saves consultation notes for the assigned Doctor. */
+  /**
+   * Saves consultation notes for the assigned Doctor.
+   *
+   * @param actor assigned Doctor session
+   * @param appointmentId appointment identifier
+   * @param diagnosis required diagnosis text
+   * @param consultationNotes required consultation notes
+   * @param followUpNotes optional follow-up notes
+   * @return the persisted clinical record
+   * @throws AuthorizationException if the actor is not the assigned Doctor
+   * @throws SQLException if the record cannot be saved
+   * @throws ValidationException if the appointment state or required text is invalid
+   */
   public ClinicalRecord saveConsultation(
       Session actor,
       long appointmentId,
@@ -56,7 +83,21 @@ public final class ClinicalService {
             validFollowUp));
   }
 
-  /** Adds a validated prescription to an assigned Doctor's consultation. */
+  /**
+   * Adds a validated prescription to an assigned Doctor's consultation.
+   *
+   * @param actor assigned Doctor session
+   * @param appointmentId appointment identifier
+   * @param medication medication name
+   * @param dosage dosage instructions
+   * @param frequency administration frequency
+   * @param duration treatment duration
+   * @param instructions additional usage instructions
+   * @return the persisted prescription
+   * @throws AuthorizationException if the actor is not the assigned Doctor
+   * @throws SQLException if the prescription cannot be saved
+   * @throws ValidationException if the appointment state, consultation, or input is invalid
+   */
   public Prescription addPrescription(
       Session actor,
       long appointmentId,
@@ -85,7 +126,16 @@ public final class ClinicalService {
     return clinicalRecords.addPrescription(prescription);
   }
 
-  /** Lists prescriptions for an assigned Doctor's consultation. */
+  /**
+   * Lists prescriptions for an assigned Doctor's consultation.
+   *
+   * @param actor assigned Doctor session
+   * @param appointmentId appointment identifier
+   * @return immutable prescription list
+   * @throws AuthorizationException if the actor is not the assigned Doctor
+   * @throws SQLException if the appointment or prescription query fails
+   * @throws ValidationException if the appointment or clinical record does not exist
+   */
   public List<Prescription> prescriptionsForDoctor(Session actor, long appointmentId)
       throws SQLException {
     Appointment appointment = appointment(appointmentId);

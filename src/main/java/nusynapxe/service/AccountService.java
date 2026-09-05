@@ -16,7 +16,12 @@ public final class AccountService {
   private final PasswordPolicy passwordPolicy;
   private final PasswordHasher passwordHasher;
 
-  /** Creates an account service with the default password policy and hasher. */
+  /**
+   * Creates an account service with the default password policy and hasher.
+   *
+   * @param accounts repository used for account persistence
+   * @throws NullPointerException if {@code accounts} is {@code null}
+   */
   public AccountService(AccountRepository accounts) {
     this(accounts, new PasswordPolicy(), new PasswordHasher());
   }
@@ -28,17 +33,41 @@ public final class AccountService {
     this.passwordHasher = Objects.requireNonNull(passwordHasher, "passwordHasher");
   }
 
-  /** Reports whether the first administrator still needs to be created. */
+  /**
+   * Reports whether the first administrator still needs to be created.
+   *
+   * @return {@code true} when no account has been persisted
+   * @throws SQLException if the account query fails
+   */
   public boolean needsInitialSetup() throws SQLException {
     return !accounts.hasAccounts();
   }
 
-  /** Creates the first enabled System Admin account atomically. */
+  /**
+   * Creates the first enabled System Admin account atomically.
+   *
+   * @param username requested login name
+   * @param password password to hash and store
+   * @return the created public account
+   * @throws SQLException if account persistence fails
+   * @throws NullPointerException if {@code password} is {@code null}
+   * @throws ValidationException if an input is invalid or an administrator already exists
+   */
   public Account createInitialAdmin(String username, char[] password) throws SQLException {
     return createInitialAdmin(username, "System Admin", password);
   }
 
-  /** Creates the first enabled System Admin account with a display name. */
+  /**
+   * Creates the first enabled System Admin account with a display name.
+   *
+   * @param username requested login name
+   * @param displayName user-facing account name
+   * @param password password to hash and store
+   * @return the created public account
+   * @throws SQLException if account persistence fails
+   * @throws NullPointerException if {@code password} is {@code null}
+   * @throws ValidationException if an input is invalid or an administrator already exists
+   */
   public Account createInitialAdmin(String username, String displayName, char[] password)
       throws SQLException {
     String normalizedUsername = required(username, "Username");
@@ -60,7 +89,19 @@ public final class AccountService {
     }
   }
 
-  /** Creates a Doctor or Receptionist account as an authenticated System Admin. */
+  /**
+   * Creates a Doctor or Receptionist account as an authenticated System Admin.
+   *
+   * @param actor authenticated System Admin session
+   * @param username requested login name
+   * @param displayName user-facing account name
+   * @param role account role; only Doctor and Receptionist are accepted
+   * @param password password to hash and store
+   * @return the created public account
+   * @throws AuthorizationException if the actor is not a System Admin
+   * @throws SQLException if account persistence fails
+   * @throws ValidationException if an input or role is invalid, or the username is already used
+   */
   public Account createStaff(
       Session actor, String username, String displayName, Role role, char[] password)
       throws SQLException {
@@ -80,13 +121,27 @@ public final class AccountService {
     }
   }
 
-  /** Returns public account information to an authenticated System Admin. */
+  /**
+   * Returns public account information to an authenticated System Admin.
+   *
+   * @param actor authenticated System Admin session
+   * @return immutable public account list
+   * @throws AuthorizationException if the actor is not a System Admin
+   * @throws SQLException if the account query fails
+   */
   public List<Account> listAccounts(Session actor) throws SQLException {
     Authorization.requireRole(actor, Role.SYSTEM_ADMIN);
     return accounts.findAll();
   }
 
-  /** Returns Doctor accounts to a Receptionist or System Admin for scheduling. */
+  /**
+   * Returns Doctor accounts to a Receptionist or System Admin for scheduling.
+   *
+   * @param actor authenticated Receptionist or System Admin session
+   * @return immutable list of Doctor accounts
+   * @throws AuthorizationException if the actor is not permitted
+   * @throws SQLException if the account query fails
+   */
   public List<Account> listDoctors(Session actor) throws SQLException {
     if (actor == null || (actor.role() != Role.RECEPTIONIST && actor.role() != Role.SYSTEM_ADMIN)) {
       throw new AuthorizationException("You are not allowed to list Doctors");

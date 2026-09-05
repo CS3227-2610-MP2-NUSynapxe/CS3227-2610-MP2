@@ -18,7 +18,14 @@ public final class SetupView {
     throw new AssertionError("Utility class");
   }
 
-  /** Creates a first-run setup view connected to account creation. */
+  /**
+   * Creates a first-run setup view connected to account creation.
+   *
+   * @param accounts service used to create the initial administrator
+   * @param onSuccess callback invoked after setup succeeds
+   * @return root node for the setup form
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public static Parent create(AccountService accounts, SetupSuccess onSuccess) {
     TextField username = new TextField();
     username.setId("setup-username");

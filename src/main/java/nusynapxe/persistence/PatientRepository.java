@@ -55,12 +55,24 @@ public final class PatientRepository {
           + PATIENT_ORDER;
   private final SqliteDatabase database;
 
-  /** Creates a patient repository backed by an opened database. */
+  /**
+   * Creates a patient repository backed by an opened database.
+   *
+   * @param database database used for patient persistence
+   * @throws NullPointerException if {@code database} is {@code null}
+   */
   public PatientRepository(SqliteDatabase database) {
     this.database = Objects.requireNonNull(database, "database");
   }
 
-  /** Creates a patient and returns its generated Patient ID. */
+  /**
+   * Creates a patient and returns its generated Patient ID.
+   *
+   * @param requestedPatient patient data to normalize and persist
+   * @return the patient with its generated identifier
+   * @throws NullPointerException if {@code requestedPatient} is {@code null}
+   * @throws SQLException if the insert fails
+   */
   public Patient create(Patient requestedPatient) throws SQLException {
     Objects.requireNonNull(requestedPatient, "patient");
     Patient patient = normalizeIdentity(requestedPatient);
@@ -93,7 +105,14 @@ public final class PatientRepository {
         });
   }
 
-  /** Atomically updates a patient's permitted basic information. */
+  /**
+   * Atomically updates a patient's permitted basic information.
+   *
+   * @param requestedPatient replacement administrative patient data
+   * @return the updated patient
+   * @throws NullPointerException if {@code requestedPatient} is {@code null}
+   * @throws SQLException if the update fails or the patient does not exist
+   */
   public Patient update(Patient requestedPatient) throws SQLException {
     Objects.requireNonNull(requestedPatient, "patient");
     Patient patient = normalizeIdentity(requestedPatient);
@@ -122,12 +141,24 @@ public final class PatientRepository {
         });
   }
 
-  /** Deactivates a patient while preserving the Patient ID and all related history. */
+  /**
+   * Deactivates a patient while preserving the Patient ID and all related history.
+   *
+   * @param patientId patient identifier
+   * @return the deactivated patient
+   * @throws SQLException if the update fails or the patient does not exist
+   */
   public Patient deactivate(long patientId) throws SQLException {
     return setActive(patientId, false);
   }
 
-  /** Reactivates a patient while preserving the Patient ID and all related history. */
+  /**
+   * Reactivates a patient while preserving the Patient ID and all related history.
+   *
+   * @param patientId patient identifier
+   * @return the activated patient
+   * @throws SQLException if the update fails or the patient does not exist
+   */
   public Patient activate(long patientId) throws SQLException {
     return setActive(patientId, true);
   }
@@ -160,7 +191,13 @@ public final class PatientRepository {
         });
   }
 
-  /** Finds one patient's non-clinical basic information. */
+  /**
+   * Finds one patient's non-clinical basic information.
+   *
+   * @param id patient identifier
+   * @return matching patient, or empty when it does not exist
+   * @throws SQLException if the query fails
+   */
   public Optional<Patient> findById(long id) throws SQLException {
     try (PreparedStatement statement =
         database.connection().prepareStatement(SELECT_PATIENT_BY_ID)) {
@@ -171,7 +208,15 @@ public final class PatientRepository {
     }
   }
 
-  /** Finds a patient by the normalized composite document identity. */
+  /**
+   * Finds a patient by the normalized composite document identity.
+   *
+   * @param type identity-document category
+   * @param issuingCountry normalized issuing country code
+   * @param identityNumber normalized identity-document number
+   * @return matching patient, or empty when any component is missing or no match exists
+   * @throws SQLException if the query fails
+   */
   public Optional<Patient> findByIdentity(
       IdentityType type, String issuingCountry, String identityNumber) throws SQLException {
     if (type == null || issuingCountry == null || identityNumber == null) {
@@ -188,7 +233,13 @@ public final class PatientRepository {
     }
   }
 
-  /** Returns non-sensitive relationship counts for a patient deletion check. */
+  /**
+   * Returns non-sensitive relationship counts for a patient deletion check.
+   *
+   * @param patientId patient identifier
+   * @return relationship counts, or empty when the patient does not exist
+   * @throws SQLException if the query fails
+   */
   public Optional<PatientDeletionBlockers> findDeletionBlockers(long patientId)
       throws SQLException {
     try (PreparedStatement statement =
@@ -203,7 +254,13 @@ public final class PatientRepository {
     return Optional.of(readDeletionBlockers(database.connection(), patientId));
   }
 
-  /** Deletes an unused patient or returns the relationship counts that safely block deletion. */
+  /**
+   * Deletes an unused patient or returns the relationship counts that safely block deletion.
+   *
+   * @param patientId patient identifier
+   * @return empty when deletion succeeds, or non-sensitive blockers when deletion is unsafe
+   * @throws SQLException if the transaction fails or the patient does not exist
+   */
   public Optional<PatientDeletionBlockers> deleteIfUnrelated(long patientId) throws SQLException {
     return SqliteTransactions.execute(
         database,
@@ -235,7 +292,12 @@ public final class PatientRepository {
         });
   }
 
-  /** Returns all patients in deterministic name and Patient ID order. */
+  /**
+   * Returns all patients in deterministic name and Patient ID order.
+   *
+   * @return immutable patient list
+   * @throws SQLException if the query fails
+   */
   public List<Patient> findAll() throws SQLException {
     return search("");
   }
@@ -245,6 +307,10 @@ public final class PatientRepository {
    *
    * <p>Text fields use escaped literal substring matching. Numeric and {@code P}-prefixed values
    * also match an exact generated Patient ID.
+   *
+   * @param requestedQuery query text, or {@code null} for all patients
+   * @return immutable matching patient list
+   * @throws SQLException if the query fails
    */
   public List<Patient> search(String requestedQuery) throws SQLException {
     String query = requestedQuery == null ? "" : requestedQuery.trim();

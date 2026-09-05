@@ -19,7 +19,14 @@ public final class LoginView {
     throw new AssertionError("Utility class");
   }
 
-  /** Creates a login view connected to an authentication service and success callback. */
+  /**
+   * Creates a login view connected to an authentication service and success callback.
+   *
+   * @param authentication service used to authenticate submitted credentials
+   * @param onSuccess callback invoked with a successful session
+   * @return root node for the login form
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public static Parent create(AuthenticationService authentication, LoginSuccess onSuccess) {
     TextField username = new TextField();
     username.setId("login-username");
@@ -74,7 +81,11 @@ public final class LoginView {
   /** Receives a successful authenticated session. */
   @FunctionalInterface
   public interface LoginSuccess {
-    /** Handles the authenticated session. */
+    /**
+     * Handles the authenticated session.
+     *
+     * @param session newly authenticated session
+     */
     void accept(Session session);
   }
 }

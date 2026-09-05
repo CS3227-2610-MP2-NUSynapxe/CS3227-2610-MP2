@@ -38,7 +38,14 @@ public final class PatientService {
   private final AppointmentRepository appointments;
   private final ClinicalRecordRepository clinicalRecords;
 
-  /** Creates a patient service with its persistence collaborators. */
+  /**
+   * Creates a patient service with its persistence collaborators.
+   *
+   * @param patients repository used for administrative patient data
+   * @param appointments repository used to resolve Doctor-owned appointments
+   * @param clinicalRecords repository used to read Doctor-owned clinical records
+   * @throws NullPointerException if a repository is {@code null}
+   */
   public PatientService(
       PatientRepository patients,
       AppointmentRepository appointments,
@@ -48,7 +55,17 @@ public final class PatientService {
     this.clinicalRecords = Objects.requireNonNull(clinicalRecords, "clinicalRecords");
   }
 
-  /** Registers a patient using Doctor- or Receptionist-authorized basic fields. */
+  /**
+   * Registers a patient using Doctor- or Receptionist-authorized basic fields.
+   *
+   * @param actor authenticated Doctor or Receptionist session
+   * @param requestedPatient patient draft to validate and persist
+   * @return the registered patient
+   * @throws AuthorizationException if the actor is not permitted to administer patients
+   * @throws NullPointerException if {@code requestedPatient} is {@code null}
+   * @throws SQLException if persistence fails
+   * @throws ValidationException if the patient data is invalid or the identity is duplicated
+   */
   public Patient register(Session actor, Patient requestedPatient) throws SQLException {
     Authorization.requirePatientAdministration(actor);
     Patient patient = validate(requestedPatient, true);
@@ -60,7 +77,18 @@ public final class PatientService {
     }
   }
 
-  /** Atomically updates only a patient's non-clinical basic information. */
+  /**
+   * Atomically updates only a patient's non-clinical basic information.
+   *
+   * @param actor authenticated Doctor or Receptionist session
+   * @param requestedPatient replacement administrative data
+   * @return the updated patient
+   * @throws AuthorizationException if the actor is not permitted to administer patients
+   * @throws NullPointerException if {@code requestedPatient} is {@code null}
+   * @throws SQLException if persistence fails
+   * @throws ValidationException if the patient does not exist, data is invalid, or the identity is
+   *     duplicated
+   */
   public Patient updateAdministrative(Session actor, Patient requestedPatient) throws SQLException {
     Authorization.requirePatientAdministration(actor);
     Objects.requireNonNull(requestedPatient, "patient");
@@ -76,7 +104,16 @@ public final class PatientService {
     }
   }
 
-  /** Deactivates a patient without deleting the Patient ID or retained history. */
+  /**
+   * Deactivates a patient without deleting the Patient ID or retained history.
+   *
+   * @param actor authenticated Doctor or Receptionist session
+   * @param patientId patient identifier
+   * @return the deactivated patient
+   * @throws AuthorizationException if the actor is not permitted to administer patients
+   * @throws SQLException if persistence fails
+   * @throws ValidationException if the patient does not exist
+   */
   public Patient deactivateAdministrative(Session actor, long patientId) throws SQLException {
     Authorization.requirePatientAdministration(actor);
     if (patientId <= 0 || patients.findById(patientId).isEmpty()) {
@@ -85,7 +122,16 @@ public final class PatientService {
     return patients.deactivate(patientId);
   }
 
-  /** Reactivates a patient without changing the Patient ID or retained history. */
+  /**
+   * Reactivates a patient without changing the Patient ID or retained history.
+   *
+   * @param actor authenticated Doctor or Receptionist session
+   * @param patientId patient identifier
+   * @return the activated patient
+   * @throws AuthorizationException if the actor is not permitted to administer patients
+   * @throws SQLException if persistence fails
+   * @throws ValidationException if the patient does not exist
+   */
   public Patient activateAdministrative(Session actor, long patientId) throws SQLException {
     Authorization.requirePatientAdministration(actor);
     if (patientId <= 0 || patients.findById(patientId).isEmpty()) {
@@ -94,18 +140,42 @@ public final class PatientService {
     return patients.activate(patientId);
   }
 
-  /** Searches non-clinical patient information for a Doctor or Receptionist. */
+  /**
+   * Searches non-clinical patient information for a Doctor or Receptionist.
+   *
+   * @param actor authenticated Doctor or Receptionist session
+   * @param query optional search text
+   * @return immutable matching patient list
+   * @throws AuthorizationException if the actor is not permitted to administer patients
+   * @throws SQLException if the query fails
+   */
   public List<Patient> searchAdministrative(Session actor, String query) throws SQLException {
     Authorization.requirePatientAdministration(actor);
     return patients.search(query);
   }
 
-  /** Returns non-clinical patient information to authorized administrative staff. */
+  /**
+   * Returns non-clinical patient information to authorized administrative staff.
+   *
+   * @param actor authenticated Doctor or Receptionist session
+   * @return immutable list of all administrative patients
+   * @throws AuthorizationException if the actor is not permitted to administer patients
+   * @throws SQLException if the query fails
+   */
   public List<Patient> listAdministrative(Session actor) throws SQLException {
     return searchAdministrative(actor, "");
   }
 
-  /** Returns non-clinical information for a Doctor or Receptionist. */
+  /**
+   * Returns non-clinical information for a Doctor or Receptionist.
+   *
+   * @param actor authenticated Doctor or Receptionist session
+   * @param patientId patient identifier
+   * @return the requested administrative patient
+   * @throws AuthorizationException if the actor is not permitted to administer patients
+   * @throws SQLException if the query fails
+   * @throws ValidationException if the patient does not exist
+   */
   public Patient getAdministrative(Session actor, long patientId) throws SQLException {
     Authorization.requirePatientAdministration(actor);
     return patients
@@ -113,7 +183,16 @@ public final class PatientService {
         .orElseThrow(() -> new ValidationException(PATIENT_NOT_FOUND_MESSAGE));
   }
 
-  /** Returns relationship counts for an authorized patient deletion check. */
+  /**
+   * Returns relationship counts for an authorized patient deletion check.
+   *
+   * @param actor authenticated Doctor or Receptionist session
+   * @param patientId patient identifier
+   * @return non-sensitive deletion blockers
+   * @throws AuthorizationException if the actor is not permitted to administer patients
+   * @throws SQLException if the query fails
+   * @throws ValidationException if the patient does not exist
+   */
   public PatientDeletionBlockers deletionBlockers(Session actor, long patientId)
       throws SQLException {
     Authorization.requirePatientAdministration(actor);
@@ -123,7 +202,16 @@ public final class PatientService {
         .orElseThrow(() -> new ValidationException(PATIENT_NOT_FOUND_MESSAGE));
   }
 
-  /** Permanently deletes an authorized patient only when no related data exists. */
+  /**
+   * Permanently deletes an authorized patient only when no related data exists.
+   *
+   * @param actor authenticated Doctor or Receptionist session
+   * @param patientId patient identifier
+   * @throws AuthorizationException if the actor is not permitted to administer patients
+   * @throws PatientDeletionBlockedException if related data prevents deletion
+   * @throws SQLException if the deletion transaction fails
+   * @throws ValidationException if the patient does not exist
+   */
   public void deleteAdministrative(Session actor, long patientId) throws SQLException {
     Authorization.requirePatientAdministration(actor);
     requirePatientId(patientId);
@@ -136,7 +224,16 @@ public final class PatientService {
     }
   }
 
-  /** Returns the clinical record for an appointment owned by the Doctor. */
+  /**
+   * Returns the clinical record for an appointment owned by the Doctor.
+   *
+   * @param actor assigned Doctor session
+   * @param appointmentId appointment identifier
+   * @return the clinical record, or empty when none has been saved
+   * @throws AuthorizationException if the actor is not the assigned Doctor
+   * @throws SQLException if the appointment or clinical record query fails
+   * @throws ValidationException if the appointment does not exist
+   */
   public Optional<ClinicalRecord> findClinicalForDoctor(Session actor, long appointmentId)
       throws SQLException {
     Appointment appointment = appointment(appointmentId);

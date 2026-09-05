@@ -47,7 +47,15 @@ public final class DoctorView {
     throw new AssertionError("Utility class");
   }
 
-  /** Creates the Doctor workspace. */
+  /**
+   * Creates the Doctor workspace.
+   *
+   * @param services application services used by the workspace
+   * @param session authenticated Doctor session
+   * @param onLogout callback invoked when the Doctor logs out
+   * @return root node for the Doctor workspace
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public static Parent create(ClinicServices services, Session session, Runnable onLogout) {
     ListView<Appointment> appointments = new ListView<>();
     appointments.setId("doctor-appointment-list");

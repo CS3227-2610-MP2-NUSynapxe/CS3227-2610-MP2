@@ -36,7 +36,13 @@ public final class ClinicServices {
     this.calendarOperations = calendarService;
   }
 
-  /** Creates all application services over one opened database. */
+  /**
+   * Creates all application services over one opened database.
+   *
+   * @param database opened database shared by all repositories and services
+   * @return fully wired clinic service facade
+   * @throws NullPointerException if {@code database} is {@code null}
+   */
   public static ClinicServices forDatabase(SqliteDatabase database) {
     Objects.requireNonNull(database, "database");
     AccountRepository accounts = new AccountRepository(database);
@@ -57,37 +63,65 @@ public final class ClinicServices {
         calendarService);
   }
 
-  /** Returns account setup and staff-management operations. */
+  /**
+   * Returns account setup and staff-management operations.
+   *
+   * @return account service
+   */
   public AccountService accountService() {
     return accountOperations;
   }
 
-  /** Returns login and logout operations. */
+  /**
+   * Returns login and logout operations.
+   *
+   * @return authentication service
+   */
   public AuthenticationService authenticationService() {
     return authentication;
   }
 
-  /** Returns patient operations. */
+  /**
+   * Returns patient operations.
+   *
+   * @return patient service
+   */
   public PatientService patientService() {
     return patientOperations;
   }
 
-  /** Returns appointment operations. */
+  /**
+   * Returns appointment operations.
+   *
+   * @return appointment service
+   */
   public AppointmentService appointmentService() {
     return appointmentOperations;
   }
 
-  /** Returns clinical-record operations. */
+  /**
+   * Returns clinical-record operations.
+   *
+   * @return clinical service
+   */
   public ClinicalService clinicalService() {
     return clinicalOperations;
   }
 
-  /** Returns billing operations. */
+  /**
+   * Returns billing operations.
+   *
+   * @return billing service
+   */
   public BillingService billingService() {
     return billingOperations;
   }
 
-  /** Returns Doctor Calendar and preference operations. */
+  /**
+   * Returns Doctor Calendar and preference operations.
+   *
+   * @return Calendar service
+   */
   public CalendarService calendarService() {
     return calendarOperations;
   }

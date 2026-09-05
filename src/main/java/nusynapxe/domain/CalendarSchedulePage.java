@@ -3,7 +3,13 @@ package nusynapxe.domain;
 import java.util.List;
 import java.util.Objects;
 
-/** One bounded, chronologically ordered page in a doctor's future schedule. */
+/**
+ * One bounded, chronologically ordered page in a doctor's future schedule.
+ *
+ * @param appointments appointments returned by the page
+ * @param nextCursor keyset position for the next page, or {@code null} at the end
+ * @param hasMore whether another page is available
+ */
 public record CalendarSchedulePage(
     List<CalendarAppointment> appointments, CalendarScheduleCursor nextCursor, boolean hasMore) {
 
@@ -13,6 +19,12 @@ public record CalendarSchedulePage(
   /** Maximum page size accepted by the schedule query. */
   public static final int MAX_PAGE_SIZE = 100;
 
+  /**
+   * Validates and defensively copies a schedule page.
+   *
+   * @throws NullPointerException if {@code appointments} is {@code null}
+   * @throws IllegalArgumentException if the cursor state is inconsistent with the page contents
+   */
   public CalendarSchedulePage {
     Objects.requireNonNull(appointments, "appointments");
     appointments = List.copyOf(appointments);

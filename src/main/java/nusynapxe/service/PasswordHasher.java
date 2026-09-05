@@ -26,7 +26,14 @@ public final class PasswordHasher {
     this.secureRandom = Objects.requireNonNull(secureRandom, "secureRandom");
   }
 
-  /** Creates a salted verifier for a password. */
+  /**
+   * Creates a salted verifier for a password.
+   *
+   * @param password password to hash; the caller remains responsible for clearing it
+   * @return salted password hash
+   * @throws NullPointerException if {@code password} is {@code null}
+   * @throws IllegalStateException if the configured JDK hashing algorithm is unavailable
+   */
   public PasswordHash hash(char[] password) {
     Objects.requireNonNull(password, "password");
     byte[] salt = new byte[SALT_LENGTH_BYTES];
@@ -34,7 +41,16 @@ public final class PasswordHasher {
     return new PasswordHash(salt, derive(password, salt));
   }
 
-  /** Checks a password against a stored salt and verifier. */
+  /**
+   * Checks a password against a stored salt and verifier.
+   *
+   * @param password candidate password
+   * @param salt stored password salt
+   * @param expectedVerifier stored derived verifier
+   * @return {@code true} when the candidate produces the expected verifier
+   * @throws NullPointerException if an argument is {@code null}
+   * @throws IllegalStateException if the configured JDK hashing algorithm is unavailable
+   */
   public boolean matches(char[] password, byte[] salt, byte[] expectedVerifier) {
     Objects.requireNonNull(password, "password");
     Objects.requireNonNull(salt, "salt");

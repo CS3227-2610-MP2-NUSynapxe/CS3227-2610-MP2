@@ -66,6 +66,11 @@ public final class DemoDataSeeder {
    * @param appointments number of appointments created
    */
   public record SeedSummary(int accounts, int patients, int appointments) {
+    /**
+     * Validates seed counts.
+     *
+     * @throws IllegalArgumentException if a count is negative
+     */
     public SeedSummary {
       if (accounts < 0 || patients < 0 || appointments < 0) {
         throw new IllegalArgumentException("Seed counts cannot be negative");

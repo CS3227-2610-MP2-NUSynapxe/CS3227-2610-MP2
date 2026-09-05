@@ -1,6 +1,12 @@
 package nusynapxe.domain;
 
-/** A classified half-open time-grid segment used to render background shading. */
+/**
+ * A classified half-open time-grid segment used to render background shading.
+ *
+ * @param startMinute inclusive start minute in the civil day
+ * @param endMinute exclusive end minute in the civil day
+ * @param kind visual classification of the segment
+ */
 public record CalendarTimeSegment(int startMinute, int endMinute, SegmentKind kind) {
   /** Visual states for a Calendar time segment. */
   public enum SegmentKind {
@@ -12,7 +18,12 @@ public record CalendarTimeSegment(int startMinute, int endMinute, SegmentKind ki
     WORKING
   }
 
-  /** Validates a segment within a civil day. */
+  /**
+   * Validates a segment within a civil day.
+   *
+   * @throws IllegalArgumentException if the segment is outside the civil day or empty
+   * @throws NullPointerException if {@code kind} is {@code null}
+   */
   public CalendarTimeSegment {
     if (startMinute < 0
         || endMinute > WorkingInterval.MINUTES_PER_DAY

@@ -19,12 +19,23 @@ public final class ClinicalRecordRepository {
       "id, clinical_record_id, medication, dosage, frequency, duration, instructions";
   private final SqliteDatabase database;
 
-  /** Creates a clinical repository backed by an opened database. */
+  /**
+   * Creates a clinical repository backed by an opened database.
+   *
+   * @param database database used for clinical persistence
+   * @throws NullPointerException if {@code database} is {@code null}
+   */
   public ClinicalRecordRepository(SqliteDatabase database) {
     this.database = Objects.requireNonNull(database, "database");
   }
 
-  /** Finds the clinical record for an appointment. */
+  /**
+   * Finds the clinical record for an appointment.
+   *
+   * @param appointmentId appointment identifier
+   * @return clinical record, or empty when consultation notes have not been saved
+   * @throws SQLException if the query fails
+   */
   public Optional<ClinicalRecord> findByAppointment(long appointmentId) throws SQLException {
     try (PreparedStatement statement =
         database
@@ -38,7 +49,14 @@ public final class ClinicalRecordRepository {
     }
   }
 
-  /** Saves or updates the one clinical record associated with an appointment. */
+  /**
+   * Saves or updates the one clinical record associated with an appointment.
+   *
+   * @param record clinical record to insert or replace
+   * @return record with its persisted identifier
+   * @throws NullPointerException if {@code record} is {@code null}
+   * @throws SQLException if the save transaction fails
+   */
   public ClinicalRecord save(ClinicalRecord record) throws SQLException {
     Objects.requireNonNull(record, "record");
     return SqliteTransactions.execute(
@@ -53,7 +71,14 @@ public final class ClinicalRecordRepository {
         });
   }
 
-  /** Adds a prescription to a clinical record. */
+  /**
+   * Adds a prescription to a clinical record.
+   *
+   * @param prescription prescription to persist
+   * @return prescription with its generated identifier
+   * @throws NullPointerException if {@code prescription} is {@code null}
+   * @throws SQLException if the insert fails
+   */
   public Prescription addPrescription(Prescription prescription) throws SQLException {
     Objects.requireNonNull(prescription, "prescription");
     return SqliteTransactions.execute(
@@ -82,7 +107,13 @@ public final class ClinicalRecordRepository {
         });
   }
 
-  /** Returns prescriptions for a clinical record in creation order. */
+  /**
+   * Returns prescriptions for a clinical record in creation order.
+   *
+   * @param clinicalRecordId clinical record identifier
+   * @return immutable prescription list ordered by identifier
+   * @throws SQLException if the query fails
+   */
   public List<Prescription> findPrescriptions(long clinicalRecordId) throws SQLException {
     try (PreparedStatement statement =
         database

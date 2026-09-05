@@ -17,12 +17,22 @@ public final class AccountRepository {
   private static final String ACCOUNT_COLUMNS = "id, username, display_name, role, enabled";
   private final SqliteDatabase database;
 
-  /** Creates an account repository backed by an opened database. */
+  /**
+   * Creates an account repository backed by an opened database.
+   *
+   * @param database database used for account persistence
+   * @throws NullPointerException if {@code database} is {@code null}
+   */
   public AccountRepository(SqliteDatabase database) {
     this.database = Objects.requireNonNull(database, "database");
   }
 
-  /** Reports whether at least one account exists. */
+  /**
+   * Reports whether at least one account exists.
+   *
+   * @return {@code true} when the account table contains a row
+   * @throws SQLException if the account query fails
+   */
   public boolean hasAccounts() throws SQLException {
     try (PreparedStatement statement =
         database.connection().prepareStatement("SELECT 1 FROM users LIMIT 1")) {
@@ -32,7 +42,13 @@ public final class AccountRepository {
     }
   }
 
-  /** Finds credential material by case-insensitive username. */
+  /**
+   * Finds credential material by case-insensitive username.
+   *
+   * @param username login name to find
+   * @return matching account and credential material, or empty when no account exists
+   * @throws SQLException if the account query fails
+   */
   public Optional<AccountCredential> findCredentials(String username) throws SQLException {
     try (PreparedStatement statement =
         database
@@ -51,7 +67,13 @@ public final class AccountRepository {
     }
   }
 
-  /** Finds public account information by identifier. */
+  /**
+   * Finds public account information by identifier.
+   *
+   * @param id account identifier
+   * @return matching public account, or empty when no account exists
+   * @throws SQLException if the account query fails
+   */
   public Optional<Account> findById(long id) throws SQLException {
     try (PreparedStatement statement =
         database
@@ -64,7 +86,12 @@ public final class AccountRepository {
     }
   }
 
-  /** Returns all public account information in username order. */
+  /**
+   * Returns all public account information in username order.
+   *
+   * @return immutable account list
+   * @throws SQLException if the account query fails
+   */
   public List<Account> findAll() throws SQLException {
     try (PreparedStatement statement =
         database
@@ -74,7 +101,18 @@ public final class AccountRepository {
     }
   }
 
-  /** Creates an enabled account and returns its public information. */
+  /**
+   * Creates an enabled account and returns its public information.
+   *
+   * @param username unique login name
+   * @param displayName user-facing name
+   * @param role authorization role
+   * @param salt password-hashing salt
+   * @param verifier derived password verifier
+   * @return the newly created public account
+   * @throws SQLException if the insert fails
+   * @throws NullPointerException if a required argument is {@code null}
+   */
   public Account create(
       String username, String displayName, Role role, byte[] salt, byte[] verifier)
       throws SQLException {
@@ -87,7 +125,18 @@ public final class AccountRepository {
         database, connection -> insert(connection, username, displayName, role, salt, verifier));
   }
 
-  /** Creates the first administrator only when the account table is empty. */
+  /**
+   * Creates the first administrator only when the account table is empty.
+   *
+   * @param username unique login name
+   * @param displayName user-facing name
+   * @param role authorization role
+   * @param salt password-hashing salt
+   * @param verifier derived password verifier
+   * @return the new account, or empty when an account already exists
+   * @throws SQLException if the account query or insert fails
+   * @throws NullPointerException if a required argument is {@code null}
+   */
   public Optional<Account> createInitial(
       String username, String displayName, Role role, byte[] salt, byte[] verifier)
       throws SQLException {
@@ -104,7 +153,13 @@ public final class AccountRepository {
                 : Optional.of(insert(connection, username, displayName, role, salt, verifier)));
   }
 
-  /** Changes whether an account is enabled. */
+  /**
+   * Changes whether an account is enabled.
+   *
+   * @param id account identifier
+   * @param enabled new authentication state
+   * @throws SQLException if the update fails
+   */
   public void setEnabled(long id, boolean enabled) throws SQLException {
     SqliteTransactions.execute(
         database,

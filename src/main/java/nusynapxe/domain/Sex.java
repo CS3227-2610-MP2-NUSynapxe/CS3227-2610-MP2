@@ -13,7 +13,11 @@ public enum Sex {
     this.displayName = displayName;
   }
 
-  /** Returns the user-facing label while persistence continues to use {@link #name()}. */
+  /**
+   * Returns the user-facing label while persistence continues to use {@link #name()}.
+   *
+   * @return display label for the sex value
+   */
   @Override
   public String toString() {
     return displayName;

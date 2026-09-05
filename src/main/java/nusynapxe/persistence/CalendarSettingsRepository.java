@@ -17,12 +17,24 @@ import nusynapxe.domain.WorkingInterval;
 public final class CalendarSettingsRepository {
   private final SqliteDatabase database;
 
-  /** Creates a Calendar settings repository backed by an opened database. */
+  /**
+   * Creates a Calendar settings repository backed by an opened database.
+   *
+   * @param database database used for Calendar preference persistence
+   * @throws NullPointerException if {@code database} is {@code null}
+   */
   public CalendarSettingsRepository(SqliteDatabase database) {
     this.database = Objects.requireNonNull(database, "database");
   }
 
-  /** Finds saved settings for one Doctor. */
+  /**
+   * Finds saved settings for one Doctor.
+   *
+   * @param doctorId doctor identifier
+   * @return saved settings, or empty when the Doctor has no saved profile
+   * @throws IllegalArgumentException if {@code doctorId} is not positive
+   * @throws SQLException if the settings query or stored-value conversion fails
+   */
   public Optional<DoctorCalendarSettings> findByDoctor(long doctorId) throws SQLException {
     requireDoctorId(doctorId);
     String firstDay;
@@ -70,7 +82,14 @@ public final class CalendarSettingsRepository {
     }
   }
 
-  /** Atomically replaces one Doctor's complete Calendar settings snapshot. */
+  /**
+   * Atomically replaces one Doctor's complete Calendar settings snapshot.
+   *
+   * @param settings validated settings to persist
+   * @return the persisted settings
+   * @throws NullPointerException if {@code settings} is {@code null}
+   * @throws SQLException if the replacement transaction fails
+   */
   public DoctorCalendarSettings save(DoctorCalendarSettings settings) throws SQLException {
     Objects.requireNonNull(settings, "settings");
     return SqliteTransactions.execute(

@@ -8,14 +8,26 @@ public final class AppointmentTransitions {
     throw new AssertionError("Utility class");
   }
 
-  /** Requires that an appointment may move from one state to another. */
+  /**
+   * Requires that an appointment may move from one state to another.
+   *
+   * @param from current lifecycle state
+   * @param to requested lifecycle state
+   * @throws ValidationException if the transition is not allowed
+   */
   public static void requireAllowed(AppointmentStatus from, AppointmentStatus to) {
     if (!isAllowed(from, to)) {
       throw new ValidationException("The appointment cannot move from " + from + " to " + to);
     }
   }
 
-  /** Reports whether the lifecycle transition is valid. */
+  /**
+   * Reports whether the lifecycle transition is valid.
+   *
+   * @param from current lifecycle state
+   * @param to requested lifecycle state
+   * @return {@code true} when the transition is permitted
+   */
   public static boolean isAllowed(AppointmentStatus from, AppointmentStatus to) {
     if (from == null || to == null) {
       return false;

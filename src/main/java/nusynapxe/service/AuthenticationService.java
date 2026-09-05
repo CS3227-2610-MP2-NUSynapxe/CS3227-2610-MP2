@@ -15,7 +15,12 @@ public final class AuthenticationService {
   private final PasswordHasher passwordHasher;
   private final SessionManager sessions;
 
-  /** Creates an authentication service with a new in-memory session manager. */
+  /**
+   * Creates an authentication service with a new in-memory session manager.
+   *
+   * @param accounts repository used to read credentials
+   * @throws NullPointerException if {@code accounts} is {@code null}
+   */
   public AuthenticationService(AccountRepository accounts) {
     this(accounts, new PasswordHasher(), new SessionManager());
   }
@@ -27,7 +32,15 @@ public final class AuthenticationService {
     this.sessions = Objects.requireNonNull(sessions, "sessions");
   }
 
-  /** Attempts login and returns an empty result for every invalid credential case. */
+  /**
+   * Attempts login and returns an empty result for every invalid credential case.
+   *
+   * @param username login name
+   * @param password submitted password; it is cleared before this method returns
+   * @return authenticated session, or empty when the credentials are invalid or disabled
+   * @throws SQLException if credential lookup fails
+   * @throws NullPointerException if {@code password} is {@code null}
+   */
   public Optional<Session> login(String username, char[] password) throws SQLException {
     Objects.requireNonNull(password, "password");
     try {
@@ -57,7 +70,11 @@ public final class AuthenticationService {
     }
   }
 
-  /** Returns the current authenticated session, if one exists. */
+  /**
+   * Returns the current authenticated session, if one exists.
+   *
+   * @return current session, or empty when no user is authenticated
+   */
   public Optional<Session> currentSession() {
     return sessions.current();
   }

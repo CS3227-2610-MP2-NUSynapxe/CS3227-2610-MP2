@@ -20,11 +20,31 @@ public final class ReceiptRepository {
           + " WHERE (? IS NULL OR ? = '' OR CAST(p.id AS TEXT) LIKE lower(?) OR lower(p.first_name || ' ' || p.last_name) LIKE lower(?) OR lower(p.email) LIKE lower(?)) AND (? IS NULL OR a.doctor_id = ?) AND (? IS NULL OR r.receipt_date = ?) ORDER BY r.receipt_date DESC, r.sequence_number DESC";
   private final SqliteDatabase database;
 
+  /**
+   * Creates a receipt repository backed by an opened database.
+   *
+   * @param database database used for receipt persistence
+   * @throws NullPointerException if {@code database} is {@code null}
+   */
   public ReceiptRepository(SqliteDatabase database) {
     this.database = Objects.requireNonNull(database, "database");
   }
 
-  /** Creates a receipt row inside the caller's transaction. */
+  /**
+   * Creates a receipt row inside the caller's transaction.
+   *
+   * @param connection active transaction connection
+   * @param paymentId payment identifier
+   * @param appointmentId paid appointment identifier
+   * @param patientId patient identifier
+   * @param amountMinor amount in minor currency units
+   * @param method payment method
+   * @param receiptDate Singapore-local receipt date
+   * @param recordedAt payment recording timestamp
+   * @return the created receipt
+   * @throws NullPointerException if a required argument is {@code null}
+   * @throws SQLException if the sequence lookup or insert fails
+   */
   public Receipt create(
       java.sql.Connection connection,
       long paymentId,
@@ -80,6 +100,13 @@ public final class ReceiptRepository {
     }
   }
 
+  /**
+   * Finds one receipt by identifier.
+   *
+   * @param id receipt identifier
+   * @return the matching receipt
+   * @throws SQLException if the receipt does not exist or the query fails
+   */
   public Receipt findById(long id) throws SQLException {
     try (PreparedStatement statement = database.connection().prepareStatement(FIND_BY_ID_QUERY)) {
       statement.setLong(1, id);
@@ -92,6 +119,15 @@ public final class ReceiptRepository {
     }
   }
 
+  /**
+   * Finds receipts using optional patient, Doctor, and date filters.
+   *
+   * @param patientQuery optional patient search text
+   * @param doctorId optional Doctor identifier
+   * @param date optional Singapore-local receipt date
+   * @return matching receipts in reverse receipt-date and sequence order
+   * @throws SQLException if the query fails
+   */
   public List<Receipt> findAll(String patientQuery, Long doctorId, LocalDate date)
       throws SQLException {
     try (PreparedStatement statement = database.connection().prepareStatement(FIND_ALL_QUERY)) {

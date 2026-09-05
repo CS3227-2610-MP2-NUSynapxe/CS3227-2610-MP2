@@ -55,7 +55,15 @@ public final class DoctorCalendarView {
   private CalendarScheduleList scheduleList;
   private boolean shown;
 
-  /** Creates a Calendar page using the Singapore clinic system clock. */
+  /**
+   * Creates a Calendar page using the Singapore clinic system clock.
+   *
+   * @param services application services used for Calendar operations
+   * @param session authenticated Doctor session
+   * @param onSettings callback used to open Calendar settings
+   * @param feedback label used for user-facing operation messages
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public DoctorCalendarView(
       ClinicServices services, Session session, Runnable onSettings, Label feedback) {
     this(services, session, onSettings, feedback, Clock.system(CalendarService.CLINIC_ZONE));
@@ -81,7 +89,11 @@ public final class DoctorCalendarView {
     refresh();
   }
 
-  /** Returns the Calendar page node. */
+  /**
+   * Returns the Calendar page node.
+   *
+   * @return root node for the Calendar page
+   */
   public Parent view() {
     return root;
   }
