@@ -49,6 +49,13 @@ final class AppointmentRepositoryScheduleTest {
               doctor,
               LocalDateTime.of(2026, 9, 3, 9, 0),
               AppointmentStatus.CANCELLED);
+      Appointment sameStartDeclined =
+          createAppointment(
+              appointments,
+              patient,
+              doctor,
+              LocalDateTime.of(2026, 9, 3, 9, 0),
+              AppointmentStatus.DECLINED);
       appointments.updateStatus(first.id(), AppointmentStatus.PENDING);
       Appointment third =
           createAppointment(
@@ -56,6 +63,13 @@ final class AppointmentRepositoryScheduleTest {
               patient,
               doctor,
               LocalDateTime.of(2026, 9, 4, 9, 0),
+              AppointmentStatus.ACCEPTED);
+      Appointment fourth =
+          createAppointment(
+              appointments,
+              patient,
+              doctor,
+              LocalDateTime.of(2026, 9, 5, 9, 0),
               AppointmentStatus.ACCEPTED);
       createAppointment(
           appointments,
@@ -71,11 +85,17 @@ final class AppointmentRepositoryScheduleTest {
           appointments.findCalendarPageByDoctor(
               doctor.id(), LocalDate.of(2026, 9, 3).atStartOfDay(), firstPage.nextCursor(), 2);
 
-      assertEquals(List.of(first.id(), sameStartCancelled.id()), ids(firstPage));
+      assertEquals(List.of(first.id(), third.id()), ids(firstPage));
       assertTrue(firstPage.hasMore());
-      assertEquals(List.of(third.id()), ids(secondPage));
+      assertEquals(List.of(fourth.id()), ids(secondPage));
       assertTrue(!secondPage.hasMore());
-      assertEquals(AppointmentStatus.CANCELLED, firstPage.appointments().get(1).status());
+      assertEquals(AppointmentStatus.PENDING, firstPage.appointments().get(0).status());
+      assertTrue(
+          firstPage.appointments().stream()
+              .noneMatch(
+                  appointment ->
+                      appointment.appointmentId() == sameStartCancelled.id()
+                          || appointment.appointmentId() == sameStartDeclined.id()));
     }
   }
 
@@ -126,14 +146,16 @@ final class AppointmentRepositoryScheduleTest {
       Patient patient = createPatient(database, "Grace", "Hopper");
       AppointmentRepository appointments = new AppointmentRepository(database);
       LocalDateTime base = LocalDateTime.of(2026, 9, 3, 9, 0);
-      for (int index = 0; index < 105; index++) {
+      for (int index = 0; index < 110; index++) {
         LocalDateTime startsAt = base.plusDays(index);
         createAppointment(
             appointments,
             patient,
             doctor,
             startsAt,
-            index % 10 == 0 ? AppointmentStatus.CANCELLED : AppointmentStatus.PENDING);
+            index == 0
+                ? AppointmentStatus.CANCELLED
+                : index == 1 ? AppointmentStatus.DECLINED : AppointmentStatus.PENDING);
       }
 
       CalendarSchedulePage firstPage =
@@ -152,7 +174,7 @@ final class AppointmentRepositoryScheduleTest {
       allIds.addAll(secondIds);
       assertEquals(CalendarSchedulePage.MAX_PAGE_SIZE, firstIds.size());
       assertTrue(firstPage.hasMore());
-      assertEquals(6, secondIds.size());
+      assertEquals(9, secondIds.size());
       assertTrue(secondIds.contains(laterInsert.id()));
       assertEquals(firstIds.size() + secondIds.size(), allIds.size());
       assertTrue(

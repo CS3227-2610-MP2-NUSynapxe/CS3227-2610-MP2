@@ -21,8 +21,15 @@ public final class AppointmentTransitions {
       return false;
     }
     return switch (from) {
-      case PENDING -> to == AppointmentStatus.ACCEPTED || to == AppointmentStatus.CANCELLED;
-      case ACCEPTED -> to == AppointmentStatus.CHECKED_IN || to == AppointmentStatus.CANCELLED;
+      case PENDING ->
+          to == AppointmentStatus.ACCEPTED
+              || to == AppointmentStatus.DECLINED
+              || to == AppointmentStatus.CANCELLED;
+      case ACCEPTED ->
+          to == AppointmentStatus.DECLINED
+              || to == AppointmentStatus.CHECKED_IN
+              || to == AppointmentStatus.CANCELLED;
+      case DECLINED -> to == AppointmentStatus.CANCELLED;
       case CHECKED_IN -> to == AppointmentStatus.COMPLETED;
       case COMPLETED -> to == AppointmentStatus.CHECKED_OUT;
       case CHECKED_OUT, CANCELLED -> false;

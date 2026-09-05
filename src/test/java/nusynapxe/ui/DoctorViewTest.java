@@ -130,6 +130,17 @@ final class DoctorViewTest extends ApplicationTest {
   }
 
   @Test
+  void doctorCanCheckInAnAcceptedAppointmentFromTheDashboard() throws SQLException {
+    new AppointmentRepository(database).updateStatus(1, AppointmentStatus.ACCEPTED);
+    loginAsDoctor();
+    selectFirst("#doctor-appointment-list");
+    assertFalse(lookup("#doctor-check-in").queryAs(Button.class).isDisable());
+    fire("#doctor-check-in");
+    verifyThat("#doctor-feedback", hasText("Patient checked in"));
+    assertEquals(AppointmentStatus.CHECKED_IN, services.appointmentService().get(1).status());
+  }
+
+  @Test
   void doctorCanNavigateToPatientsAndDeleteAnUnusedPatient() throws SQLException {
     loginAsDoctor();
     Button dashboardNavigation = lookup("#doctor-nav-dashboard").queryAs(Button.class);

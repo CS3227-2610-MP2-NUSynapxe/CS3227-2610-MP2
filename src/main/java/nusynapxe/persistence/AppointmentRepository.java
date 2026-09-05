@@ -4,6 +4,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Types;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -73,18 +74,40 @@ public final class AppointmentRepository {
   public Appointment reschedule(long id, LocalDateTime startsAt, LocalDateTime endsAt)
       throws SQLException {
     validateInterval(startsAt, endsAt);
+    return rescheduleInternal(id, startsAt, endsAt, null);
+  }
+
+  /** Reschedules an appointment and sets its resulting lifecycle status atomically. */
+  public Appointment reschedule(
+      long id, LocalDateTime startsAt, LocalDateTime endsAt, AppointmentStatus status)
+      throws SQLException {
+    validateInterval(startsAt, endsAt);
+    Objects.requireNonNull(status, STATUS_COLUMN);
+    return rescheduleInternal(id, startsAt, endsAt, status);
+  }
+
+  private Appointment rescheduleInternal(
+      long id, LocalDateTime startsAt, LocalDateTime endsAt, AppointmentStatus status)
+      throws SQLException {
     return SqliteTransactions.execute(
         database,
         connection -> {
           Appointment current = findById(connection, id).orElseThrow(() -> missing(id));
           ensureAvailable(connection, current.doctorId(), startsAt, endsAt, id);
+          AppointmentStatus resultingStatus = status == null ? current.status() : status;
           try (PreparedStatement statement =
               connection.prepareStatement(
-                  "UPDATE appointments SET starts_at = ?, ends_at = ?, updated_at = ? WHERE id = ?")) {
+                  "UPDATE appointments SET starts_at = ?, ends_at = ?, "
+                      + "status = COALESCE(?, status), updated_at = ? WHERE id = ?")) {
             SqliteQueries.bindTimestamp(statement, 1, startsAt);
             SqliteQueries.bindTimestamp(statement, 2, endsAt);
-            statement.setString(3, SqliteQueries.formatTimestamp(LocalDateTime.now()));
-            statement.setLong(4, id);
+            if (status != null) {
+              statement.setString(3, status.name());
+            } else {
+              statement.setNull(3, Types.VARCHAR);
+            }
+            statement.setString(4, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+            statement.setLong(5, id);
             statement.executeUpdate();
           }
           return new Appointment(
@@ -93,7 +116,7 @@ public final class AppointmentRepository {
               current.doctorId(),
               startsAt,
               endsAt,
-              current.status());
+              resultingStatus);
         });
   }
 
@@ -153,6 +176,7 @@ public final class AppointmentRepository {
                     + "p.first_name, p.last_name FROM appointments a "
                     + "JOIN patients p ON p.id = a.patient_id "
                     + "WHERE a.doctor_id = ? AND a.starts_at < ? AND a.ends_at > ? "
+                    + "AND a.status NOT IN ('DECLINED', 'CANCELLED') "
                     + "ORDER BY a.starts_at, a.id")) {
       statement.setLong(1, doctorId);
       SqliteQueries.bindTimestamp(statement, 2, rangeEnd);
@@ -178,7 +202,8 @@ public final class AppointmentRepository {
             "SELECT a.id, a.patient_id, a.starts_at, a.ends_at, a.status, "
                 + "p.first_name, p.last_name FROM appointments a "
                 + "JOIN patients p ON p.id = a.patient_id "
-                + "WHERE a.doctor_id = ? AND a.starts_at >= ?");
+                + "WHERE a.doctor_id = ? AND a.starts_at >= ? "
+                + "AND a.status NOT IN ('DECLINED', 'CANCELLED')");
     if (cursor != null) {
       sql.append(" AND (a.starts_at > ? OR (a.starts_at = ? AND a.id > ?))");
     }
@@ -396,13 +421,7 @@ public final class AppointmentRepository {
   private static CalendarAppointment readCalendarAppointment(ResultSet resultSet)
       throws SQLException {
     long patientId = resultSet.getLong("patient_id");
-    String patientName =
-        String.format(
-            java.util.Locale.ROOT,
-            "P%06d - %s %s",
-            patientId,
-            resultSet.getString("first_name"),
-            resultSet.getString("last_name"));
+    String patientName = resultSet.getString("first_name") + " " + resultSet.getString("last_name");
     return new CalendarAppointment(
         resultSet.getLong("id"),
         patientId,

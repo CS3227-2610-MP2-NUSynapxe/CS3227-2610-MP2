@@ -26,7 +26,7 @@ final class SqliteDatabaseTest {
 
       assertTrue(database.isOpen());
       assertEquals(1, foreignKeysEnabled(database));
-      assertEquals("5", metadataValue(database, "schema_version"));
+      assertEquals("6", metadataValue(database, "schema_version"));
       assertTrue(tableNames(database).containsAll(expectedFeatureTables()));
       assertTrue(indexNames(database).contains("idx_appointments_doctor_time"));
       assertTrue(indexNames(database).contains("idx_calendar_intervals_doctor_day"));

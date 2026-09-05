@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
@@ -55,6 +56,33 @@ final class AppointmentServiceTest {
       assertThrows(
           AuthorizationException.class,
           () -> service.accept(fixture.otherDoctorSession(), appointment.id()));
+    }
+  }
+
+  @Test
+  void doctorBooksAcceptedAppointmentsOnlyForTheirOwnSchedule() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      Accounts fixture = accounts(database);
+      AppointmentService service = service(database);
+
+      Appointment appointment =
+          service.book(
+              fixture.doctorSession(),
+              fixture.patient().id(),
+              fixture.doctor().id(),
+              APPOINTMENT_START,
+              APPOINTMENT_END);
+
+      assertEquals(AppointmentStatus.ACCEPTED, appointment.status());
+      assertThrows(
+          AuthorizationException.class,
+          () ->
+              service.book(
+                  fixture.otherDoctorSession(),
+                  fixture.patient().id(),
+                  fixture.doctor().id(),
+                  LocalDateTime.of(2026, 9, 1, 10, 0),
+                  LocalDateTime.of(2026, 9, 1, 10, 30)));
     }
   }
 
@@ -119,6 +147,7 @@ final class AppointmentServiceTest {
               LocalDateTime.of(2026, 9, 1, 11, 0),
               LocalDateTime.of(2026, 9, 1, 11, 30));
       assertEquals(LocalDateTime.of(2026, 9, 1, 11, 0), rescheduled.startsAt());
+      assertEquals(AppointmentStatus.ACCEPTED, rescheduled.status());
       assertEquals(
           AppointmentStatus.CANCELLED,
           service.cancel(fixture.receptionistSession(), appointment.id()).status());
@@ -130,6 +159,73 @@ final class AppointmentServiceTest {
                   appointment.id(),
                   APPOINTMENT_START,
                   APPOINTMENT_END));
+    }
+  }
+
+  @Test
+  void declineIsDoctorOwnedAndReceptionistRescheduleRestoresPending() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      Accounts fixture = accounts(database);
+      AppointmentService service = service(database);
+      Appointment appointment =
+          service.book(
+              fixture.receptionistSession(),
+              fixture.patient().id(),
+              fixture.doctor().id(),
+              APPOINTMENT_START,
+              APPOINTMENT_END);
+      long appointmentId = appointment.id();
+
+      assertThrows(
+          AuthorizationException.class,
+          () -> service.decline(fixture.otherDoctorSession(), appointmentId));
+      appointment = service.decline(fixture.doctorSession(), appointmentId);
+      assertEquals(AppointmentStatus.DECLINED, appointment.status());
+      assertEquals(
+          List.of(appointment),
+          service.searchAppointments(
+              fixture.receptionistSession(),
+              APPOINTMENT_START.toLocalDate(),
+              fixture.doctor().id(),
+              "",
+              AppointmentStatus.DECLINED));
+      Appointment declined = appointment;
+      assertThrows(
+          ValidationException.class,
+          () ->
+              service.reschedule(
+                  fixture.doctorSession(),
+                  declined.id(),
+                  LocalDateTime.of(2026, 9, 1, 11, 0),
+                  LocalDateTime.of(2026, 9, 1, 11, 30)));
+      assertEquals(declined, service.get(declined.id()));
+
+      Appointment rescheduled =
+          service.reschedule(
+              fixture.receptionistSession(),
+              declined.id(),
+              LocalDateTime.of(2026, 9, 1, 11, 0),
+              LocalDateTime.of(2026, 9, 1, 11, 30));
+      assertEquals(AppointmentStatus.PENDING, rescheduled.status());
+      assertEquals(LocalDateTime.of(2026, 9, 1, 11, 0), rescheduled.startsAt());
+
+      Appointment conflicting =
+          service.book(
+              fixture.receptionistSession(),
+              fixture.patient().id(),
+              fixture.doctor().id(),
+              LocalDateTime.of(2026, 9, 1, 12, 0),
+              LocalDateTime.of(2026, 9, 1, 12, 30));
+      assertThrows(
+          ValidationException.class,
+          () ->
+              service.reschedule(
+                  fixture.receptionistSession(),
+                  rescheduled.id(),
+                  LocalDateTime.of(2026, 9, 1, 12, 15),
+                  LocalDateTime.of(2026, 9, 1, 12, 45)));
+      assertEquals(rescheduled, service.get(rescheduled.id()));
+      assertEquals(AppointmentStatus.PENDING, conflicting.status());
     }
   }
 
@@ -148,6 +244,11 @@ final class AppointmentServiceTest {
 
       appointment = service.accept(fixture.doctorSession(), appointment.id());
       appointment = service.checkIn(fixture.receptionistSession(), appointment.id());
+      long checkedInAppointmentId = appointment.id();
+      assertThrows(
+          ValidationException.class,
+          () -> service.cancel(fixture.doctorSession(), checkedInAppointmentId));
+      assertEquals(AppointmentStatus.CHECKED_IN, service.get(checkedInAppointmentId).status());
       appointment = service.complete(fixture.doctorSession(), appointment.id());
       assertEquals(AppointmentStatus.COMPLETED, appointment.status());
       long completedAppointmentId = appointment.id();
@@ -159,6 +260,56 @@ final class AppointmentServiceTest {
           () ->
               AppointmentTransitions.requireAllowed(
                   AppointmentStatus.COMPLETED, AppointmentStatus.ACCEPTED));
+    }
+  }
+
+  @Test
+  void assignedDoctorCanCheckInOwnAcceptedAppointmentAtItsStart() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      Accounts fixture = accounts(database);
+      AppointmentService service = service(database, AFTER_APPOINTMENT);
+      Appointment ownAppointment =
+          service.book(
+              fixture.doctorSession(),
+              fixture.patient().id(),
+              fixture.doctor().id(),
+              APPOINTMENT_START,
+              APPOINTMENT_END);
+      assertEquals(
+          AppointmentStatus.CHECKED_IN,
+          service.checkIn(fixture.doctorSession(), ownAppointment.id()).status());
+
+      Appointment otherAppointment =
+          service.book(
+              fixture.otherDoctorSession(),
+              fixture.patient().id(),
+              fixture.otherDoctor().id(),
+              LocalDateTime.of(2026, 9, 1, 11, 0),
+              LocalDateTime.of(2026, 9, 1, 11, 30));
+      assertThrows(
+          AuthorizationException.class,
+          () -> service.checkIn(fixture.doctorSession(), otherAppointment.id()));
+    }
+  }
+
+  @Test
+  void checkInBeforeStartPreservesAcceptedStateForDoctor() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      Accounts fixture = accounts(database);
+      AppointmentService service =
+          service(database, Clock.fixed(Instant.parse("2026-09-01T08:00:00Z"), ZoneId.of("UTC")));
+      Appointment appointment =
+          service.book(
+              fixture.doctorSession(),
+              fixture.patient().id(),
+              fixture.doctor().id(),
+              APPOINTMENT_START,
+              APPOINTMENT_END);
+
+      assertThrows(
+          ValidationException.class,
+          () -> service.checkIn(fixture.doctorSession(), appointment.id()));
+      assertEquals(AppointmentStatus.ACCEPTED, service.get(appointment.id()).status());
     }
   }
 

@@ -41,16 +41,25 @@ public final class AppointmentService {
     this.clock = Objects.requireNonNull(clock, "clock");
   }
 
-  /** Books a pending appointment for any Doctor as a Receptionist. */
+  /** Books an appointment for a Receptionist-selected Doctor or the signed-in Doctor. */
   public Appointment book(
       Session actor, long patientId, long doctorId, LocalDateTime startsAt, LocalDateTime endsAt)
       throws SQLException {
-    Authorization.requireRole(actor, Role.RECEPTIONIST);
+    if (actor == null) {
+      throw new AuthorizationException("Authentication is required");
+    }
+    AppointmentStatus initialStatus;
+    if (actor.role() == Role.DOCTOR) {
+      Authorization.requireDoctorOwnership(actor, doctorId);
+      initialStatus = AppointmentStatus.ACCEPTED;
+    } else {
+      Authorization.requireRole(actor, Role.RECEPTIONIST);
+      initialStatus = AppointmentStatus.PENDING;
+    }
     requirePatient(patientId);
     requireDoctor(doctorId);
-    return persist(
-        () ->
-            appointments.create(patientId, doctorId, startsAt, endsAt, AppointmentStatus.PENDING));
+    AppointmentStatus status = initialStatus;
+    return persist(() -> appointments.create(patientId, doctorId, startsAt, endsAt, status));
   }
 
   /** Returns a doctor's schedule to that Doctor or to a Receptionist. */
@@ -92,20 +101,41 @@ public final class AppointmentService {
     return appointments.updateStatus(appointmentId, AppointmentStatus.ACCEPTED);
   }
 
+  /** Declines a pending or accepted appointment as its assigned Doctor. */
+  public Appointment decline(Session actor, long appointmentId) throws SQLException {
+    Appointment appointment = appointment(appointmentId);
+    Authorization.requireDoctorOwnership(actor, appointment.doctorId());
+    AppointmentTransitions.requireAllowed(appointment.status(), AppointmentStatus.DECLINED);
+    return appointments.updateStatus(appointmentId, AppointmentStatus.DECLINED);
+  }
+
   /** Reschedules an appointment as a Receptionist or its assigned Doctor. */
   public Appointment reschedule(
       Session actor, long appointmentId, LocalDateTime startsAt, LocalDateTime endsAt)
       throws SQLException {
     Appointment appointment = appointment(appointmentId);
     requireScheduleOwnerOrReceptionist(actor, appointment.doctorId());
-    if (appointment.status() != AppointmentStatus.PENDING
-        && appointment.status() != AppointmentStatus.ACCEPTED) {
-      throw new ValidationException("Only pending or accepted appointments can be rescheduled");
+    AppointmentStatus rescheduledStatus;
+    if (actor.role() == Role.DOCTOR) {
+      if (appointment.status() != AppointmentStatus.PENDING
+          && appointment.status() != AppointmentStatus.ACCEPTED) {
+        throw new ValidationException("Doctors cannot reschedule declined appointments");
+      }
+      rescheduledStatus = AppointmentStatus.ACCEPTED;
+    } else {
+      if (appointment.status() != AppointmentStatus.PENDING
+          && appointment.status() != AppointmentStatus.ACCEPTED
+          && appointment.status() != AppointmentStatus.DECLINED) {
+        throw new ValidationException(
+            "Only pending, accepted, or declined appointments can be rescheduled");
+      }
+      rescheduledStatus = AppointmentStatus.PENDING;
     }
-    return persist(() -> appointments.reschedule(appointmentId, startsAt, endsAt));
+    return persist(
+        () -> appointments.reschedule(appointmentId, startsAt, endsAt, rescheduledStatus));
   }
 
-  /** Cancels a pending or accepted appointment as a Receptionist or its Doctor. */
+  /** Cancels a pre-check-in appointment as a Receptionist or its Doctor. */
   public Appointment cancel(Session actor, long appointmentId) throws SQLException {
     Appointment appointment = appointment(appointmentId);
     requireScheduleOwnerOrReceptionist(actor, appointment.doctorId());
@@ -113,10 +143,10 @@ public final class AppointmentService {
     return appointments.updateStatus(appointmentId, AppointmentStatus.CANCELLED);
   }
 
-  /** Checks in an accepted appointment as a Receptionist at or after its start time. */
+  /** Checks in an accepted appointment as a Receptionist or its Doctor at or after its start. */
   public Appointment checkIn(Session actor, long appointmentId) throws SQLException {
-    Authorization.requireRole(actor, Role.RECEPTIONIST);
     Appointment appointment = appointment(appointmentId);
+    requireDoctorOrReceptionist(actor, appointment.doctorId());
     AppointmentTransitions.requireAllowed(appointment.status(), AppointmentStatus.CHECKED_IN);
     if (LocalDateTime.now(clock).isBefore(appointment.startsAt())) {
       throw new ValidationException("An appointment cannot be checked in before its start time");
@@ -178,6 +208,15 @@ public final class AppointmentService {
       Authorization.requireDoctorOwnership(actor, doctorId);
     } else {
       Authorization.requireRole(actor, Role.RECEPTIONIST);
+    }
+  }
+
+  private static void requireDoctorOrReceptionist(Session actor, long doctorId) {
+    Authorization.requireAuthenticated(actor);
+    if (actor.role() == Role.DOCTOR) {
+      Authorization.requireDoctorOwnership(actor, doctorId);
+    } else if (actor.role() != Role.RECEPTIONIST) {
+      throw new AuthorizationException("You are not allowed to perform this operation");
     }
   }
 

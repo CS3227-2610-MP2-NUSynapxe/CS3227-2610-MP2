@@ -41,6 +41,12 @@ final class CalendarServiceTest {
           AppointmentStatus.CANCELLED);
       appointments.create(
           fixture.patientId(),
+          fixture.doctor().id(),
+          LocalDateTime.of(2026, 9, 6, 10, 0),
+          LocalDateTime.of(2026, 9, 6, 10, 30),
+          AppointmentStatus.ACCEPTED);
+      appointments.create(
+          fixture.patientId(),
           fixture.otherDoctor().id(),
           LocalDateTime.of(2026, 9, 6, 10, 0),
           LocalDateTime.of(2026, 9, 6, 10, 30),
@@ -50,8 +56,8 @@ final class CalendarServiceTest {
       var week = service.getWeek(fixture.doctorSession(), LocalDate.of(2026, 9, 6));
 
       assertEquals(1, week.appointments().size());
-      assertEquals(AppointmentStatus.CANCELLED, week.appointments().get(0).status());
-      assertTrue(week.appointments().get(0).patientDisplayName().contains("Grace Hopper"));
+      assertEquals(AppointmentStatus.ACCEPTED, week.appointments().get(0).status());
+      assertEquals("Grace Hopper", week.appointments().get(0).patientDisplayName());
       assertEquals(0, week.settings().intervals(DayOfWeek.SUNDAY).size());
     }
   }
@@ -126,6 +132,18 @@ final class CalendarServiceTest {
           fixture.doctor().id(),
           firstStart.plusHours(2),
           firstStart.plusHours(2).plusMinutes(30),
+          AppointmentStatus.DECLINED);
+      appointments.create(
+          fixture.patientId(),
+          fixture.doctor().id(),
+          firstStart.plusHours(3),
+          firstStart.plusHours(3).plusMinutes(30),
+          AppointmentStatus.ACCEPTED);
+      appointments.create(
+          fixture.patientId(),
+          fixture.doctor().id(),
+          firstStart.plusHours(4),
+          firstStart.plusHours(4).plusMinutes(30),
           AppointmentStatus.ACCEPTED);
       appointments.create(
           fixture.patientId(),
@@ -143,12 +161,12 @@ final class CalendarServiceTest {
 
       assertEquals(2, firstPage.appointments().size());
       assertTrue(firstPage.hasMore());
-      assertEquals(AppointmentStatus.CANCELLED, firstPage.appointments().get(1).status());
+      assertEquals(AppointmentStatus.ACCEPTED, firstPage.appointments().get(1).status());
       assertEquals(1, secondPage.appointments().size());
       assertTrue(!secondPage.hasMore());
       assertTrue(
           firstPage.appointments().stream()
-              .allMatch(appointment -> appointment.patientDisplayName().contains("Grace Hopper")));
+              .allMatch(appointment -> appointment.patientDisplayName().equals("Grace Hopper")));
       assertThrows(
           AuthorizationException.class,
           () ->

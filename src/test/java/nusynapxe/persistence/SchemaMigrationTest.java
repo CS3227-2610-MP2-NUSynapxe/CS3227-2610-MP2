@@ -14,6 +14,8 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashSet;
 import java.util.Set;
+import nusynapxe.domain.Appointment;
+import nusynapxe.domain.AppointmentStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -28,7 +30,7 @@ final class SchemaMigrationTest {
     try (SqliteDatabase database = new SqliteDatabase(path)) {
       database.open();
 
-      assertEquals("5", scalar(database.connection(), "SELECT value FROM app_metadata"));
+      assertEquals("6", scalar(database.connection(), "SELECT value FROM app_metadata"));
       assertEquals("1", scalar(database.connection(), "SELECT id FROM patients"));
       assertEquals("1", scalar(database.connection(), "SELECT patient_id FROM appointments"));
       assertEquals("1", scalar(database.connection(), "SELECT patient_id FROM clinical_records"));
@@ -92,7 +94,7 @@ final class SchemaMigrationTest {
 
     try (SqliteDatabase database = new SqliteDatabase(path)) {
       database.open();
-      assertEquals("5", scalar(database.connection(), "SELECT value FROM app_metadata"));
+      assertEquals("6", scalar(database.connection(), "SELECT value FROM app_metadata"));
       assertNull(scalar(database.connection(), "SELECT sex FROM patients WHERE id = 1"));
       assertFalse(columnNames(database.connection(), "patients").contains("billing_information"));
       assertEquals("123", scalar(database.connection(), "SELECT phone_number FROM patients"));
@@ -127,10 +129,104 @@ final class SchemaMigrationTest {
 
     try (SqliteDatabase database = new SqliteDatabase(path)) {
       database.open();
-      assertEquals("5", scalar(database.connection(), "SELECT value FROM app_metadata"));
+      assertEquals("6", scalar(database.connection(), "SELECT value FROM app_metadata"));
       assertEquals("+441234", scalar(database.connection(), "SELECT phone_number FROM patients"));
       assertNull(scalar(database.connection(), "SELECT phone_country_code FROM patients"));
       assertFalse(columnNames(database.connection(), "patients").contains("phone"));
+    }
+  }
+
+  @Test
+  void migratesVersionFiveAppointmentStatusConstraintWithoutLosingReferences() throws SQLException {
+    Path path = temporaryDirectory.resolve("version-five-appointments.db");
+    try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + path);
+        Statement statement = connection.createStatement()) {
+      statement.executeUpdate("PRAGMA foreign_keys = ON");
+      statement.executeUpdate(
+          "CREATE TABLE app_metadata(key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)");
+      statement.executeUpdate("INSERT INTO app_metadata VALUES ('schema_version', '5')");
+      statement.executeUpdate(
+          """
+          CREATE TABLE users (
+              id INTEGER PRIMARY KEY,
+              role TEXT NOT NULL
+          )
+          """);
+      statement.executeUpdate("INSERT INTO users VALUES (1, 'DOCTOR')");
+      statement.executeUpdate(
+          """
+          CREATE TABLE patients (
+              id INTEGER PRIMARY KEY,
+              identity_type TEXT,
+              identity_number TEXT,
+              issuing_country TEXT,
+              first_name TEXT NOT NULL,
+              last_name TEXT NOT NULL,
+              date_of_birth TEXT NOT NULL,
+              sex TEXT,
+              phone_country_code TEXT,
+              phone_number TEXT NOT NULL,
+              email TEXT NOT NULL,
+              address TEXT NOT NULL,
+              height_cm REAL,
+              weight_kg REAL,
+              active INTEGER NOT NULL,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+          )
+          """);
+      statement.executeUpdate(
+          "INSERT INTO patients VALUES (1, NULL, NULL, NULL, 'Legacy', 'Patient', "
+              + "'1990-01-01', NULL, NULL, '123', '', '', NULL, NULL, 1, 'created', 'updated')");
+      statement.executeUpdate(
+          """
+          CREATE TABLE appointments (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              patient_id INTEGER NOT NULL REFERENCES patients(id),
+              doctor_id INTEGER NOT NULL REFERENCES users(id),
+              starts_at TEXT NOT NULL,
+              ends_at TEXT NOT NULL,
+              status TEXT NOT NULL CHECK (
+                  status IN ('PENDING', 'ACCEPTED', 'CHECKED_IN', 'COMPLETED',
+                             'CHECKED_OUT', 'CANCELLED')
+              ),
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              CHECK (ends_at > starts_at)
+          )
+          """);
+      statement.executeUpdate(
+          "INSERT INTO appointments VALUES "
+              + "(1, 1, 1, '2026-09-01T09:00:00', '2026-09-01T09:30:00', "
+              + "'ACCEPTED', 'created', 'updated')");
+      statement.executeUpdate(
+          """
+          CREATE TABLE clinical_records (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              patient_id INTEGER NOT NULL REFERENCES patients(id),
+              appointment_id INTEGER NOT NULL UNIQUE REFERENCES appointments(id),
+              doctor_id INTEGER NOT NULL REFERENCES users(id),
+              diagnosis TEXT NOT NULL,
+              consultation_notes TEXT NOT NULL,
+              follow_up_notes TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+          )
+          """);
+      statement.executeUpdate(
+          "INSERT INTO clinical_records VALUES (1, 1, 1, 1, 'diagnosis', 'notes', 'follow-up', "
+              + "'updated')");
+    }
+
+    try (SqliteDatabase database = new SqliteDatabase(path)) {
+      database.open();
+      assertEquals("6", scalar(database.connection(), "SELECT value FROM app_metadata"));
+      Appointment declined =
+          new AppointmentRepository(database).updateStatus(1, AppointmentStatus.DECLINED);
+      assertEquals(AppointmentStatus.DECLINED, declined.status());
+      assertEquals(
+          "1", scalar(database.connection(), "SELECT appointment_id FROM clinical_records"));
+      assertEquals(
+          "1", scalar(database.connection(), "SELECT patient_id FROM appointments WHERE id = 1"));
     }
   }
 

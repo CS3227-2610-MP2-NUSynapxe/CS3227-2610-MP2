@@ -560,6 +560,8 @@
     -fx-text-fill: #52677b;
     -fx-font-size: 11px;
     -fx-font-weight: bold;
+    -fx-alignment: center-left;
+    -fx-padding: 9px 8px;
 }
 
 .calendar-day-header {
@@ -583,10 +585,16 @@
 
 .calendar-time-label {
     -fx-background-color: #ffffff;
-    -fx-border-color: transparent #d9e3ed #e8eef4 transparent;
-    -fx-padding: 3px 8px 0 0;
+    -fx-border-color: transparent transparent #e8eef4 transparent;
+    -fx-padding: 3px 0 0 8px;
     -fx-text-fill: #52677b;
     -fx-font-size: 11px;
+}
+
+#doctor-calendar-time-axis {
+    -fx-background-color: #ffffff;
+    -fx-border-color: transparent #b9c8d6 transparent transparent;
+    -fx-border-width: 0 1px 0 0;
 }
 
 .calendar-day-column {
@@ -657,6 +665,7 @@
 
 .calendar-appointment-content {
     -fx-alignment: top-left;
+    -fx-max-width: infinity;
 }
 
 .calendar-appointment-patient {
@@ -672,6 +681,16 @@
 .calendar-appointment-status {
     -fx-padding: 2px 5px;
     -fx-font-size: 10px;
+}
+
+.calendar-appointment-actions {
+    -fx-max-width: infinity;
+}
+
+.calendar-appointment-action {
+    -fx-padding: 2px 5px;
+    -fx-font-size: 9px;
+    -fx-min-width: 0;
 }
 
 .calendar-schedule-list {
