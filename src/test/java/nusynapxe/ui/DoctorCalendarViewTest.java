@@ -35,6 +35,7 @@ import javafx.stage.Stage;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
+import nusynapxe.domain.CalendarWeek;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
@@ -172,7 +173,10 @@ final class DoctorCalendarViewTest extends ApplicationTest {
 
     fire("#doctor-calendar-add-appointment");
     waitForNode("#doctor-calendar-appointment-dialog-content");
-    LocalDate targetDate = today().plusDays(1);
+    LocalDate currentDate = today();
+    LocalDate currentWeekStart = CalendarWeek.containing(currentDate, DayOfWeek.SUNDAY).start();
+    LocalDate targetDate =
+        currentWeekStart.plusDays(currentWeekStart.plusDays(1).equals(currentDate) ? 2 : 1);
     interact(
         () ->
             lookup("#doctor-calendar-appointment-dialog-date")
