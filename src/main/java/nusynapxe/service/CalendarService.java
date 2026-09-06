@@ -214,6 +214,39 @@ public final class CalendarService {
         doctor.id(), anchor.atStartOfDay(), cursor, pageSize);
   }
 
+  /**
+   * Returns one bounded page of a selected Doctor's appointments for a Receptionist.
+   *
+   * @param actor authenticated Receptionist session
+   * @param doctorId selected Doctor account identifier
+   * @param anchor inclusive Singapore-local date from which to load appointments
+   * @param cursor optional keyset cursor from the previous page
+   * @param pageSize bounded number of appointments to request
+   * @return authorized schedule page for the selected Doctor
+   * @throws AuthorizationException if the actor is not a Receptionist
+   * @throws ValidationException if the Doctor does not exist or {@code pageSize} is invalid
+   * @throws NullPointerException if {@code anchor} is {@code null}
+   * @throws SQLException if the account or appointment query fails
+   */
+  public CalendarSchedulePage getReceptionistSchedulePage(
+      Session actor, long doctorId, LocalDate anchor, CalendarScheduleCursor cursor, int pageSize)
+      throws SQLException {
+    Authorization.requireRole(actor, Role.RECEPTIONIST);
+    Objects.requireNonNull(anchor, "anchor");
+    Account doctor =
+        accounts
+            .findById(doctorId)
+            .filter(account -> account.role() == Role.DOCTOR && account.enabled())
+            .orElseThrow(() -> new ValidationException("Doctor does not exist"));
+    try {
+      CalendarSchedulePage.validatePageSize(pageSize);
+    } catch (IllegalArgumentException exception) {
+      throw new ValidationException(exception.getMessage(), exception);
+    }
+    return appointments.findCalendarPageByDoctor(
+        doctor.id(), anchor.atStartOfDay(), cursor, pageSize);
+  }
+
   private Account requireDoctor(Session actor) throws SQLException {
     Authorization.requireRole(actor, Role.DOCTOR);
     Optional<Account> account = accounts.findById(actor.accountId());

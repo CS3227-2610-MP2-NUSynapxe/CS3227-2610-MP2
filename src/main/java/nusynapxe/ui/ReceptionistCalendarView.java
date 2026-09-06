@@ -13,6 +13,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
@@ -24,6 +25,7 @@ import nusynapxe.domain.CalendarAppointment;
 import nusynapxe.domain.DoctorCalendarWeek;
 import nusynapxe.domain.Session;
 import nusynapxe.service.AuthorizationException;
+import nusynapxe.service.CalendarScheduleCalculations;
 import nusynapxe.service.CalendarService;
 import nusynapxe.service.ClinicServices;
 import nusynapxe.service.ValidationException;
@@ -31,6 +33,8 @@ import nusynapxe.service.ValidationException;
 /** Read-only Doctor schedule calendar used by Receptionists to choose booking slots. */
 final class ReceptionistCalendarView {
   private static final long MAX_RANGE_DAYS = 31;
+  private static final String WEEK_MODE = "Week";
+  private static final String SCHEDULE_MODE = "Schedule";
 
   private final ClinicServices services;
   private final Session session;
@@ -41,8 +45,15 @@ final class ReceptionistCalendarView {
   private final SearchSuggestionField<Account> doctor;
   private final DatePicker from;
   private final DatePicker to;
+  private final VBox fromField;
+  private final VBox toField;
+  private final Button previous;
+  private final Button next;
+  private final ComboBox<String> viewMode;
   private final BorderPane root;
   private final VBox page;
+  private LocalDate scheduleAnchor;
+  private CalendarScheduleList scheduleList;
 
   ReceptionistCalendarView(
       ClinicServices services,
@@ -63,12 +74,20 @@ final class ReceptionistCalendarView {
             ReceptionistCalendarView::doctorLabel,
             account -> account.displayName() + " " + account.username());
     LocalDate today = LocalDate.now(clock);
+    scheduleAnchor = CalendarScheduleCalculations.today(clock);
     from = new DatePicker(today);
     from.setId("reception-calendar-from");
     from.setShowWeekNumbers(false);
     to = new DatePicker(today.plusDays(6));
     to.setId("reception-calendar-to");
     to.setShowWeekNumbers(false);
+    fromField = UiComponents.fieldGroup("From", from);
+    toField = UiComponents.fieldGroup("To", to);
+    previous = UiComponents.secondaryButton("‹", "reception-calendar-previous");
+    previous.setAccessibleText("Previous");
+    next = UiComponents.secondaryButton("›", "reception-calendar-next");
+    next.setAccessibleText("Next");
+    viewMode = UiComponents.compactSelector();
     root = buildRoot();
     page =
         new VBox(
@@ -79,9 +98,10 @@ final class ReceptionistCalendarView {
             root);
     page.setId("reception-calendar-page");
     VBox.setVgrow(root, Priority.ALWAYS);
-    doctor.valueProperty().addListener((observable, previous, selected) -> refresh());
+    doctor.valueProperty().addListener((observable, previousValue, selected) -> refresh());
     from.setOnAction(event -> refresh());
     to.setOnAction(event -> refresh());
+    applyModeVisibility();
     refreshDoctors();
     refresh();
   }
@@ -92,11 +112,11 @@ final class ReceptionistCalendarView {
 
   void refreshDoctors() {
     try {
-      Account previous = doctor.getValue();
+      Account previousDoctor = doctor.getValue();
       doctor.setItems(services.accountService().listDoctors(session));
-      if (previous != null) {
+      if (previousDoctor != null) {
         doctor.getItems().stream()
-            .filter(account -> account.id() == previous.id())
+            .filter(account -> account.id() == previousDoctor.id())
             .findFirst()
             .ifPresent(doctor::select);
       } else if (!doctor.getItems().isEmpty()) {
@@ -107,29 +127,41 @@ final class ReceptionistCalendarView {
     }
   }
 
+  @SuppressWarnings("PMD.NullAssignment")
   void refresh() {
     Account selected = doctor.getValue();
     if (selected == null) {
+      disposeScheduleList();
       root.setCenter(
           UiComponents.emptyState(
               "reception-calendar-select-doctor", "Select a Doctor to view available slots."));
       return;
     }
     try {
-      List<LocalDate> dates = selectedDates();
-      DoctorCalendarWeek data =
-          services
-              .calendarService()
-              .getReceptionistRange(session, selected.id(), from.getValue(), to.getValue());
-      CalendarTimeGrid grid =
-          new CalendarTimeGrid(
-              dates,
-              data,
-              clock,
-              new CalendarTimeGrid.InteractionHandlers(
-                  onAppointmentSelected, null, start -> onSlotSelected.accept(selected, start)));
-      grid.setId("reception-calendar-time-grid");
-      root.setCenter(grid);
+      if (isScheduleMode()) {
+        disposeScheduleList();
+        scheduleList =
+            new CalendarScheduleList(
+                scheduleLoader(selected.id()), scheduleAnchor, clock, onAppointmentSelected);
+        scheduleList.setId("reception-calendar-schedule-list");
+        root.setCenter(scheduleList);
+      } else {
+        disposeScheduleList();
+        List<LocalDate> dates = selectedDates();
+        DoctorCalendarWeek data =
+            services
+                .calendarService()
+                .getReceptionistRange(session, selected.id(), from.getValue(), to.getValue());
+        CalendarTimeGrid grid =
+            new CalendarTimeGrid(
+                dates,
+                data,
+                clock,
+                new CalendarTimeGrid.InteractionHandlers(
+                    onAppointmentSelected, null, start -> onSlotSelected.accept(selected, start)));
+        grid.setId("reception-calendar-time-grid");
+        root.setCenter(grid);
+      }
     } catch (SQLException | AuthorizationException | ValidationException exception) {
       UiComponents.showError(
           feedback,
@@ -141,15 +173,9 @@ final class ReceptionistCalendarView {
 
   private BorderPane buildRoot() {
     Button today = UiComponents.secondaryButton("Today", "reception-calendar-today");
-    today.setOnAction(
-        event -> {
-          LocalDate current = LocalDate.now(clock);
-          from.setValue(current);
-          to.setValue(current.plusDays(6));
-          refresh();
-        });
-    VBox fromField = UiComponents.fieldGroup("From", from);
-    VBox toField = UiComponents.fieldGroup("To", to);
+    today.setOnAction(event -> goToToday());
+    previous.setOnAction(event -> goToPrevious());
+    next.setOnAction(event -> goToNext());
     VBox doctorField = UiComponents.fieldGroup("Doctor", doctor);
     fromField.setPrefWidth(190);
     toField.setPrefWidth(190);
@@ -159,7 +185,15 @@ final class ReceptionistCalendarView {
     doctorField.setMaxWidth(420);
     doctor.setMinWidth(300);
     doctor.setPrefWidth(360);
-    FlowPane toolbar = new FlowPane(12, 10, today, fromField, toField, doctorField);
+    viewMode.setId("reception-calendar-view-mode");
+    viewMode.setAccessibleText("Choose Calendar view");
+    viewMode.getItems().addAll(WEEK_MODE, SCHEDULE_MODE);
+    viewMode.setEditable(false);
+    viewMode.setValue(WEEK_MODE);
+    viewMode.setOnAction(event -> changeMode());
+    FlowPane toolbar =
+        new FlowPane(
+            12, 10, today, previous, next, fromField, toField, doctorField, viewMode);
     toolbar.setAlignment(Pos.CENTER_LEFT);
     toolbar.getStyleClass().add("calendar-toolbar");
     VBox heading = new VBox(4, UiComponents.sectionHeading("Doctor schedule"), toolbar);
@@ -169,6 +203,63 @@ final class ReceptionistCalendarView {
     page.getStyleClass().add("calendar-page");
     page.setTop(heading);
     return page;
+  }
+
+  private void goToToday() {
+    if (isScheduleMode()) {
+      scheduleAnchor = CalendarScheduleCalculations.today(clock);
+    } else {
+      LocalDate current = LocalDate.now(clock);
+      from.setValue(current);
+      to.setValue(current.plusDays(6));
+    }
+    refresh();
+  }
+
+  private void goToPrevious() {
+    scheduleAnchor = CalendarScheduleCalculations.moveAnchor(scheduleAnchor, -1);
+    refresh();
+  }
+
+  private void goToNext() {
+    scheduleAnchor = CalendarScheduleCalculations.moveAnchor(scheduleAnchor, 1);
+    refresh();
+  }
+
+  private void changeMode() {
+    applyModeVisibility();
+    refresh();
+  }
+
+  private void applyModeVisibility() {
+    boolean scheduleMode = isScheduleMode();
+    previous.setVisible(scheduleMode);
+    previous.setManaged(scheduleMode);
+    next.setVisible(scheduleMode);
+    next.setManaged(scheduleMode);
+    fromField.setVisible(!scheduleMode);
+    fromField.setManaged(!scheduleMode);
+    toField.setVisible(!scheduleMode);
+    toField.setManaged(!scheduleMode);
+  }
+
+  private boolean isScheduleMode() {
+    return SCHEDULE_MODE.equals(viewMode.getValue());
+  }
+
+  @SuppressWarnings("PMD.NullAssignment")
+  private void disposeScheduleList() {
+    if (scheduleList != null) {
+      scheduleList.dispose();
+      scheduleList = null;
+    }
+  }
+
+  private CalendarSchedulePageLoader scheduleLoader(long doctorId) {
+    return (anchor, cursor, pageSize) ->
+        services
+            .calendarService()
+            .getReceptionistSchedulePage(session, doctorId, anchor, cursor, pageSize);
   }
 
   private List<LocalDate> selectedDates() {
