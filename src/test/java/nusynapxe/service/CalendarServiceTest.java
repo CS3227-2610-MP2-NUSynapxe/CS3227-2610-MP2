@@ -82,6 +82,60 @@ final class CalendarServiceTest {
   }
 
   @Test
+  void receptionistCanReadOneSelectedDoctorsAdministrativeCalendar() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      Accounts fixture = accounts(database);
+      AppointmentRepository appointments = new AppointmentRepository(database);
+      LocalDateTime start = LocalDateTime.of(2026, 9, 6, 9, 0);
+      appointments.create(
+          fixture.patientId(),
+          fixture.doctor().id(),
+          start,
+          start.plusMinutes(30),
+          AppointmentStatus.ACCEPTED);
+      appointments.create(
+          fixture.patientId(),
+          fixture.otherDoctor().id(),
+          start,
+          start.plusMinutes(30),
+          AppointmentStatus.ACCEPTED);
+
+      CalendarService service = ClinicServices.forDatabase(database).calendarService();
+      var week =
+          service.getReceptionistWeek(
+              fixture.receptionistSession(), fixture.doctor().id(), start.toLocalDate());
+
+      assertEquals(fixture.doctor().id(), week.doctorId());
+      assertEquals(1, week.appointments().size());
+      var oneDay =
+          service.getReceptionistRange(
+              fixture.receptionistSession(),
+              fixture.doctor().id(),
+              start.toLocalDate(),
+              start.toLocalDate());
+      assertEquals(1, oneDay.appointments().size());
+      assertThrows(
+          ValidationException.class,
+          () ->
+              service.getReceptionistRange(
+                  fixture.receptionistSession(),
+                  fixture.doctor().id(),
+                  start.toLocalDate().plusDays(1),
+                  start.toLocalDate()));
+      assertThrows(
+          AuthorizationException.class,
+          () ->
+              service.getReceptionistWeek(
+                  fixture.doctorSession(), fixture.doctor().id(), start.toLocalDate()));
+      assertThrows(
+          ValidationException.class,
+          () ->
+              service.getReceptionistWeek(
+                  fixture.receptionistSession(), 999_999, start.toLocalDate()));
+    }
+  }
+
+  @Test
   void workingHoursDoNotBlockOutsideHoursAppointments() throws SQLException {
     try (SqliteDatabase database = openDatabase()) {
       Accounts fixture = accounts(database);

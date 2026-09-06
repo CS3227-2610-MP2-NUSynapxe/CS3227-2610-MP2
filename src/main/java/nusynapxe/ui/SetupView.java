@@ -5,7 +5,6 @@ import javafx.geometry.Insets;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -30,19 +29,19 @@ public final class SetupView {
     TextField username = new TextField();
     username.setId("setup-username");
     username.setPromptText("Admin username");
-    PasswordField password = new PasswordField();
-    password.setId("setup-password");
-    password.setPromptText("Password (8+ non-blank characters)");
-    PasswordField confirmation = new PasswordField();
-    confirmation.setId("setup-confirm-password");
-    confirmation.setPromptText("Confirm password");
+    UiComponents.PasswordInput passwordInput =
+        UiComponents.passwordInput("setup-password", "Password (8+ non-blank characters)");
+    var password = passwordInput.field();
+    UiComponents.PasswordInput confirmationInput =
+        UiComponents.passwordInput("setup-confirm-password", "Confirm password");
+    var confirmation = confirmationInput.field();
     Label feedback = UiComponents.feedback("setup-feedback");
     Button submit = UiComponents.primaryButton("Create System Admin", "setup-submit");
     submit.setDefaultButton(true);
     submit.setOnAction(
         event -> {
           if (!password.getText().equals(confirmation.getText())) {
-            feedback.setText("Passwords do not match");
+            UiComponents.showError(feedback, "Passwords do not match");
             return;
           }
           try {
@@ -50,9 +49,9 @@ public final class SetupView {
             feedback.setText("");
             onSuccess.accept();
           } catch (ValidationException exception) {
-            feedback.setText(exception.getMessage());
+            UiComponents.showError(feedback, exception.getMessage());
           } catch (SQLException exception) {
-            feedback.setText("Account setup is temporarily unavailable");
+            UiComponents.showError(feedback, "Account setup is temporarily unavailable");
           }
         });
 
@@ -70,16 +69,15 @@ public final class SetupView {
             UiComponents.supportingText(
                 "Create the administrator account for this clinic installation."),
             UiComponents.fieldGroup("Admin username", username),
-            UiComponents.fieldGroup("Password", password),
-            UiComponents.fieldGroup("Confirm password", confirmation),
-            UiComponents.actionBar(submit),
-            feedback);
+            UiComponents.fieldGroup("Password", passwordInput.view()),
+            UiComponents.fieldGroup("Confirm password", confirmationInput.view()),
+            UiComponents.actionBar(submit));
     VBox content = new VBox(24, identity, form);
     content.getStyleClass().add("auth-content");
-    StackPane root = new StackPane(content);
+    StackPane root = UiComponents.notificationOverlay(content, feedback);
     root.setId("setup-view");
     root.getStyleClass().add("auth-screen");
-    root.setPadding(new Insets(32));
+    StackPane.setMargin(content, new Insets(32));
     return root;
   }
 

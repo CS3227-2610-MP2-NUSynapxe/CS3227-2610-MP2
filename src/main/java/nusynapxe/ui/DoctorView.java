@@ -482,13 +482,12 @@ public final class DoctorView {
     Button patientsNavigation = UiComponents.secondaryButton("Patients", "doctor-nav-patients");
     Button calendarNavigation = UiComponents.secondaryButton("Calendar", "doctor-nav-calendar");
     dashboardNavigation.getStyleClass().add(ACTIVE_NAVIGATION_STYLE);
+    Label navigationTitle = new Label("Navigation");
+    navigationTitle.setId("doctor-navigation-title");
+    navigationTitle.getStyleClass().add("navigation-title");
+    navigationTitle.setMaxWidth(Double.MAX_VALUE);
     VBox navigation =
-        new VBox(
-            0,
-            new Label("Navigation"),
-            dashboardNavigation,
-            patientsNavigation,
-            calendarNavigation);
+        new VBox(0, navigationTitle, dashboardNavigation, patientsNavigation, calendarNavigation);
     navigation.setId("doctor-navigation");
     DoctorCalendarSettingsView[] settingsHolder = new DoctorCalendarSettingsView[1];
     Runnable showCalendar =
@@ -538,7 +537,6 @@ public final class DoctorView {
     root.setLeft(navigation);
     BorderPane.setMargin(navigation, new Insets(0, 16, 0, 0));
     root.setCenter(pages);
-    root.setBottom(feedback);
     refreshSchedule(
         services,
         session,
@@ -549,7 +547,7 @@ public final class DoctorView {
         followUpNotes,
         prescriptions,
         feedback);
-    return root;
+    return UiComponents.notificationOverlay(root, feedback);
   }
 
   private static TextField field(String id, String prompt) {
@@ -640,7 +638,8 @@ public final class DoctorView {
           prescriptions,
           feedback);
     } catch (SQLException | AuthorizationException | ValidationException exception) {
-      feedback.setText(userMessage(exception, "Schedule is temporarily unavailable"));
+      UiComponents.showError(
+          feedback, userMessage(exception, "Schedule is temporarily unavailable"));
     }
   }
 
@@ -672,7 +671,8 @@ public final class DoctorView {
           FXCollections.observableArrayList(
               services.clinicalService().prescriptionsForDoctor(session, appointment.id())));
     } catch (SQLException | AuthorizationException | ValidationException exception) {
-      feedback.setText(userMessage(exception, "Clinical information is temporarily unavailable"));
+      UiComponents.showError(
+          feedback, userMessage(exception, "Clinical information is temporarily unavailable"));
     }
   }
 
@@ -726,9 +726,9 @@ public final class DoctorView {
     try {
       operation.run();
     } catch (ValidationException | AuthorizationException exception) {
-      feedback.setText(exception.getMessage());
+      UiComponents.showError(feedback, exception.getMessage());
     } catch (SQLException exception) {
-      feedback.setText("The requested operation is temporarily unavailable");
+      UiComponents.showError(feedback, "The requested operation is temporarily unavailable");
     }
   }
 

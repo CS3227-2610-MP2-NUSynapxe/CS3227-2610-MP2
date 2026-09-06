@@ -11,7 +11,6 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
-import javafx.scene.control.PasswordField;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
@@ -47,8 +46,12 @@ public final class SystemAdminView {
     username.setId("admin-account-username");
     TextField displayName = new TextField();
     displayName.setId("admin-account-display-name");
-    PasswordField password = new PasswordField();
-    password.setId("admin-account-password");
+    UiComponents.PasswordInput passwordInput =
+        UiComponents.passwordInput("admin-account-password", "Initial password");
+    var password = passwordInput.field();
+    UiComponents.PasswordInput confirmationInput =
+        UiComponents.passwordInput("admin-account-confirm-password", "Confirm initial password");
+    var confirmation = confirmationInput.field();
     ComboBox<Role> role = UiComponents.compactSelector();
     role.setItems(FXCollections.observableArrayList(Role.DOCTOR, Role.RECEPTIONIST));
     role.setId("admin-account-role");
@@ -60,6 +63,10 @@ public final class SystemAdminView {
     Button create = UiComponents.primaryButton("Create account", "admin-account-submit");
     create.setOnAction(
         event -> {
+          if (!password.getText().equals(confirmation.getText())) {
+            UiComponents.showError(feedback, "Passwords do not match");
+            return;
+          }
           try {
             accounts.createStaff(
                 session,
@@ -67,15 +74,16 @@ public final class SystemAdminView {
                 displayName.getText(),
                 role.getValue(),
                 password.getText().toCharArray());
-            feedback.setText("Account created");
+            UiComponents.showMessage(feedback, "Account created");
             username.clear();
             displayName.clear();
             password.clear();
+            confirmation.clear();
             refreshAccounts(accounts, session, accountTable, feedback);
           } catch (ValidationException | AuthorizationException exception) {
-            feedback.setText(exception.getMessage());
+            UiComponents.showError(feedback, exception.getMessage());
           } catch (SQLException exception) {
-            feedback.setText("Accounts are temporarily unavailable");
+            UiComponents.showError(feedback, "Accounts are temporarily unavailable");
           }
         });
     Button logout = new Button("Log out");
@@ -92,14 +100,13 @@ public final class SystemAdminView {
         UiComponents.card(
             "admin-account-form-card",
             UiComponents.pageTitle("Staff accounts"),
-            UiComponents.supportingText(
-                "Create a Doctor or Receptionist account with the minimum access it needs."),
+            UiComponents.supportingText("Create a Doctor or Receptionist account."),
             UiComponents.inlineField("Username", username),
             UiComponents.inlineField("Display name", displayName),
             UiComponents.inlineField("Role", role),
-            UiComponents.inlineField("Initial password", password),
-            UiComponents.actionBar(create),
-            feedback);
+            UiComponents.inlineField("Initial password", passwordInput.view()),
+            UiComponents.inlineField("Confirm password", confirmationInput.view()),
+            UiComponents.actionBar(create));
     createCard.getStyleClass().add("compact-form-card");
     VBox listCard =
         UiComponents.card(
@@ -111,7 +118,7 @@ public final class SystemAdminView {
     scroll.setFitToWidth(true);
     root.setCenter(scroll);
     refreshAccounts(accounts, session, accountTable, feedback);
-    return root;
+    return UiComponents.notificationOverlay(root, feedback);
   }
 
   private static TableView<Account> accountTable() {
@@ -177,7 +184,7 @@ public final class SystemAdminView {
       int visibleRows = Math.min(Math.max(accountTable.getItems().size(), 1), 5);
       accountTable.setPrefHeight(40 + visibleRows * 40);
     } catch (SQLException exception) {
-      feedback.setText("Accounts are temporarily unavailable");
+      UiComponents.showError(feedback, "Accounts are temporarily unavailable");
     }
   }
 }

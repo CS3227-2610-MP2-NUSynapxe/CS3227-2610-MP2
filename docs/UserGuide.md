@@ -15,15 +15,13 @@ their content area.
 
 Authenticated screens show the NUSynapxe name, the current role, the signed-in
 username, and **Log out** in a shared header. Receptionists use the dark
-left-hand navigation rail to switch between **Patients**, **Appointments**,
-**Checkout**, and **Revenue**. The active page heading provides the fuller
-description of the selected work area.
-Doctors use a two-item navigation rail with **Dashboard** for the existing
-appointment and consultation workspace and **Patients** for the shared
-administrative patient directory. **Dashboard** and **Patients** occupy the
-full rail width as contiguous destinations, and the selected destination is
-highlighted. Appointment booking and management remain independent inside the
-Appointments area.
+left-hand navigation rail to switch between **Directory**, **Appointments**,
+**Calendar**, **Check in**, **Checkout**, and **Revenue Reports**. Navigation
+labels remain horizontal, and the separate **Navigation** heading is not a
+selectable destination. Doctors use the same rail pattern for **Dashboard**,
+**Patients**, and **Calendar**. The selected destination is highlighted.
+Short operation notices appear below the header and close automatically after
+six seconds.
 
 ## First launch
 
@@ -48,11 +46,17 @@ password` message. Select **Log out** in any workspace to clear the in-memory
 session and return to Login. Closing and reopening the application also
 requires a new login.
 
+Password fields on setup, login, and staff-account creation include a faded eye
+inside the right edge of the field that temporarily reveals or hides the entered
+password. Validation errors appear in a red notification at the top centre of
+the window and fade away after six seconds.
+
 ## System Admin workflow
 
 1. Log in with the account created during first-run setup.
 2. In **SYSTEM ADMIN workspace**, enter a unique username, display name,
-   initial password, and select **Doctor** or **Receptionist**.
+   initial password, enter it again in **Confirm password**, and select
+   **Doctor** or **Receptionist**. The two password entries must match.
 3. Select **Create account**. A successful account appears in the Current
    staff accounts table, with its username, display name, role, and status,
    and can log in immediately.
@@ -64,15 +68,16 @@ medical records through the protected services.
 
 ### Patient directory and basic data
 
-Every patient receives an immutable, automatically generated Patient ID. The
-interface displays it in a form such as `P000042`; staff do not enter or edit
-this value, and it is not shown on the new-patient form. Appointments, payments, and retained records continue to use the
-same Patient ID even when basic details are corrected.
+Every patient receives an immutable internal Patient ID for database
+relationships. Staff do not enter or edit it, and routine directory and detail
+views omit it to leave more room for useful patient information. Appointments,
+payments, and retained records continue to use the same internal ID when basic
+details are corrected.
 
 The **Patient directory** is one page. It initially shows the patient search
-controls and a table with these columns: **Patient ID**, **Name**, **Date of
-birth**, **Phone**, **Email**, **Status**, and **Actions**. The **Actions**
-column is fixed at the far right and contains an **Edit** button for each row.
+controls and a table with these columns: **Name**, **Date of birth**, **Phone**,
+**Email**, **Status**, and **Actions**. The **Actions** column is fixed at the
+far right and contains a **View** button for each row.
 Select **Register new patient** at the bottom to switch to the registration
 form. The identity, country, date, and sex dropdowns use compact controls so
 the form remains easy to scan:
@@ -112,22 +117,21 @@ with `A patient with this identity document already exists`; no second patient
 is created. The message and application logs do not repeat the full document
 number.
 
-Use the **Patient directory** search controls to find patients by Patient ID
-(for example, `P000042` or `42`), identity type/number/country, name, phone, or
-email.
+Use the **Patient directory** search controls to find patients by name,
+NRIC/FIN or another identity document, phone, or email. The older generated-ID
+lookup remains accepted for compatibility but is not needed for normal work.
 Search is case-insensitive, partial text is accepted, and **Clear search**
 restores the full directory. No matches produce an empty list rather than an
 application error.
 
-Select a row's **Edit** button to replace the directory with an **Edit patient**
-page. It shows the generated Patient ID and the same permitted basic-data
-fields as registration. Correct them and select **Save patient changes** to
-return to the directory; a failed validation or duplicate identity leaves the
-edit page open with feedback so the values can be corrected. Select **Cancel**
-to discard unsaved edits and return to the directory. Select **Deactivate
-patient** when a record should no longer be active; the same button changes to
-**Activate patient** for an inactive record. Either status change preserves
-its Patient ID, appointments, payments, and clinical history. A patient
+Select a row's **View** button to open a read-only page containing all permitted
+administrative details. From there, select **Edit**, **Deactivate patient** (or
+**Activate patient**), **Delete patient**, or **Back to patients**. **Edit**
+opens the editable basic-data form; select **Save** to persist changes or
+**Discard changes** to return to the read-only view without writing the draft.
+A failed validation or duplicate identity keeps the edit page open with
+feedback. Status changes preserve the patient's internal ID, appointments,
+payments, and clinical history. A patient
 migrated from an older database remains searchable, but its identity-document
 fields must be completed before its next basic-data save.
 
@@ -154,19 +158,30 @@ Open **Appointments** in the left navigation. Use the
 **Book appointment** sub-tab for new bookings and **Search and manage
 appointments** for filters and existing appointments.
 
-The scheduling dashboard shows a chronological all-Doctor list and summary
+Alternatively, open **Calendar**, search for a Doctor, and select inclusive
+**From** and **To** dates (up to 31 days). Every date in that range appears without
+a week-number column. Clicking an empty date/time slot opens a scrollable
+booking popup with that Doctor, date, start time, and a 30-minute end time
+already filled. Select the patient and adjust any fields before booking. Select
+an existing Calendar appointment to open its edit popup. Closing either popup
+returns to Calendar, and successful changes refresh the grid immediately.
+
+The scheduling dashboard shows a chronological all-Doctor table and summary
 counts for Pending, Accepted, Checked in, and Completed appointments. Each row
-shows the Patient ID/name, Doctor ID, date/time, and a written status label.
+has **Date**, **Time**, **Patient**, **Doctor**, and **Status** columns; generated
+Patient and Doctor IDs are not displayed.
 Use the
-optional date, Doctor, status, and patient name/Patient ID filters to narrow
-the list; changing a filter reloads the list automatically. Selecting a patient
+optional date, Doctor, status, and patient administrative filters to narrow
+the table; choose **All statuses** to clear a previous status choice. Changing a
+filter or selecting Search reloads the table. Selecting a patient
 for a new booking only offers active patients. Existing appointments remain
 available for historical viewing if a patient is later deactivated.
 
-Patient and Doctor booking fields are searchable dropdowns: click the field and
-type part of the name or identifier instead of scrolling through the full list.
-Start and end times use separate hour (`00`–`23`) and minute (`00` or `30`)
-dropdowns.
+Patient and Doctor booking fields are search bars: type part of a name,
+username, NRIC/FIN, phone, or email and choose a filtered suggestion underneath.
+Use the mouse, or use Up/Down and Enter from the keyboard.
+The date, start time, and end time are aligned on one row. Start and end times
+use separate hour (`00`–`23`) and minute (`00` or `30`) dropdowns.
 
 1. Choose a patient and a Doctor.
 2. Select the appointment date with the calendar and choose start/end hours and
@@ -184,21 +199,22 @@ dashboard.
 
 ### Check in, checkout, and revenue
 
-The **Revenue Reports** tab supports From/To date pickers, patient, Doctor,
-and payment-method filters. Generate a report to view receipt-backed totals,
+The **Revenue Reports** page keeps equally sized From/To, patient, Doctor, and
+payment-method filters on one row. Choose **All methods** to clear a previous
+method selection. Generate a report to view receipt-backed totals,
 breakdowns, and payment details. Use **Export CSV** or **Export JSON** to save
 the current report.
 
 The **Check-in Queue** tab is the Receptionist's front-desk view for arrivals.
 It defaults to Singapore's current date and shows accepted appointments waiting
 for arrival together with appointments already checked in. Use the Doctor,
-patient, date, and queue-status filters to narrow the list. Select an appointment
+patient, date, and queue-status filters to narrow the table. Select an appointment
 to open its administrative details and choose **Check in patient** when the
 appointment start time has arrived. The queue refreshes automatically after a
 successful check-in. Clinical notes and prescriptions are never shown.
 
 1. After the assigned Doctor accepts the appointment, reopen **Appointments
-   across all Doctors** and select the appointment; the list refreshes automatically.
+   across all Doctors** and select the appointment; the table refreshes automatically.
 2. Check-in is handled through the appointment workflow at or after the scheduled
    start time; the all-Doctor dashboard has no standalone **Check in selected**
    button.
@@ -212,8 +228,9 @@ successful check-in. Clinical notes and prescriptions are never shown.
 6. In the **Checkout** workspace, use the Patient, Doctor, and date filters to
    find completed appointments ready for payment. After checkout, the receipt
    preview shows the daily receipt number and Singapore timestamp. Open the
-   **Receipts** sub-tab to browse prior payments and select a receipt to view
-   its persisted details.
+   **Receipts** sub-tab to browse the receipt table and select a receipt to view
+   its persisted details. Checkout, queue, receipt, and revenue result tables do
+   not display generated Patient or Doctor ID columns.
 5. Open **Daily revenue**, enter a date as `yyyy-MM-dd`, and select **Show revenue** to see the count
    and total of successful checkouts for that local clinic date.
 

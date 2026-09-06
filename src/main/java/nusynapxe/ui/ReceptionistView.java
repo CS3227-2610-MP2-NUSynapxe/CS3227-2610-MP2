@@ -14,29 +14,33 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
+import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
+import javafx.geometry.VPos;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
-import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
-import javafx.util.StringConverter;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
@@ -53,14 +57,17 @@ import nusynapxe.service.ValidationException;
 /** Builds the Receptionist scheduling, patient, checkout, and revenue workspace. */
 public final class ReceptionistView {
   private static final String APPOINTMENT_REQUIRED = "Select an appointment first";
-  private static final String DETAIL_SEPARATOR = " | ";
   private static final String DATE_LABEL = "Date";
+  private static final String DOCTOR_LABEL = "Doctor";
   private static final String QUEUE_WAITING = "Waiting";
   private static final String QUEUE_CHECKED_IN = "Checked in";
   private static final String QUEUE_ALL = "All";
   private static final String ALL_DOCTORS = "All Doctors";
-  private static final String PATIENT_NAME_ID = "Patient name or ID";
+  private static final String ALL_METHODS = "All methods";
+  private static final String ALL_STATUSES = "All statuses";
+  private static final String PATIENT_NAME_ID = "Name, NRIC/FIN, phone, or email";
   private static final String PATIENT_LABEL = "Patient";
+  private static final String SUBTAB_CONTENT_STYLE = "subtab-content";
   private static final String DATE_TIME_PATTERN = "yyyy-MM-dd HH:mm";
   private static final DateTimeFormatter DATE_TIME_FORMAT =
       DateTimeFormatter.ofPattern(DATE_TIME_PATTERN);
@@ -80,34 +87,36 @@ public final class ReceptionistView {
    * @throws NullPointerException if an argument is {@code null}
    */
   public static Parent create(ClinicServices services, Session session, Runnable onLogout) {
-    ComboBox<Account> doctor = doctorSelector();
+    SearchSuggestionField<Account> doctor =
+        doctorSelector("reception-doctor", "Search doctors by name or username");
     AppointmentDialog.TimeFields startsAt = AppointmentDialog.timeSelector("reception-start");
     AppointmentDialog.TimeFields endsAt = AppointmentDialog.timeSelector("reception-end");
     Button book = button("Book appointment", "reception-book");
     Button reschedule = button("Reschedule selected", "reception-reschedule");
     Button cancel = button("Cancel selected", "reception-cancel");
-    ListView<Appointment> appointmentList = new ListView<>();
-    appointmentList.setId("reception-appointment-list");
+    TableView<Appointment> appointmentList =
+        appointmentTable("reception-appointment-list", services, session);
     DatePicker scheduleDate = new DatePicker();
     scheduleDate.setId("reception-schedule-date");
     scheduleDate.setPromptText("Any date");
-    ComboBox<Account> scheduleDoctor = doctorSelector();
-    scheduleDoctor.setId("reception-schedule-doctor");
-    scheduleDoctor.setPromptText(ALL_DOCTORS);
-    ComboBox<AppointmentStatus> scheduleStatus = UiComponents.compactSelector();
-    scheduleStatus.setItems(FXCollections.observableArrayList(AppointmentStatus.values()));
+    SearchSuggestionField<Account> scheduleDoctor =
+        doctorSelector("reception-schedule-doctor", ALL_DOCTORS);
+    ComboBox<String> scheduleStatus = UiComponents.compactSelector();
+    scheduleStatus.getItems().add(ALL_STATUSES);
+    for (AppointmentStatus status : AppointmentStatus.values()) {
+      scheduleStatus.getItems().add(displayStatus(status));
+    }
     scheduleStatus.setId("reception-schedule-status");
-    scheduleStatus.setPromptText("All statuses");
+    scheduleStatus.getSelectionModel().select(ALL_STATUSES);
     TextField schedulePatient = field("reception-schedule-patient", "Patient name or ID");
     Label scheduleSummary = new Label();
     scheduleSummary.setId("reception-schedule-summary");
-    ListView<Appointment> queueList = new ListView<>();
-    queueList.setId("reception-check-in-queue-list");
+    TableView<Appointment> queueList =
+        appointmentTable("reception-check-in-queue-list", services, session);
     DatePicker queueDate = new DatePicker(LocalDate.now(SINGAPORE_ZONE));
     queueDate.setId("reception-check-in-queue-date");
-    ComboBox<Account> queueDoctor = doctorSelector();
-    queueDoctor.setId("reception-check-in-queue-doctor");
-    queueDoctor.setPromptText(ALL_DOCTORS);
+    SearchSuggestionField<Account> queueDoctor =
+        doctorSelector("reception-check-in-queue-doctor", ALL_DOCTORS);
     TextField queuePatient = field("reception-check-in-queue-patient", PATIENT_NAME_ID);
     ComboBox<String> queueStatus = UiComponents.compactSelector();
     queueStatus.setItems(
@@ -116,31 +125,28 @@ public final class ReceptionistView {
     queueStatus.getSelectionModel().select(QUEUE_ALL);
     Label queueSummary = new Label();
     queueSummary.setId("reception-check-in-queue-summary");
+    Button queueSearch = button("Search", "reception-check-in-queue-search");
     DatePicker appointmentDate = new DatePicker(LocalDate.now());
     appointmentDate.setId("reception-appointment-date");
-    ComboBox<Patient> appointmentPatient = UiComponents.compactSelector();
-    appointmentPatient.setId("reception-appointment-patient");
-    PatientDirectoryView.makePatientSearchable(appointmentPatient);
+    SearchSuggestionField<Patient> appointmentPatient =
+        PatientDirectoryView.patientSearchField("reception-appointment-patient");
     Button checkIn = button("Check in selected", "reception-check-in");
-    ListView<Appointment> checkoutAppointmentList = new ListView<>();
-    checkoutAppointmentList.setId("reception-checkout-appointment-list");
+    TableView<Appointment> checkoutAppointmentList =
+        appointmentTable("reception-checkout-appointment-list", services, session);
     boolean[] checkoutMouseSelection = {false};
     boolean[] checkoutTabActive = {false};
     TextField checkoutPatient = field("reception-checkout-patient", PATIENT_NAME_ID);
     DatePicker checkoutDate = new DatePicker();
     checkoutDate.setId("reception-checkout-date");
-    ComboBox<Account> checkoutDoctor = doctorSelector();
-    checkoutDoctor.setId("reception-checkout-doctor");
-    checkoutDoctor.setPromptText(ALL_DOCTORS);
+    SearchSuggestionField<Account> checkoutDoctor =
+        doctorSelector("reception-checkout-doctor", ALL_DOCTORS);
     Button checkoutSearch = button("Search checkout", "reception-checkout-search");
     TextField receiptPatient = field("reception-receipt-patient", PATIENT_NAME_ID);
     DatePicker receiptDate = new DatePicker();
     receiptDate.setId("reception-receipt-date");
-    ComboBox<Account> receiptDoctor = doctorSelector();
-    receiptDoctor.setId("reception-receipt-doctor");
-    receiptDoctor.setPromptText(ALL_DOCTORS);
-    ListView<Receipt> receiptHistoryList = new ListView<>();
-    receiptHistoryList.setId("reception-receipt-history-list");
+    SearchSuggestionField<Account> receiptDoctor =
+        doctorSelector("reception-receipt-doctor", ALL_DOCTORS);
+    TableView<Receipt> receiptHistoryList = receiptTable("reception-receipt-history-list");
     Button receiptSearch = button("Search receipts", "reception-receipt-search");
     Label receiptPreview = new Label();
     receiptPreview.setId("reception-receipt-preview");
@@ -149,18 +155,19 @@ public final class ReceptionistView {
     DatePicker reportToDate = new DatePicker(LocalDate.now(SINGAPORE_ZONE));
     reportToDate.setId("reception-revenue-report-to");
     TextField reportPatient = field("reception-revenue-report-patient", "Patient name or ID");
-    ComboBox<Account> reportDoctor = doctorSelector();
-    reportDoctor.setId("reception-revenue-report-doctor");
-    reportDoctor.setPromptText(ALL_DOCTORS);
-    ComboBox<PaymentMethod> reportMethod = UiComponents.compactSelector();
-    reportMethod.setItems(FXCollections.observableArrayList(PaymentMethod.values()));
+    SearchSuggestionField<Account> reportDoctor =
+        doctorSelector("reception-revenue-report-doctor", ALL_DOCTORS);
+    ComboBox<String> reportMethod = UiComponents.compactSelector();
+    reportMethod.getItems().add(ALL_METHODS);
+    for (PaymentMethod method : PaymentMethod.values()) {
+      reportMethod.getItems().add(displayStatus(method));
+    }
     reportMethod.setId("reception-revenue-report-method");
-    reportMethod.setPromptText("All methods");
+    reportMethod.getSelectionModel().select(ALL_METHODS);
     Button reportButton = button("Generate report", "reception-revenue-report");
     Label reportSummary = new Label();
     reportSummary.setId("reception-revenue-report-summary");
-    ListView<Receipt> reportRows = new ListView<>();
-    reportRows.setId("reception-revenue-report-list");
+    TableView<Receipt> reportRows = receiptTable("reception-revenue-report-list");
     RevenueReport[] currentReport = {new RevenueReport(List.of())};
     Button exportCsv = button("Export CSV", "reception-revenue-export-csv");
     Button exportJson = button("Export JSON", "reception-revenue-export-json");
@@ -168,8 +175,7 @@ public final class ReceptionistView {
     Button legacyRevenueButton = button("Show revenue", "reception-revenue-submit");
     Label legacyRevenue = new Label();
     legacyRevenue.setId("reception-revenue");
-    Label feedback = new Label();
-    feedback.setId("reception-feedback");
+    Label feedback = UiComponents.feedback("reception-feedback");
     SelectionState selection = new SelectionState();
     PatientDirectoryView patientDirectory =
         PatientDirectoryView.create(
@@ -274,6 +280,18 @@ public final class ReceptionistView {
                     selected,
                     queueStatus.getValue(),
                     queueSummary));
+    queueSearch.setOnAction(
+        event ->
+            refreshQueue(
+                services,
+                session,
+                queueList,
+                feedback,
+                queueDate.getValue(),
+                queueDoctor.getValue() == null ? null : queueDoctor.getValue().id(),
+                queuePatient.getText(),
+                queueStatus.getValue(),
+                queueSummary));
     scheduleDate
         .valueProperty()
         .addListener(
@@ -487,7 +505,7 @@ public final class ReceptionistView {
                         parseScheduleDateTime(appointmentDate, startsAt, "Start time"),
                         parseScheduleDateTime(appointmentDate, endsAt, "End time"));
             selection.appointmentId = appointment.id();
-            feedback.setText("Appointment booked and awaiting Doctor acceptance");
+            UiComponents.showMessage(feedback, "Appointment booked and awaiting Doctor acceptance");
             refreshSchedule(
                 services,
                 session,
@@ -510,9 +528,9 @@ public final class ReceptionistView {
           } catch (ValidationException
               | AuthorizationException
               | IllegalArgumentException exception) {
-            feedback.setText(exception.getMessage());
+            UiComponents.showError(feedback, exception.getMessage());
           } catch (SQLException exception) {
-            feedback.setText("Appointment booking is temporarily unavailable");
+            UiComponents.showError(feedback, "Appointment booking is temporarily unavailable");
           }
         });
 
@@ -538,7 +556,7 @@ public final class ReceptionistView {
                         scheduleStatus.getValue(),
                         scheduleSummary));
           } catch (ValidationException | AuthorizationException exception) {
-            feedback.setText(exception.getMessage());
+            UiComponents.showError(feedback, exception.getMessage());
           }
         });
 
@@ -547,7 +565,7 @@ public final class ReceptionistView {
           try {
             requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
             services.appointmentService().cancel(session, selection.appointmentId);
-            feedback.setText("Appointment cancelled");
+            UiComponents.showMessage(feedback, "Appointment cancelled");
             refreshSchedule(
                 services,
                 session,
@@ -568,9 +586,9 @@ public final class ReceptionistView {
                 checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
                 checkoutDate.getValue());
           } catch (ValidationException | AuthorizationException exception) {
-            feedback.setText(exception.getMessage());
+            UiComponents.showError(feedback, exception.getMessage());
           } catch (SQLException exception) {
-            feedback.setText("Appointment cancellation is temporarily unavailable");
+            UiComponents.showError(feedback, "Appointment cancellation is temporarily unavailable");
           }
         });
 
@@ -579,7 +597,7 @@ public final class ReceptionistView {
           try {
             requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
             services.appointmentService().checkIn(session, selection.appointmentId);
-            feedback.setText("Patient checked in");
+            UiComponents.showMessage(feedback, "Patient checked in");
             refreshSchedule(
                 services,
                 session,
@@ -600,9 +618,9 @@ public final class ReceptionistView {
                 checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
                 checkoutDate.getValue());
           } catch (ValidationException | AuthorizationException exception) {
-            feedback.setText(exception.getMessage());
+            UiComponents.showError(feedback, exception.getMessage());
           } catch (SQLException exception) {
-            feedback.setText("Check-in is temporarily unavailable");
+            UiComponents.showError(feedback, "Check-in is temporarily unavailable");
           }
         });
 
@@ -620,30 +638,15 @@ public final class ReceptionistView {
                         to,
                         reportPatient.getText(),
                         reportDoctor.getValue() == null ? null : reportDoctor.getValue().id(),
-                        reportMethod.getValue());
+                        selectedPaymentMethod(reportMethod.getValue()));
             currentReport[0] = report;
             reportRows.setItems(FXCollections.observableArrayList(report.receipts()));
-            reportRows.setCellFactory(
-                list ->
-                    new javafx.scene.control.ListCell<>() {
-                      @Override
-                      protected void updateItem(Receipt item, boolean empty) {
-                        super.updateItem(item, empty);
-                        setText(empty || item == null ? null : formatReceiptRow(item));
-                      }
-                    });
-            reportSummary.setText(
-                report.receiptCount()
-                    + " successful payment(s), total "
-                    + formatMinor(report.totalMinor())
-                    + "\nBy method: "
-                    + report.byMethod()
-                    + "\nBy Doctor: "
-                    + report.byDoctor());
+            reportSummary.setText(formatRevenueSummary(report));
+            UiComponents.showMessage(feedback, "Revenue report generated");
           } catch (ValidationException | AuthorizationException exception) {
-            feedback.setText(exception.getMessage());
+            UiComponents.showError(feedback, exception.getMessage());
           } catch (SQLException exception) {
-            feedback.setText("Revenue report is temporarily unavailable");
+            UiComponents.showError(feedback, "Revenue report is temporarily unavailable");
           }
         });
     legacyRevenueButton.setOnAction(
@@ -658,9 +661,9 @@ public final class ReceptionistView {
                     + " successful payment(s), total "
                     + formatMinor(summary.totalMinor()));
           } catch (ValidationException | AuthorizationException exception) {
-            feedback.setText(exception.getMessage());
+            UiComponents.showError(feedback, exception.getMessage());
           } catch (SQLException | DateTimeParseException exception) {
-            feedback.setText("Revenue is temporarily unavailable");
+            UiComponents.showError(feedback, "Revenue is temporarily unavailable");
           }
         });
 
@@ -672,68 +675,123 @@ public final class ReceptionistView {
 
     Button logout = button("Log out", "logout-button");
     logout.setOnAction(event -> onLogout.run());
-    Region headerSpacer = new Region();
-    HBox.setHgrow(headerSpacer, Priority.ALWAYS);
-    HBox header = new HBox(12, new Label("RECEPTIONIST workspace"), headerSpacer, logout);
+    HBox header =
+        UiComponents.workspaceHeader("RECEPTIONIST workspace", session.username(), logout);
 
     VBox patientContent = new VBox(12, patientDirectory.view());
     GridPane appointmentForm = new GridPane();
-    appointmentForm.setHgap(8);
-    appointmentForm.setVgap(8);
-    appointmentForm.addRow(0, new Label(PATIENT_LABEL), appointmentPatient);
-    appointmentForm.addRow(1, new Label("Doctor"), doctor);
-    appointmentForm.addRow(2, new Label(DATE_LABEL), appointmentDate);
-    appointmentForm.addRow(
-        3, new Label("Starts"), startsAt.view(), new Label("Ends"), endsAt.view());
-    appointmentForm.addRow(4, book);
-    HBox scheduleFilters =
-        new HBox(
-            8,
-            new Label(DATE_LABEL),
-            scheduleDate,
-            scheduleDoctor,
-            scheduleStatus,
-            schedulePatient);
-    VBox bookingContent = new VBox(12, appointmentForm);
+    appointmentForm.getStyleClass().add("appointment-form-grid");
+    appointmentForm.setHgap(16);
+    appointmentForm.setVgap(14);
+    addUniformColumns(appointmentForm, 3, 180, 240, 240);
+    appointmentForm.add(UiComponents.fieldGroup(PATIENT_LABEL, appointmentPatient), 0, 0, 3, 1);
+    appointmentForm.add(UiComponents.fieldGroup(DOCTOR_LABEL, doctor), 0, 1, 3, 1);
+    VBox appointmentDateField = UiComponents.fieldGroup(DATE_LABEL, appointmentDate);
+    VBox appointmentStartField = UiComponents.fieldGroup("Starts", startsAt.view());
+    VBox appointmentEndField = UiComponents.fieldGroup("Ends", endsAt.view());
+    appointmentDateField.getStyleClass().add("appointment-interval-field");
+    appointmentStartField.getStyleClass().add("appointment-interval-field");
+    appointmentEndField.getStyleClass().add("appointment-interval-field");
+    appointmentForm.add(appointmentDateField, 0, 2);
+    appointmentForm.add(appointmentStartField, 1, 2);
+    appointmentForm.add(appointmentEndField, 2, 2);
+    appointmentForm.add(book, 2, 3);
+    GridPane scheduleFilters = new GridPane();
+    scheduleFilters.getStyleClass().add("uniform-filter-grid");
+    scheduleFilters.setHgap(12);
+    scheduleFilters.setVgap(10);
+    addUniformColumns(scheduleFilters, 4, 170, 220, 220);
+    scheduleFilters.add(UiComponents.fieldGroup(DATE_LABEL, scheduleDate), 0, 0);
+    scheduleFilters.add(UiComponents.fieldGroup(DOCTOR_LABEL, scheduleDoctor), 1, 0);
+    scheduleFilters.add(UiComponents.fieldGroup("Status", scheduleStatus), 2, 0);
+    scheduleFilters.add(UiComponents.fieldGroup(PATIENT_LABEL, schedulePatient), 3, 0);
+    VBox bookingContent =
+        UiComponents.card(
+            "reception-booking-card",
+            UiComponents.sectionHeading("Book appointment"),
+            appointmentForm);
     VBox appointmentManageContent =
-        new VBox(
-            12, scheduleFilters, scheduleSummary, appointmentList, new HBox(8, reschedule, cancel));
-    Tab bookingTab = new Tab("Book appointment", bookingContent);
+        UiComponents.card(
+            "reception-appointment-results-card",
+            scheduleFilters,
+            scheduleSummary,
+            appointmentList,
+            UiComponents.actionBar(reschedule, cancel));
+    VBox bookingTabContent = new VBox(bookingContent);
+    bookingTabContent.getStyleClass().add(SUBTAB_CONTENT_STYLE);
+    bookingTabContent.setPadding(new Insets(22, 0, 0, 0));
+    VBox manageTabContent = new VBox(appointmentManageContent);
+    manageTabContent.getStyleClass().add(SUBTAB_CONTENT_STYLE);
+    manageTabContent.setPadding(new Insets(22, 0, 0, 0));
+    Tab bookingTab = new Tab("Book appointment", bookingTabContent);
     bookingTab.setClosable(false);
-    Tab manageAppointmentsTab = new Tab("Search and manage appointments", appointmentManageContent);
+    Tab manageAppointmentsTab = new Tab("Search and manage appointments", manageTabContent);
     manageAppointmentsTab.setClosable(false);
     TabPane appointmentTabs = new TabPane(bookingTab, manageAppointmentsTab);
     appointmentTabs.setId("reception-appointment-tabs");
-    VBox appointmentContent = new VBox(12, appointmentTabs);
-    HBox queueFilters =
-        new HBox(8, new Label(DATE_LABEL), queueDate, queueDoctor, queueStatus, queuePatient);
-    VBox queueContent = new VBox(12, queueFilters, queueSummary, queueList);
-    HBox checkoutFilters =
-        new HBox(
-            8,
-            new Label(PATIENT_LABEL),
-            checkoutPatient,
-            new Label("Doctor"),
-            checkoutDoctor,
-            new Label("Date"),
-            checkoutDate,
-            checkoutSearch);
-    HBox receiptFilters =
-        new HBox(
-            8,
-            new Label(PATIENT_LABEL),
-            receiptPatient,
-            new Label("Doctor"),
-            receiptDoctor,
-            new Label("Date"),
-            receiptDate,
-            receiptSearch);
-    VBox readyForCheckoutContent =
-        new VBox(12, new Label("Ready for checkout"), checkoutFilters, checkoutAppointmentList);
-    readyForCheckoutContent.setId("reception-checkout-ready-tab");
-    VBox receiptHistoryContent =
+    appointmentTabs.getStyleClass().add("sub-navigation");
+    VBox appointmentContent =
         new VBox(
-            12, new Label("Receipt history"), receiptFilters, receiptHistoryList, receiptPreview);
+            12,
+            UiComponents.pageTitle("Appointments"),
+            UiComponents.supportingText("Book, search, reschedule, and cancel appointments."),
+            appointmentTabs);
+    GridPane queueFilters = filterGrid("reception-check-in-filter-grid");
+    addUniformColumns(queueFilters, 4, 170, 220, 220);
+    queueFilters.add(UiComponents.fieldGroup(DATE_LABEL, queueDate), 0, 0);
+    queueFilters.add(UiComponents.fieldGroup(DOCTOR_LABEL, queueDoctor), 1, 0);
+    queueFilters.add(UiComponents.fieldGroup("Status", queueStatus), 2, 0);
+    queueFilters.add(UiComponents.fieldGroup(PATIENT_LABEL, queuePatient), 3, 0);
+    queueFilters.add(queueSearch, 4, 0);
+    alignFilterAction(queueSearch);
+    VBox queueContent =
+        new VBox(
+            12,
+            UiComponents.pageTitle("Check in"),
+            UiComponents.supportingText(
+                "Find arriving patients and review appointments already checked in."),
+            UiComponents.card(
+                "reception-check-in-card",
+                UiComponents.sectionHeading("Check-in appointments"),
+                queueFilters,
+                queueSummary,
+                queueList));
+    GridPane checkoutFilters = filterGrid("reception-checkout-filter-grid");
+    checkoutFilters.getStyleClass().add("spacious-filter-grid");
+    addUniformColumns(checkoutFilters, 3, 180, 240, 240);
+    checkoutFilters.add(UiComponents.fieldGroup(PATIENT_LABEL, checkoutPatient), 0, 0);
+    checkoutFilters.add(UiComponents.fieldGroup(DOCTOR_LABEL, checkoutDoctor), 1, 0);
+    checkoutFilters.add(UiComponents.fieldGroup(DATE_LABEL, checkoutDate), 2, 0);
+    checkoutFilters.add(checkoutSearch, 3, 0);
+    alignFilterAction(checkoutSearch);
+    GridPane receiptFilters = filterGrid("reception-receipt-filter-grid");
+    receiptFilters.getStyleClass().add("spacious-filter-grid");
+    addUniformColumns(receiptFilters, 3, 180, 240, 240);
+    receiptFilters.add(UiComponents.fieldGroup(PATIENT_LABEL, receiptPatient), 0, 0);
+    receiptFilters.add(UiComponents.fieldGroup(DOCTOR_LABEL, receiptDoctor), 1, 0);
+    receiptFilters.add(UiComponents.fieldGroup(DATE_LABEL, receiptDate), 2, 0);
+    receiptFilters.add(receiptSearch, 3, 0);
+    alignFilterAction(receiptSearch);
+    VBox readyForCheckoutCard =
+        UiComponents.card(
+            "reception-checkout-ready-card",
+            UiComponents.sectionHeading("Checkout appointments"),
+            checkoutFilters,
+            checkoutAppointmentList);
+    VBox readyForCheckoutContent = new VBox(readyForCheckoutCard);
+    readyForCheckoutContent.getStyleClass().add(SUBTAB_CONTENT_STYLE);
+    readyForCheckoutContent.setPadding(new Insets(22, 0, 0, 0));
+    readyForCheckoutContent.setId("reception-checkout-ready-tab");
+    VBox receiptHistoryCard =
+        UiComponents.card(
+            "reception-receipts-card",
+            UiComponents.sectionHeading("Issued receipts"),
+            receiptFilters,
+            receiptHistoryList,
+            receiptPreview);
+    VBox receiptHistoryContent = new VBox(receiptHistoryCard);
+    receiptHistoryContent.getStyleClass().add(SUBTAB_CONTENT_STYLE);
+    receiptHistoryContent.setPadding(new Insets(22, 0, 0, 0));
     receiptHistoryContent.setId("reception-receipts-tab");
     Tab readyForCheckoutTab = new Tab("Checkout", readyForCheckoutContent);
     readyForCheckoutTab.setClosable(false);
@@ -741,45 +799,166 @@ public final class ReceptionistView {
     receiptHistoryTab.setClosable(false);
     TabPane checkoutTabs = new TabPane(readyForCheckoutTab, receiptHistoryTab);
     checkoutTabs.setId("reception-checkout-tabs");
-    VBox checkoutContent = new VBox(12, checkoutTabs);
-    HBox reportDates =
-        new HBox(
-            8,
-            new Label("From"),
-            reportFromDate,
-            new Label("To"),
-            reportToDate,
-            reportPatient,
-            reportDoctor,
-            reportMethod,
-            reportButton);
-    VBox revenueContent =
+    checkoutTabs.getStyleClass().add("sub-navigation");
+    VBox checkoutContent =
         new VBox(
             12,
-            new Label("Revenue Reports"),
+            UiComponents.pageTitle("Checkout and receipts"),
+            UiComponents.supportingText(
+                "Complete payments for finished visits or review previously issued receipts."),
+            checkoutTabs);
+    GridPane reportDates = new GridPane();
+    reportDates.setId("reception-revenue-filter-grid");
+    reportDates.getStyleClass().add("uniform-filter-grid");
+    reportDates.getStyleClass().add("single-line-filter-grid");
+    reportDates.setHgap(12);
+    reportDates.setVgap(10);
+    addUniformColumns(reportDates, 5, 145, 166, 166);
+    reportDates.add(UiComponents.fieldGroup("From", reportFromDate), 0, 0);
+    reportDates.add(UiComponents.fieldGroup("To", reportToDate), 1, 0);
+    reportDates.add(UiComponents.fieldGroup(PATIENT_LABEL, reportPatient), 2, 0);
+    reportDates.add(UiComponents.fieldGroup(DOCTOR_LABEL, reportDoctor), 3, 0);
+    reportDates.add(UiComponents.fieldGroup("Payment method", reportMethod), 4, 0);
+    reportDates.add(reportButton, 5, 0);
+    alignFilterAction(reportButton);
+    VBox revenueCard =
+        UiComponents.card(
+            "reception-revenue-card",
+            UiComponents.sectionHeading("Revenue results"),
             reportDates,
             new HBox(8, exportCsv, exportJson),
             reportSummary,
             reportRows);
+    VBox revenueContent =
+        new VBox(
+            12,
+            UiComponents.pageTitle("Revenue Reports"),
+            UiComponents.supportingText(
+                "Filter successful payments and export the resulting report."),
+            revenueCard);
     VBox legacyRevenueCompatibility =
         new VBox(legacyRevenueDate, legacyRevenueButton, legacyRevenue);
     legacyRevenueCompatibility.setOpacity(0);
     legacyRevenueCompatibility.setManaged(false);
     revenueContent.getChildren().add(legacyRevenueCompatibility);
-    Tab patientFeature = featureTab("Patient directory and basic data", patientContent);
-    Tab appointmentFeature = featureTab("Appointments across all Doctors", appointmentContent);
-    Tab queueFeature = featureTab("Check-in Queue", queueContent);
+    Tab patientFeature = featureTab("Directory", patientContent);
+    Tab appointmentFeature = featureTab("Appointments", appointmentContent);
+    ReceptionistCalendarView[] calendarHolder = new ReceptionistCalendarView[1];
+    calendarHolder[0] =
+        new ReceptionistCalendarView(
+            services,
+            session,
+            feedback,
+            (selectedDoctor, start) ->
+                AppointmentDialog.showReceptionistCreate(
+                    services,
+                    session,
+                    selectedDoctor.id(),
+                    start,
+                    feedback,
+                    () -> {
+                      calendarHolder[0].refresh();
+                      refreshSchedule(
+                          services,
+                          session,
+                          appointmentList,
+                          selection,
+                          feedback,
+                          scheduleDate.getValue(),
+                          scheduleDoctor.getValue() == null ? null : scheduleDoctor.getValue().id(),
+                          schedulePatient.getText(),
+                          scheduleStatus.getValue(),
+                          scheduleSummary);
+                    }),
+            selectedAppointment ->
+                AppointmentDialog.showReceptionistEdit(
+                    services,
+                    session,
+                    selectedAppointment.appointmentId(),
+                    feedback,
+                    () -> {
+                      calendarHolder[0].refresh();
+                      refreshSchedule(
+                          services,
+                          session,
+                          appointmentList,
+                          selection,
+                          feedback,
+                          scheduleDate.getValue(),
+                          scheduleDoctor.getValue() == null ? null : scheduleDoctor.getValue().id(),
+                          schedulePatient.getText(),
+                          scheduleStatus.getValue(),
+                          scheduleSummary);
+                    }));
+    ReceptionistCalendarView receptionistCalendar = calendarHolder[0];
+    Tab calendarFeature = new Tab("Calendar", receptionistCalendar.view());
+    calendarFeature.setClosable(false);
+    Tab queueFeature = featureTab("Check in", queueContent);
     Tab checkoutFeature = featureTab("Checkout", checkoutContent);
     Tab revenueFeature = featureTab("Revenue Reports", revenueContent);
     TabPane workspaceTabs =
         new TabPane(
-            patientFeature, appointmentFeature, queueFeature, checkoutFeature, revenueFeature);
+            patientFeature,
+            appointmentFeature,
+            calendarFeature,
+            queueFeature,
+            checkoutFeature,
+            revenueFeature);
     workspaceTabs.setId("reception-workspace-tabs");
+    workspaceTabs.getStyleClass().add("hidden-tab-headers");
+    Button directoryNavigation = navigationButton("Directory", "reception-nav-directory");
+    Button appointmentsNavigation = navigationButton("Appointments", "reception-nav-appointments");
+    Button calendarNavigation = navigationButton("Calendar", "reception-nav-calendar");
+    Button checkInNavigation = navigationButton("Check in", "reception-nav-check-in");
+    Button checkoutNavigation = navigationButton("Checkout", "reception-nav-checkout");
+    Button revenueNavigation = navigationButton("Revenue Reports", "reception-nav-revenue-reports");
+    List<Button> navigationButtons =
+        List.of(
+            directoryNavigation,
+            appointmentsNavigation,
+            calendarNavigation,
+            checkInNavigation,
+            checkoutNavigation,
+            revenueNavigation);
+    directoryNavigation.getStyleClass().add("active-navigation");
+    Label navigationTitle = new Label("Navigation");
+    navigationTitle.setId("reception-navigation-title");
+    navigationTitle.getStyleClass().add("navigation-title");
+    navigationTitle.setMaxWidth(Double.MAX_VALUE);
+    VBox navigation =
+        new VBox(
+            0,
+            navigationTitle,
+            directoryNavigation,
+            appointmentsNavigation,
+            calendarNavigation,
+            checkInNavigation,
+            checkoutNavigation,
+            revenueNavigation);
+    navigation.setId("reception-navigation");
+    directoryNavigation.setOnAction(
+        event -> workspaceTabs.getSelectionModel().select(patientFeature));
+    appointmentsNavigation.setOnAction(
+        event -> workspaceTabs.getSelectionModel().select(appointmentFeature));
+    calendarNavigation.setOnAction(
+        event -> workspaceTabs.getSelectionModel().select(calendarFeature));
+    checkInNavigation.setOnAction(event -> workspaceTabs.getSelectionModel().select(queueFeature));
+    checkoutNavigation.setOnAction(
+        event -> workspaceTabs.getSelectionModel().select(checkoutFeature));
+    revenueNavigation.setOnAction(
+        event -> workspaceTabs.getSelectionModel().select(revenueFeature));
     workspaceTabs
         .getSelectionModel()
         .selectedItemProperty()
         .addListener(
             (observable, previous, selected) -> {
+              for (Button navigationButton : navigationButtons) {
+                navigationButton.getStyleClass().remove("active-navigation");
+              }
+              int selectedIndex = workspaceTabs.getSelectionModel().getSelectedIndex();
+              if (selectedIndex >= 0 && selectedIndex < navigationButtons.size()) {
+                navigationButtons.get(selectedIndex).getStyleClass().add("active-navigation");
+              }
               checkoutTabActive[0] = selected == checkoutFeature;
               if (selected == patientFeature) {
                 patientDirectory.refresh();
@@ -792,7 +971,7 @@ public final class ReceptionistView {
                     feedback,
                     patientDirectory.selectedPatientId());
                 refreshDoctors(services, session, scheduleDoctor, feedback);
-                scheduleDoctor.getSelectionModel().clearSelection();
+                scheduleDoctor.clearSelection();
                 refreshSchedule(
                     services,
                     session,
@@ -804,9 +983,12 @@ public final class ReceptionistView {
                     schedulePatient.getText(),
                     scheduleStatus.getValue(),
                     scheduleSummary);
-              } else if (selected != null && "Check-in Queue".equals(selected.getText())) {
+              } else if (selected == calendarFeature) {
+                receptionistCalendar.refreshDoctors();
+                receptionistCalendar.refresh();
+              } else if (selected == queueFeature) {
                 refreshDoctors(services, session, queueDoctor, feedback);
-                queueDoctor.getSelectionModel().clearSelection();
+                queueDoctor.clearSelection();
                 refreshQueue(
                     services,
                     session,
@@ -818,6 +1000,10 @@ public final class ReceptionistView {
                     queueStatus.getValue(),
                     queueSummary);
               } else if (selected == checkoutFeature) {
+                refreshDoctors(services, session, checkoutDoctor, feedback);
+                checkoutDoctor.clearSelection();
+                refreshDoctors(services, session, receiptDoctor, feedback);
+                receiptDoctor.clearSelection();
                 refreshCheckoutReady(
                     services,
                     session,
@@ -837,14 +1023,16 @@ public final class ReceptionistView {
                     feedback);
               } else if (selected == revenueFeature) {
                 refreshDoctors(services, session, reportDoctor, feedback);
-                reportDoctor.getSelectionModel().clearSelection();
+                reportDoctor.clearSelection();
               }
             });
     BorderPane root = new BorderPane(workspaceTabs);
     root.setId("receptionist-workspace");
+    root.getStyleClass().add("workspace-shell");
     root.setPadding(new Insets(24));
     root.setTop(header);
-    root.setBottom(feedback);
+    root.setLeft(navigation);
+    BorderPane.setMargin(navigation, new Insets(0, 16, 0, 0));
     refreshDoctors(services, session, doctor, feedback);
     refreshDoctors(services, session, reportDoctor, feedback);
     patientDirectory.refresh();
@@ -862,7 +1050,7 @@ public final class ReceptionistView {
         null,
         scheduleSummary);
     refreshDoctors(services, session, queueDoctor, feedback);
-    queueDoctor.getSelectionModel().clearSelection();
+    queueDoctor.clearSelection();
     refreshQueue(
         services,
         session,
@@ -873,6 +1061,10 @@ public final class ReceptionistView {
         queuePatient.getText(),
         queueStatus.getValue(),
         queueSummary);
+    refreshDoctors(services, session, checkoutDoctor, feedback);
+    checkoutDoctor.clearSelection();
+    refreshDoctors(services, session, receiptDoctor, feedback);
+    receiptDoctor.clearSelection();
     refreshCheckoutReady(
         services,
         session,
@@ -881,7 +1073,7 @@ public final class ReceptionistView {
         checkoutPatient.getText(),
         checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
         checkoutDate.getValue());
-    return root;
+    return UiComponents.notificationOverlay(root, feedback);
   }
 
   private static Tab featureTab(String title, VBox content) {
@@ -899,41 +1091,140 @@ public final class ReceptionistView {
     return field;
   }
 
+  private static Button navigationButton(String text, String id) {
+    Button button = new Button(text);
+    button.setId(id);
+    button.setMaxWidth(Double.MAX_VALUE);
+    return button;
+  }
+
   private static Button button(String label, String id) {
     Button button = new Button(label);
     button.setId(id);
     return button;
   }
 
-  private static ComboBox<Account> doctorSelector() {
-    ComboBox<Account> doctor = UiComponents.compactSelector();
-    doctor.setEditable(true);
-    doctor.setPromptText("Search Doctors");
-    doctor.setId("reception-doctor");
-    doctor.setConverter(
-        new StringConverter<>() {
-          @Override
-          public String toString(Account account) {
-            return doctorLabel(account);
-          }
+  private static TableView<Appointment> appointmentTable(
+      String id, ClinicServices services, Session session) {
+    TableView<Appointment> table = new TableView<>();
+    table.setId(id);
+    table.setPrefHeight(360);
+    table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+    table.setPlaceholder(
+        UiComponents.emptyState(id + "-empty", "No appointments match these filters."));
+    TableColumn<Appointment, String> date =
+        textColumn(DATE_LABEL, appointment -> appointment.startsAt().toLocalDate().toString());
+    TableColumn<Appointment, String> time =
+        textColumn(
+            "Time",
+            appointment ->
+                appointment.startsAt().toLocalTime() + " – " + appointment.endsAt().toLocalTime());
+    TableColumn<Appointment, String> patient =
+        textColumn(
+            "Patient",
+            appointment -> patientDisplayName(services, session, appointment.patientId()));
+    TableColumn<Appointment, String> doctor =
+        textColumn(
+            DOCTOR_LABEL,
+            appointment -> doctorDisplayName(services, session, appointment.doctorId()));
+    TableColumn<Appointment, String> status =
+        textColumn("Status", appointment -> displayStatus(appointment.status()));
+    table.getColumns().addAll(List.of(date, time, patient, doctor, status));
+    return table;
+  }
 
-          @Override
-          public Account fromString(String value) {
-            if (value == null || value.isBlank()) {
-              return null;
-            }
-            String normalized = value.trim();
-            return doctor.getItems().stream()
-                .filter(
-                    candidate ->
-                        doctorLabel(candidate).equals(normalized)
-                            || candidate.username().equalsIgnoreCase(normalized)
-                            || candidate.displayName().equalsIgnoreCase(normalized))
-                .findFirst()
-                .orElse(null);
-          }
-        });
-    return doctor;
+  private static TableView<Receipt> receiptTable(String id) {
+    TableView<Receipt> table = new TableView<>();
+    table.setId(id);
+    table.setPrefHeight(360);
+    table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+    Label empty = UiComponents.emptyState(id + "-empty", "No receipts match these filters.");
+    empty.getStyleClass().add("table-empty-row");
+    empty.setPrefHeight(52);
+    empty.setMaxHeight(52);
+    table.setPlaceholder(empty);
+    table
+        .getColumns()
+        .addAll(
+            List.of(
+                textColumn(
+                    "Receipt",
+                    receipt ->
+                        receipt.receiptDate() + "-" + "%04d".formatted(receipt.sequenceNumber())),
+                textColumn(
+                    "Date and time", receipt -> receipt.recordedAt().format(DATE_TIME_FORMAT)),
+                textColumn("Patient", Receipt::patientName),
+                textColumn(DOCTOR_LABEL, Receipt::doctorName),
+                textColumn("Amount", receipt -> formatMinor(receipt.amountMinor())),
+                textColumn("Method", receipt -> displayStatus(receipt.method()))));
+    return table;
+  }
+
+  private static <T> TableColumn<T, String> textColumn(
+      String title, Function<T, String> valueProvider) {
+    TableColumn<T, String> column = new TableColumn<>(title);
+    column.setCellValueFactory(
+        data -> new ReadOnlyStringWrapper(valueOrEmpty(valueProvider.apply(data.getValue()))));
+    return column;
+  }
+
+  private static String displayStatus(Object value) {
+    return value == null
+        ? ""
+        : value
+                .toString()
+                .toLowerCase(Locale.ROOT)
+                .replace('_', ' ')
+                .substring(0, 1)
+                .toUpperCase(Locale.ROOT)
+            + value.toString().toLowerCase(Locale.ROOT).replace('_', ' ').substring(1);
+  }
+
+  private static GridPane filterGrid(String id) {
+    GridPane grid = new GridPane();
+    grid.setId(id);
+    grid.getStyleClass().add("uniform-filter-grid");
+    grid.setHgap(12);
+    grid.setVgap(10);
+    return grid;
+  }
+
+  private static void addUniformColumns(
+      GridPane grid, int count, double minimumWidth, double preferredWidth, double maximumWidth) {
+    for (int index = 0; index < count; index++) {
+      ColumnConstraints column = new ColumnConstraints(minimumWidth, preferredWidth, maximumWidth);
+      column.setHgrow(Priority.ALWAYS);
+      column.setFillWidth(true);
+      grid.getColumnConstraints().add(column);
+    }
+  }
+
+  private static void alignFilterAction(Button button) {
+    button.setMinHeight(38);
+    button.setPrefHeight(38);
+    GridPane.setValignment(button, VPos.BOTTOM);
+  }
+
+  private static AppointmentStatus selectedAppointmentStatus(String value) {
+    if (value == null || ALL_STATUSES.equals(value)) {
+      return null;
+    }
+    return AppointmentStatus.valueOf(value.toUpperCase(Locale.ROOT).replace(' ', '_'));
+  }
+
+  private static PaymentMethod selectedPaymentMethod(String value) {
+    if (value == null || ALL_METHODS.equals(value)) {
+      return null;
+    }
+    return PaymentMethod.valueOf(value.toUpperCase(Locale.ROOT).replace(' ', '_'));
+  }
+
+  private static SearchSuggestionField<Account> doctorSelector(String id, String prompt) {
+    return new SearchSuggestionField<>(
+        id,
+        prompt,
+        ReceptionistView::doctorLabel,
+        doctor -> doctor.displayName() + " " + doctor.username());
   }
 
   private static String doctorLabel(Account account) {
@@ -941,22 +1232,24 @@ public final class ReceptionistView {
   }
 
   private static void refreshDoctors(
-      ClinicServices services, Session session, ComboBox<Account> doctor, Label feedback) {
+      ClinicServices services,
+      Session session,
+      SearchSuggestionField<Account> doctor,
+      Label feedback) {
     try {
-      doctor.setItems(
-          FXCollections.observableArrayList(services.accountService().listDoctors(session)));
+      doctor.setItems(services.accountService().listDoctors(session));
       if (!doctor.getItems().isEmpty()) {
-        doctor.getSelectionModel().selectFirst();
+        doctor.select(doctor.getItems().getFirst());
       }
     } catch (SQLException exception) {
-      feedback.setText("Doctors are temporarily unavailable");
+      UiComponents.showError(feedback, "Doctors are temporarily unavailable");
     }
   }
 
   private static void refreshCheckoutReady(
       ClinicServices services,
       Session session,
-      ListView<Appointment> list,
+      TableView<Appointment> list,
       Label feedback,
       String patientQuery,
       Long doctorId,
@@ -968,25 +1261,15 @@ public final class ReceptionistView {
               .searchAppointments(
                   session, date, doctorId, patientQuery, AppointmentStatus.COMPLETED);
       list.setItems(FXCollections.observableArrayList(appointments));
-      list.setCellFactory(
-          view ->
-              new javafx.scene.control.ListCell<>() {
-                @Override
-                protected void updateItem(Appointment item, boolean empty) {
-                  super.updateItem(item, empty);
-                  setText(
-                      empty || item == null ? null : formatAppointment(services, session, item));
-                }
-              });
     } catch (SQLException exception) {
-      feedback.setText("Checkout appointments are temporarily unavailable");
+      UiComponents.showError(feedback, "Checkout appointments are temporarily unavailable");
     }
   }
 
   private static void refreshReceiptHistory(
       ClinicServices services,
       Session session,
-      ListView<Receipt> history,
+      TableView<Receipt> history,
       Label preview,
       String patientQuery,
       Long doctorId,
@@ -996,18 +1279,9 @@ public final class ReceptionistView {
       List<Receipt> receipts =
           services.billingService().receiptHistory(session, patientQuery, doctorId, date);
       history.setItems(FXCollections.observableArrayList(receipts));
-      history.setCellFactory(
-          list ->
-              new javafx.scene.control.ListCell<>() {
-                @Override
-                protected void updateItem(Receipt item, boolean empty) {
-                  super.updateItem(item, empty);
-                  setText(empty || item == null ? null : formatReceiptRow(item));
-                }
-              });
       preview.setText("");
     } catch (SQLException | ValidationException | AuthorizationException exception) {
-      feedback.setText("Receipt history is temporarily unavailable");
+      UiComponents.showError(feedback, "Receipt history is temporarily unavailable");
     }
   }
 
@@ -1044,9 +1318,9 @@ public final class ReceptionistView {
     try {
       String content = json ? reportJson(report) : reportCsv(report);
       Files.writeString(target.toPath(), content, StandardCharsets.UTF_8);
-      feedback.setText("Revenue report exported");
+      UiComponents.showMessage(feedback, "Revenue report exported");
     } catch (java.io.IOException exception) {
-      feedback.setText("Revenue report export failed");
+      UiComponents.showError(feedback, "Revenue report export failed");
     }
   }
 
@@ -1106,30 +1380,21 @@ public final class ReceptionistView {
   private static void refreshSchedule(
       ClinicServices services,
       Session session,
-      ListView<Appointment> appointmentList,
+      TableView<Appointment> appointmentList,
       SelectionState selection,
       Label feedback,
       LocalDate date,
       Long doctorId,
       String patientQuery,
-      AppointmentStatus status,
+      String status,
       Label summary) {
     try {
       List<Appointment> appointments =
           services
               .appointmentService()
-              .searchAppointments(session, date, doctorId, patientQuery, status);
+              .searchAppointments(
+                  session, date, doctorId, patientQuery, selectedAppointmentStatus(status));
       appointmentList.setItems(FXCollections.observableArrayList(appointments));
-      appointmentList.setCellFactory(
-          list ->
-              new javafx.scene.control.ListCell<>() {
-                @Override
-                protected void updateItem(Appointment item, boolean empty) {
-                  super.updateItem(item, empty);
-                  setText(
-                      empty || item == null ? null : formatAppointment(services, session, item));
-                }
-              });
       selectAppointment(appointmentList, selection.appointmentId);
       long pending =
           appointments.stream().filter(a -> a.status() == AppointmentStatus.PENDING).count();
@@ -1154,14 +1419,14 @@ public final class ReceptionistView {
               + " | Completed: "
               + completed);
     } catch (SQLException exception) {
-      feedback.setText("Appointments are temporarily unavailable");
+      UiComponents.showError(feedback, "Appointments are temporarily unavailable");
     }
   }
 
   private static void refreshQueue(
       ClinicServices services,
       Session session,
-      ListView<Appointment> queue,
+      TableView<Appointment> queue,
       Label feedback,
       LocalDate date,
       Long doctorId,
@@ -1190,16 +1455,6 @@ public final class ReceptionistView {
       }
       appointments.sort(Comparator.comparing(Appointment::startsAt));
       queue.setItems(FXCollections.observableArrayList(appointments));
-      queue.setCellFactory(
-          list ->
-              new javafx.scene.control.ListCell<>() {
-                @Override
-                protected void updateItem(Appointment item, boolean empty) {
-                  super.updateItem(item, empty);
-                  setText(
-                      empty || item == null ? null : formatAppointment(services, session, item));
-                }
-              });
       long waiting =
           appointments.stream().filter(a -> a.status() == AppointmentStatus.ACCEPTED).count();
       long checkedIn =
@@ -1212,7 +1467,7 @@ public final class ReceptionistView {
               + " | Total: "
               + appointments.size());
     } catch (SQLException exception) {
-      feedback.setText("Check-in queue is temporarily unavailable");
+      UiComponents.showError(feedback, "Check-in queue is temporarily unavailable");
     }
   }
 
@@ -1238,17 +1493,15 @@ public final class ReceptionistView {
           services.patientService().getAdministrative(session, appointment.patientId());
       Label details =
           new Label(
-              patient.displayedId()
-                  + DETAIL_SEPARATOR
-                  + valueOrEmpty(patient.firstName())
+              valueOrEmpty(patient.firstName())
                   + " "
                   + valueOrEmpty(patient.lastName())
                   + "\nEmail: "
                   + valueOrEmpty(patient.email())
                   + "\nPhone: "
                   + valueOrEmpty(patient.phone())
-                  + "\nDoctor ID: "
-                  + appointment.doctorId()
+                  + "\nDoctor: "
+                  + doctorDisplayName(services, session, appointment.doctorId())
                   + "\nScheduled: "
                   + appointment.startsAt().format(DATE_TIME_FORMAT)
                   + " - "
@@ -1268,13 +1521,13 @@ public final class ReceptionistView {
           event -> {
             try {
               services.appointmentService().checkIn(session, appointmentId);
-              workspaceFeedback.setText("Patient checked in");
+              UiComponents.showMessage(workspaceFeedback, "Patient checked in");
               onUpdated.run();
               dialog.close();
             } catch (ValidationException | AuthorizationException exception) {
-              feedback.setText(exception.getMessage());
+              UiComponents.showError(feedback, exception.getMessage());
             } catch (SQLException exception) {
-              feedback.setText("Check-in is temporarily unavailable");
+              UiComponents.showError(feedback, "Check-in is temporarily unavailable");
             }
           });
       VBox content = new VBox(12, new Label("Appointment details"), details, checkIn, feedback);
@@ -1285,7 +1538,7 @@ public final class ReceptionistView {
       dialog.setScene(new Scene(content, 500, 300));
       dialog.show();
     } catch (SQLException | ValidationException | AuthorizationException exception) {
-      workspaceFeedback.setText(exception.getMessage());
+      UiComponents.showError(workspaceFeedback, exception.getMessage());
     }
   }
 
@@ -1302,17 +1555,15 @@ public final class ReceptionistView {
           services.patientService().getAdministrative(session, appointment.patientId());
       Label details =
           new Label(
-              patient.displayedId()
-                  + DETAIL_SEPARATOR
-                  + valueOrEmpty(patient.firstName())
+              valueOrEmpty(patient.firstName())
                   + " "
                   + valueOrEmpty(patient.lastName())
                   + "\nEmail: "
                   + valueOrEmpty(patient.email())
                   + "\nPhone: "
                   + valueOrEmpty(patient.phone())
-                  + "\nDoctor ID: "
-                  + appointment.doctorId()
+                  + "\nDoctor: "
+                  + doctorDisplayName(services, session, appointment.doctorId())
                   + "\nScheduled: "
                   + appointment.startsAt().format(DATE_TIME_FORMAT)
                   + " - "
@@ -1345,13 +1596,13 @@ public final class ReceptionistView {
                   .filter(receipt -> receipt.appointmentId() == appointmentId)
                   .findFirst()
                   .ifPresent(receipt -> receiptPreview.setText(formatReceipt(receipt)));
-              workspaceFeedback.setText("Checkout completed");
+              UiComponents.showMessage(workspaceFeedback, "Checkout completed");
               onUpdated.run();
               dialog.close();
             } catch (ValidationException | AuthorizationException exception) {
-              feedback.setText(exception.getMessage());
+              UiComponents.showError(feedback, exception.getMessage());
             } catch (SQLException exception) {
-              feedback.setText("Checkout is temporarily unavailable");
+              UiComponents.showError(feedback, "Checkout is temporarily unavailable");
             }
           });
       VBox content =
@@ -1363,7 +1614,7 @@ public final class ReceptionistView {
       dialog.setScene(new Scene(content, 500, 400));
       dialog.show();
     } catch (SQLException | ValidationException | AuthorizationException exception) {
-      workspaceFeedback.setText(exception.getMessage());
+      UiComponents.showError(workspaceFeedback, exception.getMessage());
     }
   }
 
@@ -1372,28 +1623,14 @@ public final class ReceptionistView {
     return AppointmentDialog.parseDateTime(date, time, fieldName);
   }
 
-  private static String formatAppointment(
-      ClinicServices services, Session session, Appointment appointment) {
-    String patient = "P" + String.format(Locale.ROOT, "%06d", appointment.patientId());
+  private static String patientDisplayName(
+      ClinicServices services, Session session, long patientId) {
     try {
-      Patient details =
-          services.patientService().getAdministrative(session, appointment.patientId());
-      patient =
-          patient
-              + " "
-              + valueOrEmpty(details.firstName())
-              + " "
-              + valueOrEmpty(details.lastName()).trim();
+      Patient details = services.patientService().getAdministrative(session, patientId);
+      return (valueOrEmpty(details.firstName()) + " " + valueOrEmpty(details.lastName())).trim();
     } catch (SQLException | ValidationException | AuthorizationException ignored) {
-      // Keep the generated Patient ID visible if a display lookup is unavailable.
+      return "Patient unavailable";
     }
-    return String.format(
-        Locale.ROOT,
-        "%s | Patient %s | Doctor: %s | %s",
-        appointment.startsAt().format(DATE_TIME_FORMAT),
-        patient.trim(),
-        doctorDisplayName(services, session, appointment.doctorId()),
-        appointment.status());
   }
 
   private static String doctorDisplayName(ClinicServices services, Session session, long doctorId) {
@@ -1402,13 +1639,13 @@ public final class ReceptionistView {
           .filter(doctor -> doctor.id() == doctorId)
           .map(Account::displayName)
           .findFirst()
-          .orElse("ID " + doctorId);
+          .orElse("Doctor unavailable");
     } catch (SQLException | AuthorizationException exception) {
-      return "ID " + doctorId;
+      return "Doctor unavailable";
     }
   }
 
-  private static void selectAppointment(ListView<Appointment> list, long id) {
+  private static void selectAppointment(TableView<Appointment> list, long id) {
     for (int index = 0; index < list.getItems().size(); index++) {
       if (list.getItems().get(index).id() == id) {
         list.getSelectionModel().select(index);
@@ -1438,6 +1675,28 @@ public final class ReceptionistView {
 
   private static String formatMinor(long amountMinor) {
     return BigDecimal.valueOf(amountMinor, 2).toPlainString();
+  }
+
+  private static String formatRevenueSummary(RevenueReport report) {
+    return "Successful payments: "
+        + report.receiptCount()
+        + "    Total: $"
+        + formatMinor(report.totalMinor())
+        + "\nPayment methods: "
+        + formatTotals(report.byMethod())
+        + "\nDoctors: "
+        + formatTotals(report.byDoctor());
+  }
+
+  private static String formatTotals(Map<?, Long> totals) {
+    if (totals.isEmpty()) {
+      return "None";
+    }
+    return totals.entrySet().stream()
+        .sorted(java.util.Comparator.comparing(entry -> entry.getKey().toString()))
+        .map(entry -> displayStatus(entry.getKey()) + " $" + formatMinor(entry.getValue()))
+        .reduce((left, right) -> left + " · " + right)
+        .orElse("None");
   }
 
   private static void requireSelection(long id, String message) {

@@ -35,7 +35,6 @@ import javafx.stage.Stage;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
-import nusynapxe.domain.CalendarWeek;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
@@ -111,23 +110,25 @@ final class DoctorCalendarViewTest extends ApplicationTest {
     assertTrue(
         lookup("#doctor-calendar-current-time-line-" + today()).queryAs(Region.class).isVisible());
 
-    String currentRange = lookup("#doctor-calendar-week-picker").queryAs(Button.class).getText();
-    fire("#doctor-calendar-previous");
-    String previousRange = lookup("#doctor-calendar-week-picker").queryAs(Button.class).getText();
-    assertNotEquals(currentRange, previousRange);
-    fire("#doctor-calendar-next");
-    assertEquals(
-        currentRange, lookup("#doctor-calendar-week-picker").queryAs(Button.class).getText());
-    fire("#doctor-calendar-week-picker");
-    waitForNode("#doctor-calendar-week-picker-popup");
-    verifyThat("#doctor-calendar-picker-month-grid", isVisible());
-    verifyThat("#doctor-calendar-picker-year-grid", isVisible());
-    fire("#doctor-calendar-picker-next-month");
-    fire("#doctor-calendar-picker-close");
-    fire("#doctor-calendar-week-picker");
-    fire("#doctor-calendar-picker-today");
-    assertEquals(
-        currentRange, lookup("#doctor-calendar-week-picker").queryAs(Button.class).getText());
+    assertFalse(lookup("#doctor-calendar-week-picker").queryAs(Button.class).isVisible());
+    assertFalse(lookup("#doctor-calendar-previous").queryAs(Button.class).isVisible());
+    assertFalse(lookup("#doctor-calendar-next").queryAs(Button.class).isVisible());
+    DatePicker from = lookup("#doctor-calendar-from").queryAs(DatePicker.class);
+    DatePicker to = lookup("#doctor-calendar-to").queryAs(DatePicker.class);
+    assertEquals(today(), from.getValue());
+    assertEquals(today().plusDays(6), to.getValue());
+    interact(
+        () -> {
+          from.setValue(today().plusDays(3));
+          to.setValue(today().plusDays(3));
+          to.getOnAction().handle(new javafx.event.ActionEvent());
+        });
+    WaitForAsyncUtils.waitForFxEvents();
+    assertEquals(1, lookup(".calendar-day-header").queryAll().size());
+    fire("#doctor-calendar-today");
+    assertEquals(7, lookup(".calendar-day-header").queryAll().size());
+    assertEquals(today(), from.getValue());
+    assertEquals(today().plusDays(6), to.getValue());
 
     fire("#doctor-calendar-settings");
     waitForNode("#doctor-calendar-settings-page");
@@ -173,10 +174,7 @@ final class DoctorCalendarViewTest extends ApplicationTest {
 
     fire("#doctor-calendar-add-appointment");
     waitForNode("#doctor-calendar-appointment-dialog-content");
-    LocalDate currentDate = today();
-    LocalDate currentWeekStart = CalendarWeek.containing(currentDate, DayOfWeek.SUNDAY).start();
-    LocalDate targetDate =
-        currentWeekStart.plusDays(currentWeekStart.plusDays(1).equals(currentDate) ? 2 : 1);
+    LocalDate targetDate = today().plusDays(2);
     interact(
         () ->
             lookup("#doctor-calendar-appointment-dialog-date")

@@ -5,7 +5,7 @@ Provides Receptionists with searchable, auditable checkout receipts that can be 
 ## Requirements
 ### Requirement: Completed appointments SHALL be searchable for checkout
 
-The Checkout view SHALL list completed appointments that are ready for payment and SHALL support filtering by Patient ID or name, Doctor, and appointment date. Search results SHALL show only administrative patient and appointment information.
+The Checkout view SHALL show completed appointments that are ready for payment in a table and SHALL support filtering by patient administrative query, searchable Doctor, and appointment date. The table SHALL show date, time, patient name, Doctor name, and status without generated Patient or Doctor ID columns. Search results SHALL show only administrative patient and appointment information.
 
 #### Scenario: Receptionist searches completed appointments
 - **WHEN** a Receptionist enters a patient query, selects a Doctor, or chooses an appointment date
@@ -29,7 +29,7 @@ After a valid payment is recorded for a completed appointment, the system SHALL 
 
 ### Requirement: Receipt history SHALL support review
 
-The Receipts sub-tab SHALL provide receipt history for previously paid appointments, searchable by Patient ID or name, Doctor, and receipt date. Selecting a receipt SHALL show its persisted details and SHALL NOT create another payment, receipt, or checked-out transition.
+The Receipts sub-tab SHALL provide receipt history for previously paid appointments in a table, searchable by patient administrative query, searchable Doctor, and receipt date. The table SHALL show receipt number, date/time, patient name, Doctor name, amount, and method without generated Patient or Doctor ID columns. Selecting a receipt SHALL show its persisted details and SHALL NOT create another payment, receipt, or checked-out transition.
 
 #### Scenario: Receptionist reviews receipt history
 - **WHEN** a Receptionist opens receipt history or applies its filters

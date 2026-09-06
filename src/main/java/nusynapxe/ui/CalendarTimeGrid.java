@@ -54,19 +54,28 @@ final class CalendarTimeGrid extends BorderPane {
   private static final DateTimeFormatter DATE_FORMAT =
       DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH);
 
-  private final CalendarWeek week;
+  private final List<LocalDate> dates;
   private final DoctorCalendarWeek data;
   private final Clock clock;
   private final InteractionHandlers handlers;
   private final Map<LocalDate, DayColumn> columns = new LinkedHashMap<>();
 
   CalendarTimeGrid(CalendarWeek week, DoctorCalendarWeek data, Clock clock) {
-    this(week, data, clock, InteractionHandlers.none());
+    this(week.dates(), data, clock, InteractionHandlers.none());
   }
 
   CalendarTimeGrid(
       CalendarWeek week, DoctorCalendarWeek data, Clock clock, InteractionHandlers handlers) {
-    this.week = week;
+    this(week.dates(), data, clock, handlers);
+  }
+
+  CalendarTimeGrid(
+      List<LocalDate> dates, DoctorCalendarWeek data, Clock clock, InteractionHandlers handlers) {
+    Objects.requireNonNull(dates, "dates");
+    if (dates.isEmpty()) {
+      throw new IllegalArgumentException("Calendar dates must not be empty");
+    }
+    this.dates = List.copyOf(dates);
     this.data = data;
     this.clock = clock;
     this.handlers = Objects.requireNonNull(handlers, "handlers");
@@ -102,15 +111,14 @@ final class CalendarTimeGrid extends BorderPane {
     VBox grid = new VBox();
     grid.setId("doctor-calendar-grid-content");
     grid.getStyleClass().add("calendar-grid-content");
-    grid.setMinWidth(TIME_AXIS_WIDTH + (7 * MIN_DAY_COLUMN_WIDTH));
-    grid.setPrefWidth(TIME_AXIS_WIDTH + (7 * DAY_COLUMN_WIDTH));
+    grid.setMinWidth(TIME_AXIS_WIDTH + (dates.size() * MIN_DAY_COLUMN_WIDTH));
+    grid.setPrefWidth(TIME_AXIS_WIDTH + (dates.size() * DAY_COLUMN_WIDTH));
     grid.setMaxWidth(Double.MAX_VALUE);
     grid.setFillWidth(true);
     grid.setSnapToPixel(false);
-    List<LocalDate> dates = week.dates();
     HBox headerRow = new HBox();
-    headerRow.setMinWidth(TIME_AXIS_WIDTH + (7 * MIN_DAY_COLUMN_WIDTH));
-    headerRow.setPrefWidth(TIME_AXIS_WIDTH + (7 * DAY_COLUMN_WIDTH));
+    headerRow.setMinWidth(TIME_AXIS_WIDTH + (dates.size() * MIN_DAY_COLUMN_WIDTH));
+    headerRow.setPrefWidth(TIME_AXIS_WIDTH + (dates.size() * DAY_COLUMN_WIDTH));
     headerRow.setMaxWidth(Double.MAX_VALUE);
     headerRow.setSnapToPixel(false);
     Label timeHeader = header("Time", "doctor-calendar-time-header");
@@ -143,8 +151,8 @@ final class CalendarTimeGrid extends BorderPane {
       timeAxis.getChildren().add(label);
     }
     HBox bodyRow = new HBox();
-    bodyRow.setMinWidth(TIME_AXIS_WIDTH + (7 * MIN_DAY_COLUMN_WIDTH));
-    bodyRow.setPrefWidth(TIME_AXIS_WIDTH + (7 * DAY_COLUMN_WIDTH));
+    bodyRow.setMinWidth(TIME_AXIS_WIDTH + (dates.size() * MIN_DAY_COLUMN_WIDTH));
+    bodyRow.setPrefWidth(TIME_AXIS_WIDTH + (dates.size() * DAY_COLUMN_WIDTH));
     bodyRow.setMaxWidth(Double.MAX_VALUE);
     bodyRow.setSnapToPixel(false);
     bodyRow.getChildren().add(timeAxis);
@@ -162,7 +170,8 @@ final class CalendarTimeGrid extends BorderPane {
     scroll.setFitToWidth(true);
     VBox center = new VBox(8);
     if (data.appointments().isEmpty()) {
-      Label empty = UiComponents.emptyState("doctor-calendar-empty", "No appointments this week.");
+      Label empty =
+          UiComponents.emptyState("doctor-calendar-empty", "No appointments in this date range.");
       center.getChildren().add(empty);
     }
     center.getChildren().add(scroll);

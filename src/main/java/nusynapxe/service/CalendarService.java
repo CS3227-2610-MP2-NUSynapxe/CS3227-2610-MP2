@@ -80,6 +80,35 @@ public final class CalendarService {
   }
 
   /**
+   * Returns the signed-in Doctor's administrative calendar projection for an inclusive date range.
+   *
+   * @param actor authenticated Doctor session
+   * @param from first visible date, inclusive
+   * @param to final visible date, inclusive
+   * @return the Doctor's non-clinical appointments in the requested range
+   * @throws AuthorizationException if the actor is not a valid Doctor session
+   * @throws ValidationException if the range is invalid
+   * @throws SQLException if the account, settings, or appointment query fails
+   */
+  public DoctorCalendarWeek getRange(Session actor, LocalDate from, LocalDate to)
+      throws SQLException {
+    Account doctor = requireDoctor(actor);
+    Objects.requireNonNull(from, "from");
+    Objects.requireNonNull(to, "to");
+    if (to.isBefore(from)) {
+      throw new ValidationException("Calendar To date must not be before From date");
+    }
+    DoctorCalendarSettings calendarSettings = getSettings(actor);
+    LocalDateTime rangeStart = from.atStartOfDay();
+    LocalDateTime rangeEnd = to.plusDays(1).atStartOfDay();
+    return new DoctorCalendarWeek(
+        doctor.id(),
+        from,
+        calendarSettings,
+        appointments.findCalendarByDoctor(doctor.id(), rangeStart, rangeEnd));
+  }
+
+  /**
    * Returns non-clinical appointments overlapping a selected seven-day period.
    *
    * @param actor authenticated Doctor session
@@ -98,6 +127,60 @@ public final class CalendarService {
     java.util.List<CalendarAppointment> calendarAppointments =
         appointments.findCalendarByDoctor(doctor.id(), rangeStart, rangeEnd);
     return new DoctorCalendarWeek(doctor.id(), weekStart, calendarSettings, calendarAppointments);
+  }
+
+  /**
+   * Returns the administrative Calendar projection for a Doctor selected by a Receptionist.
+   *
+   * @param actor authenticated Receptionist session
+   * @param doctorId selected Doctor account identifier
+   * @param weekStart first date of the selected seven-day period
+   * @return the selected Doctor's non-clinical appointment week
+   * @throws AuthorizationException if the actor is not a Receptionist
+   * @throws ValidationException if the selected Doctor does not exist
+   * @throws SQLException if the account, settings, or appointment query fails
+   */
+  public DoctorCalendarWeek getReceptionistWeek(Session actor, long doctorId, LocalDate weekStart)
+      throws SQLException {
+    return getReceptionistRange(actor, doctorId, weekStart, weekStart.plusDays(6));
+  }
+
+  /**
+   * Returns a selected Doctor's administrative calendar projection for an inclusive date range.
+   *
+   * @param actor authenticated Receptionist session
+   * @param doctorId selected Doctor account identifier
+   * @param from first visible date, inclusive
+   * @param to final visible date, inclusive
+   * @return the selected Doctor's non-clinical appointments in the requested range
+   * @throws AuthorizationException if the actor is not a Receptionist
+   * @throws ValidationException if the Doctor or range is invalid
+   * @throws SQLException if the account, settings, or appointment query fails
+   */
+  public DoctorCalendarWeek getReceptionistRange(
+      Session actor, long doctorId, LocalDate from, LocalDate to) throws SQLException {
+    Authorization.requireRole(actor, Role.RECEPTIONIST);
+    Objects.requireNonNull(from, "from");
+    Objects.requireNonNull(to, "to");
+    if (to.isBefore(from)) {
+      throw new ValidationException("Calendar To date must not be before From date");
+    }
+    Account doctor =
+        accounts
+            .findById(doctorId)
+            .filter(account -> account.role() == Role.DOCTOR && account.enabled())
+            .orElseThrow(() -> new ValidationException("Doctor does not exist"));
+    DoctorCalendarSettings calendarSettings =
+        settings
+            .findByDoctor(doctor.id())
+            .orElseGet(() -> DoctorCalendarSettings.defaults(doctor.id()));
+    LocalDateTime rangeStart = from.atStartOfDay();
+    LocalDateTime rangeEnd = to.plusDays(1).atStartOfDay();
+    return new DoctorCalendarWeek(
+        doctor.id(),
+        from,
+        calendarSettings,
+        appointments.findCalendarByDoctor(doctor.id(), rangeStart, rangeEnd));
   }
 
   /**
@@ -121,6 +204,39 @@ public final class CalendarService {
       throws SQLException {
     Account doctor = requireDoctor(actor);
     Objects.requireNonNull(anchor, "anchor");
+    try {
+      CalendarSchedulePage.validatePageSize(pageSize);
+    } catch (IllegalArgumentException exception) {
+      throw new ValidationException(exception.getMessage(), exception);
+    }
+    return appointments.findCalendarPageByDoctor(
+        doctor.id(), anchor.atStartOfDay(), cursor, pageSize);
+  }
+
+  /**
+   * Returns one bounded page of a selected Doctor's appointments for a Receptionist.
+   *
+   * @param actor authenticated Receptionist session
+   * @param doctorId selected Doctor account identifier
+   * @param anchor inclusive Singapore-local date from which to load appointments
+   * @param cursor optional keyset cursor from the previous page
+   * @param pageSize bounded number of appointments to request
+   * @return authorized schedule page for the selected Doctor
+   * @throws AuthorizationException if the actor is not a Receptionist
+   * @throws ValidationException if the Doctor does not exist or {@code pageSize} is invalid
+   * @throws NullPointerException if {@code anchor} is {@code null}
+   * @throws SQLException if the account or appointment query fails
+   */
+  public CalendarSchedulePage getReceptionistSchedulePage(
+      Session actor, long doctorId, LocalDate anchor, CalendarScheduleCursor cursor, int pageSize)
+      throws SQLException {
+    Authorization.requireRole(actor, Role.RECEPTIONIST);
+    Objects.requireNonNull(anchor, "anchor");
+    Account doctor =
+        accounts
+            .findById(doctorId)
+            .filter(account -> account.role() == Role.DOCTOR && account.enabled())
+            .orElseThrow(() -> new ValidationException("Doctor does not exist"));
     try {
       CalendarSchedulePage.validatePageSize(pageSize);
     } catch (IllegalArgumentException exception) {
