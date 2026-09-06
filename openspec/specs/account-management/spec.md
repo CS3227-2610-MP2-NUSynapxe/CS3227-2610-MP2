@@ -40,7 +40,11 @@ When the local database contains no user accounts, opening the application SHALL
 
 ### Requirement: A System Admin SHALL be able to create Doctor and Receptionist accounts
 
-An authenticated System Admin SHALL be able to create an enabled staff account with a unique username, display name, role, and initial password for either Doctor or Receptionist. The system SHALL reject duplicate usernames and invalid account fields without a partial account.
+An authenticated System Admin SHALL be able to create an enabled staff account with a unique username, display name, role, and initial password for either Doctor or Receptionist. The account-creation interface SHALL require confirmation of the initial password and SHALL reject mismatched entries. The system SHALL reject duplicate usernames and invalid account fields without a partial account.
+
+#### Scenario: Initial password confirmation does not match
+- **WHEN** a System Admin submits a staff account with different initial-password and confirmation values
+- **THEN** the interface reports the mismatch and no account is created
 
 #### Scenario: Administrator creates a Doctor account
 - **WHEN** a System Admin submits valid unique credentials and selects Doctor

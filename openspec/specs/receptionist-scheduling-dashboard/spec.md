@@ -5,7 +5,7 @@ Provides Receptionists with a clear all-Doctor appointment coordination view whi
 ## Requirements
 ### Requirement: The Receptionist dashboard SHALL summarize and filter all appointments
 
-An authenticated Receptionist SHALL see appointments across all Doctors with Patient ID/name, Doctor, start/end time, and lifecycle status. The dashboard SHALL provide filters for clinic date, Doctor, patient name or Patient ID, and status, and SHALL show counts for the filtered or selected-day appointments by relevant status.
+An authenticated Receptionist SHALL see appointments across all Doctors in a table with date, time, patient name, Doctor name, and lifecycle status columns. Generated Patient and Doctor IDs SHALL not be displayed as columns. The dashboard SHALL provide filters for clinic date, Doctor, patient administrative query, and status, and SHALL show counts for the filtered or selected-day appointments by relevant status.
 
 #### Scenario: Receptionist views a filtered schedule
 - **WHEN** a Receptionist selects a date, Doctor, patient query, or status filter
@@ -49,14 +49,14 @@ The dashboard SHALL provide calendar-based date selection and validated time inp
 
 ### Requirement: Appointment selectors and times SHALL support rapid entry
 
-Patient and Doctor selectors SHALL be editable searchable dropdowns. Appointment start and end
+Patient and Doctor selectors SHALL be text search fields whose filtered suggestions appear beneath the field and support mouse selection plus Up/Down/Enter keyboard navigation. Appointment start and end
 times SHALL use separate hour (`00`–`23`) and minute (`00` or `30`) dropdowns, representing
 30-minute increments from `00:00` through `23:30`, while validation
 continues to enforce a valid interval.
 
 #### Scenario: Receptionist searches a selector
-- **WHEN** a Receptionist types a patient or Doctor name or identifier in its dropdown
-- **THEN** the selector accepts the search text without requiring manual scrolling through every option
+- **WHEN** a Receptionist types a patient or Doctor name or supported identifier in its search field
+- **THEN** matching options appear underneath and can be selected by mouse or keyboard without scrolling through every option
 
 #### Scenario: Receptionist chooses a half-hour time
 - **WHEN** a Receptionist opens a start or end time dropdown
@@ -77,6 +77,19 @@ Selecting reschedule for an eligible `PENDING`, `ACCEPTED`, or `DECLINED` appoin
 #### Scenario: Receptionist cancels from popup
 - **WHEN** cancel appointment is selected for a `PENDING`, `ACCEPTED`, or `DECLINED` appointment
 - **THEN** the appointment becomes `CANCELLED`, the popup closes, and the dashboard refreshes
+
+### Requirement: Receptionists SHALL be able to start bookings from Calendar
+
+The Receptionist workspace SHALL provide an inclusive From/To date-range Calendar for a selected Doctor using only administrative appointment information. The range SHALL show every date from the selected From date through the selected To date, SHALL omit week-number controls, and SHALL support a range of up to 31 days. Selecting an empty date/time slot SHALL open a scrollable booking popup with the selected Doctor, date, start time, and a 30-minute end time. Selecting an existing appointment SHALL open its scrollable Receptionist edit popup. Both popups SHALL provide the standard window close control, return to Calendar when closed, and refresh Calendar after a successful change.
+
+#### Scenario: Receptionist selects a Calendar slot
+- **WHEN** a Receptionist selects a Doctor and clicks an empty Calendar slot
+- **THEN** a booking popup opens with that Doctor and interval prefilled
+- **AND** no clinical record, diagnosis, note, or prescription is displayed
+
+#### Scenario: Receptionist changes an appointment from Calendar
+- **WHEN** a Receptionist selects an existing Calendar appointment and saves an allowed change
+- **THEN** the popup closes and the Calendar immediately reloads the updated appointment
 
 ### Requirement: Dashboard updates SHALL be automatic and non-clinical
 

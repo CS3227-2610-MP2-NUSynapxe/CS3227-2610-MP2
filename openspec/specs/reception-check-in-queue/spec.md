@@ -5,7 +5,7 @@ Provides Receptionists with a focused, privacy-safe view of patients arriving fo
 ## Requirements
 ### Requirement: The check-in queue SHALL show today's operational appointments
 
-An authenticated Receptionist SHALL be able to open a check-in queue for a selected clinic date, defaulting to the current Singapore date. The queue SHALL show accepted appointments awaiting arrival and checked-in appointments, with Patient ID/name, Doctor, scheduled interval, and status. It SHALL provide summary counts for waiting and checked-in appointments.
+An authenticated Receptionist SHALL be able to open a check-in queue for a selected clinic date, defaulting to the current Singapore date. The queue SHALL use a table showing accepted appointments awaiting arrival and checked-in appointments, with date, interval, patient name, Doctor name, and status columns but no generated Patient or Doctor ID columns. It SHALL provide summary counts for waiting and checked-in appointments.
 
 #### Scenario: Receptionist opens today's queue
 - **WHEN** a Receptionist opens the Check-in Queue without changing the date
@@ -17,7 +17,7 @@ An authenticated Receptionist SHALL be able to open a check-in queue for a selec
 
 ### Requirement: The check-in queue SHALL support administrative filtering
 
-The queue SHALL allow filtering by clinic date, Doctor, Patient ID or patient name, and queue status. Changing any filter SHALL refresh the rows and counts automatically. Queue results SHALL contain only administrative patient and appointment information.
+The queue SHALL allow filtering by clinic date, searchable Doctor, patient administrative query, and queue status. Changing any filter SHALL refresh the rows and counts automatically. Queue results SHALL contain only administrative patient and appointment information.
 
 #### Scenario: Receptionist filters the queue
 - **WHEN** a Receptionist selects a date, Doctor, patient query, or queue status

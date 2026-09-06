@@ -12,7 +12,7 @@ The system SHALL assign every new patient an immutable database-generated numeri
 - **WHEN** an authenticated Receptionist submits otherwise valid patient information with identity type `NRIC`, issuing country `SG`, and an unused non-blank identity number
 - **THEN** the system creates one patient with the normalized identity information
 - **AND** the database generates a separate immutable numeric Patient ID
-- **AND** the interface displays that ID in a patient-friendly form such as `P000042`
+- **AND** the directory keeps that generated ID out of routine table and detail columns
 
 #### Scenario: Register a foreign patient with a passport
 
@@ -61,7 +61,7 @@ The system SHALL assign every new patient an immutable database-generated numeri
 
 ### Requirement: Receptionists can search the patient directory
 
-The system SHALL allow an authenticated Receptionist to search basic patient records by displayed Patient ID, identity type, identity number, issuing country, patient name, phone, or email. Text matching SHALL be case-insensitive, and surrounding whitespace in the search query SHALL be ignored.
+The system SHALL allow an authenticated Receptionist to search basic patient records by identity type, identity number, issuing country, patient name, phone, or email. The existing generated-ID lookup MAY remain available for compatibility without advertising the generated ID as a routine patient-facing field. Text matching SHALL be case-insensitive, and surrounding whitespace in the search query SHALL be ignored.
 
 #### Scenario: Search by Patient ID
 
@@ -104,23 +104,23 @@ information SHALL not be collected or stored; appointment payment and checkout
 records remain separate. An update SHALL either persist all validated changes
 or leave the existing patient unchanged. Patient removal SHALL deactivate rather
 than physically delete a patient with retained history. The shared directory
-presentation SHALL provide an explicit row-level edit action and an in-page
-edit view rather than requiring a patient-details popup for ordinary editing.
+presentation SHALL provide an explicit row-level View action, a read-only detail
+state, and a separate in-page edit state rather than requiring a patient-details
+popup for ordinary viewing or editing.
 
 #### Scenario: View an administrative patient record
 
-- **WHEN** an authenticated Receptionist selects a patient's `Edit` action in
+- **WHEN** an authenticated Receptionist selects a patient's `View` action in
   the directory table
-- **THEN** the system displays that patient's generated Patient ID and
-  permitted identity, demographic, measurement, contact, and address
-  information in the Patient directory's edit view
+- **THEN** the system displays that patient's permitted identity, demographic,
+  measurement, contact, address, and status information in a read-only view
 
 #### Scenario: Save valid administrative changes
 
 - **WHEN** an authenticated Receptionist submits valid changes to a selected
   patient's administrative information from the edit view
 - **THEN** the system persists the changes, refreshes the directory table and
-  dependent patient selectors, and returns to the Patient directory
+  dependent patient selectors, and returns to the read-only patient view
 
 #### Scenario: Reject changing to another patient's identity document
 
@@ -142,10 +142,10 @@ edit view rather than requiring a patient-details popup for ordinary editing.
 
 #### Scenario: Cancel editing
 
-- **WHEN** an authenticated Receptionist selects `Cancel` from the edit view
+- **WHEN** an authenticated Receptionist selects `Discard changes` from the edit view
   before saving
-- **THEN** the system discards unsaved values and returns to the Patient
-  directory without changing the patient
+- **THEN** the system discards unsaved values and returns to the read-only
+  patient view without changing the patient
 
 #### Scenario: Select date of birth and calculate age
 
@@ -189,15 +189,15 @@ edit view rather than requiring a patient-details popup for ordinary editing.
 
 #### Scenario: Deactivate a patient
 
-- **WHEN** an authenticated Receptionist removes a patient who has retained
-  clinic history from the edit view
+- **WHEN** an authenticated Receptionist deactivates a patient who has retained
+  clinic history from the read-only patient view
 - **THEN** the system marks the patient inactive instead of physically deleting
   the patient or related records
 
 #### Scenario: Reactivate an inactive patient
 
 - **WHEN** an authenticated Receptionist activates an inactive patient from the
-  edit view
+  read-only patient view
 - **THEN** the system marks the patient active again without changing the
   Patient ID or retained history
 - **AND** the status action changes back to `Deactivate patient`
@@ -209,20 +209,21 @@ edit view rather than requiring a patient-details popup for ordinary editing.
 - **AND** Male is the first option
 - **AND** the service rejects any other or missing sex value
 
-### Requirement: Registration and patient management use separate tabs
+### Requirement: Registration, viewing, and editing use explicit page states
 
 The shared administrative patient area SHALL present one `Patient directory`
 page rather than registration and search/manage sub-tabs. By default, the page
-SHALL show a headed patient table with `Patient ID`, `Name`, `Date of birth`,
-`Phone`, `Email`, `Status`, and `Actions` columns, plus a `Register new
-patient` action at the bottom. Each populated row SHALL provide an `Edit`
-action in the far-right `Actions` column. Selecting `Register new patient`
+SHALL show a headed patient table with `Name`, `Date of birth`, `Phone`,
+`Email`, `Status`, and `Actions` columns, plus a `Register new patient` action
+at the bottom. Each populated row SHALL provide a `View` action in the
+far-right `Actions` column. Selecting `Register new patient`
 SHALL switch the page to a blank registration view containing the existing
 patient-registration fields, a register action, and a cancel action. Selecting
-`Edit` SHALL switch the page to an in-page edit view containing the selected
-patient's permitted administrative details, generated Patient ID, save action,
-active-status action, delete action, and cancel action. Registration, edit, and
-directory forms SHALL use independent controls and state. Ordinary editing
+`View` SHALL switch the page to a read-only detail view containing all permitted
+administrative details with `Edit`, active-status, delete, and back actions.
+Selecting `Edit` from that view SHALL open an editable form with `Save` and
+`Discard changes` actions. Registration, view, edit, and directory states SHALL
+use independent controls and state. Ordinary viewing and editing
 SHALL not open a patient-details popup. Deletion confirmation and blocked
 deletion explanation popups SHALL remain available for their safety purpose.
 
@@ -239,10 +240,11 @@ deletion explanation popups SHALL remain available for their safety purpose.
 - **WHEN** the directory search returns one or more administrative patients
 - **THEN** each result appears as one table row under the documented column
   headers
-- **AND** the far-right cell contains an `Edit` action for that patient
+- **AND** the far-right cell contains a `View` action for that patient
+- **AND** no generated Patient ID column consumes table space
 - **AND** the table does not display clinical information
 
-#### Scenario: Open the registration tab
+#### Scenario: Open the registration page
 
 - **WHEN** an authorized Doctor or Receptionist selects `Register new patient`
   from the Patient directory
@@ -251,27 +253,30 @@ deletion explanation popups SHALL remain available for their safety purpose.
 
 #### Scenario: Select a search result
 
-- **WHEN** an authorized Receptionist or Doctor selects a patient's `Edit`
+- **WHEN** an authorized Receptionist or Doctor selects a patient's `View`
   action
-- **THEN** the system replaces the directory content with an in-page edit form
+- **THEN** the system replaces the directory content with a read-only details page
+- **AND** selecting `Edit` on that page opens the editable form
   populated with that patient's administrative values
 - **AND** no ordinary patient-details popup is opened
 - **AND** clinical fields remain unavailable
 
-#### Scenario: Cancel registration or editing
+#### Scenario: Cancel registration or discard editing
 
-- **WHEN** a user selects `Cancel` from either the registration or edit view
-  before submitting changes
-- **THEN** the system clears the unfinished form and returns to the Patient
-  directory without creating or changing a patient
+- **WHEN** a user selects `Cancel` from registration or `Discard changes` from
+  editing before submitting changes
+- **THEN** the system clears the unfinished form and returns to the directory
+  from registration or the read-only patient view from editing without creating
+  or changing a patient
 
-#### Scenario: Return to the directory after successful registration or edit
+#### Scenario: Return after successful registration or edit
 
 - **WHEN** an authorized Receptionist or Doctor submits valid registration or
   edit data
 - **THEN** the system completes the existing atomic service operation
-- **AND** the system returns to the Patient directory with refreshed table
-  results and dependent patient selectors
+- **AND** the system returns to the Patient directory after registration or the
+  read-only patient view after editing, with refreshed table results and
+  dependent patient selectors
 
 #### Scenario: Keep the active form after a failed submission
 
@@ -304,13 +309,13 @@ The Receptionist registration and edit forms SHALL use an issuing-country dropdo
 - **THEN** the Receptionist can select any country in the country dropdown
 - **AND** the selected normalized country code is used for identity uniqueness
 
-### Requirement: Receptionist features use separate automatically refreshed tabs
+### Requirement: Receptionist features use separate automatically refreshed navigation pages
 
-The workspace SHALL provide separate top-level tabs for `Patient directory and basic data`, `Appointments across all Doctors`, `Checkout`, and `Daily revenue`. The Log out button SHALL be positioned at the top right. The workspace SHALL not expose a manual Refresh button and SHALL refresh affected data after successful writes, searches, and relevant feature-tab selection.
+The workspace SHALL provide a dark left navigation rail with horizontal-text destinations for `Directory`, `Appointments`, `Calendar`, `Check in`, `Checkout`, and `Revenue Reports`. `Navigation` SHALL be a visually distinct non-selectable heading. The Log out button SHALL be positioned at the top right. The workspace SHALL not expose a manual Refresh button and SHALL refresh affected data after successful writes, searches, and relevant page selection.
 
 #### Scenario: Navigate between Receptionist features
 
-- **WHEN** a Receptionist selects a top-level feature tab
+- **WHEN** a Receptionist selects a top-level navigation destination
 - **THEN** only that feature's controls are presented as the primary page content
 - **AND** the feature reloads data that may have changed since it was last viewed
 

@@ -188,14 +188,16 @@ The Receptionist scheduling dashboard uses `AppointmentRepository.search` and
 `AppointmentService.searchAppointments` for optional date, Doctor, patient, and
 status filters. It derives summary counts from the same filtered result set.
 The repository joins only the administrative patient projection, and the UI
-formats rows with Patient ID/name, Doctor ID, interval, and status. Booking
+formats table rows with patient name, Doctor name, interval, and status without
+generated identifier columns. Booking
 rejects inactive patients at the service boundary. Reactivation restores booking
 eligibility subject to the normal schedule-conflict rules. Existing appointments
 and all history remain available after deactivation. Booking and rescheduling use
 a calendar date plus separate hour (`00`–`23`) and minute (`00`/`30`) selectors, and
 all conflict and lifecycle checks remain transactional service/repository
 rules.
-Patient and Doctor appointment selectors are editable searchable ComboBoxes.
+Patient and Doctor appointment selectors use `SearchSuggestionField`, with
+filtered keyboard- and mouse-selectable results below their text editors.
 Appointment times are generated in 30-minute increments from `00:00` through
 `23:30`. Rescheduling is handled in an owned modal Stage that displays the
 selected patient's administrative projection and exposes reschedule/cancel
@@ -260,12 +262,12 @@ the authenticated header. It has no service or persistence dependency.
 
 Views are built programmatically so semantic ids remain easy to assert. The
 patient area has one default directory view with search controls, a `TableView`
-with `Patient ID`, `Name`, `Date of birth`, `Phone`, `Email`, `Status`, and
-rightmost `Actions` columns, and a bottom `Register new patient` action. Each
-populated Actions cell has a stable `*-patient-edit-<id>` button. Registration
-and editing are separate managed page states with `Cancel`; successful
-registration clears the draft and search, while successful editing returns to
-the directory. Both refresh the directory and dependent selectors. Validation
+with `Name`, `Date of birth`, `Phone`, `Email`, `Status`, and rightmost
+`Actions` columns, and a bottom `Register new patient` action. Each populated
+Actions cell has a stable `*-patient-view-<id>` button. Registration, read-only
+viewing, and editing are separate managed page states. Successful registration
+clears the draft and search, while successful editing returns to the read-only
+patient view. Both refresh the directory and dependent selectors. Validation
 or persistence failure keeps the active form page open with feedback. Country
 options come from `Locale.getISOCountries()`, use English display names, persist
 ISO two-letter codes, and order Singapore first. NRIC and FIN selection chooses
@@ -275,12 +277,18 @@ shared `.compact-selector` style; impossible day/month combinations clamp to
 the month's final day. Age is derived with the `Asia/Singapore` date, has no
 placeholder, and is never persisted. Male precedes Female in the sex selector.
 The telephone `+` is a fixed label outside the editable, digits-only country-code
-field. Clicking a table row does not open a window; its explicit Edit action
-shows the in-page administrative form and reversible active-status controls.
-The top-level
-`reception-workspace-tabs` separates patient data, appointments, checkout, and
-revenue. Actions and tab selection refresh affected data, so Receptionist view
-has no manual refresh control. Important ids include `login-submit`, `setup-submit`,
+field. Clicking a table row does not open a window; its explicit View action
+shows all permitted administrative details with Edit, status, delete, and back
+actions. Edit then opens a form with Save and Discard changes.
+The top-level `reception-workspace-tabs` is an internal page stack with hidden
+headers. The visible `reception-navigation` rail uses ordinary horizontal-text
+buttons for directory, appointments, Calendar, check-in, checkout, and revenue.
+`ReceptionistCalendarView` reads one selected Doctor's administrative projection
+through `CalendarService.getReceptionistWeek`; empty slots open a Receptionist
+creation dialog and appointment blocks open the Receptionist edit dialog without
+exposing clinical data. Successful dialog actions refresh the grid. Actions and page
+selection refresh affected data, so Receptionist view has no manual refresh
+control. Important ids include `login-submit`, `setup-submit`,
 `admin-account-submit`, `reception-patient-directory-view`,
 `reception-patient-open-register`, `reception-patient-register-view`,
 `reception-patient-register-cancel`,
@@ -288,11 +296,11 @@ has no manual refresh control. Important ids include `login-submit`, `setup-subm
 `reception-register-phone-country-code`, `reception-register-phone-number`,
 `reception-register-phone-plus`, `reception-register-date-of-birth`,
 `reception-register-date-of-birth-month`, `reception-register-date-of-birth-year`,
-`reception-register-age`, `reception-patient-edit-view`, `reception-patient-id`,
+`reception-register-age`, `reception-patient-view`, `reception-patient-edit-view`,
 `reception-patient-identity-type`, `reception-patient-identity-number`,
 `reception-patient-issuing-country`, `reception-patient-search`,
 `reception-patient-search-submit`, `reception-patient-search-clear`,
-`reception-patient-table`, `reception-patient-edit-<id>`,
+`reception-patient-table`, `reception-patient-view-<id>`,
 `reception-patient-update`, `reception-patient-edit-cancel`,
 `reception-patient-deactivate`, `reception-book`, `reception-checkout`,
 `doctor-consultation-save`, and `logout-button`.
@@ -318,9 +326,10 @@ appointment scheduling.
 Receptionist and Doctor workspaces. It receives the authenticated session,
 services, an ID prefix, a feedback label, and a callback for refreshing
 dependent selectors. Receptionist IDs retain the `reception-*` prefix; Doctor
-IDs use `doctor-*`. The table's explicit Edit action replaces the directory with
-an in-page administrative form containing **Save patient changes**,
-**Activate/Deactivate patient**, **Delete patient**, and **Cancel**. Eligible
+IDs use `doctor-*`. The table's explicit View action replaces the directory with
+a read-only administrative page containing **Edit**, **Activate/Deactivate
+patient**, **Delete patient**, and **Back to patients**. Edit opens a separate
+form containing **Save** and **Discard changes**. Eligible
 deletion opens an explicit confirmation window; a blocked deletion opens the
 owned `*-patient-delete-blocked-window` modal with category/count labels and
 deactivation guidance. No ordinary patient-details window is created, and
@@ -328,19 +337,26 @@ failed writes leave the edit page and its draft available for correction.
 
 The shared authenticated header has `workspace-header`, `app-brand`,
 `workspace-title`, `workspace-identity`, and `logout-button`. The Receptionist
-top-level `reception-workspace-tabs` remains a `TabPane`, but its tabs are
-shown as a left navigation rail; the appointment subflow uses compact
-secondary tabs. New layout markers include
+top-level `reception-workspace-tabs` remains a hidden-header `TabPane`;
+`reception-navigation` is the visible rail and its **Navigation** label is a
+distinct non-interactive title. The appointment subflow uses compact secondary
+tabs. Workspace feedback sits directly below the shared header and
+`UiComponents.feedback` clears it after six seconds. Error feedback uses the
+red `error-feedback` treatment and `notificationArea` centres banners at the
+top. `passwordInput` overlays its faded visibility toggle within the password
+field rather than placing a separate adjacent button. New layout markers include
 `reception-patient-search-card`, `reception-patient-results-card`,
 `reception-booking-card`, `reception-appointment-results-card`,
 `reception-checkout-payment-card`, `reception-revenue-card`,
 `doctor-master-detail`, `doctor-detail-scroll`, `doctor-no-selection`,
 `admin-account-form-card`, and `admin-account-list-card`.
 
-Operational results use dedicated JavaFX renderers. Patient cells show only
-Patient ID, name, and active status. Receptionist appointment cells show
-administrative Patient context, Doctor ID, date/time, and a written lifecycle
-status; they never render the `Appointment` record's raw `toString()`. Doctor
+Operational results use dedicated JavaFX tables. Patient rows show name,
+contact details, and active status without a generated-ID column. Receptionist
+appointment rows show administrative patient context, Doctor name, date/time,
+and a written lifecycle status without Patient or Doctor ID columns. Searchable
+patient and Doctor fields use `SearchSuggestionField`, which filters options
+beneath the editor and supports mouse plus Up/Down/Enter selection. Doctor
 prescription cells show medication and usage fields. System Admin staff
 accounts use a compact table with Username, Display Name, Role, and Status
 columns. Empty results use stable `*-empty` markers and an explanatory
