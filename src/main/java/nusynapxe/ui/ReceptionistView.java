@@ -34,6 +34,7 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.ColumnConstraints;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -807,19 +808,22 @@ public final class ReceptionistView {
             UiComponents.supportingText(
                 "Complete payments for finished visits or review previously issued receipts."),
             checkoutTabs);
-    GridPane reportDates = new GridPane();
+    FlowPane reportDates = new FlowPane();
     reportDates.setId("reception-revenue-filter-grid");
     reportDates.getStyleClass().add("uniform-filter-grid");
     reportDates.getStyleClass().add("single-line-filter-grid");
     reportDates.setHgap(12);
     reportDates.setVgap(10);
-    addUniformColumns(reportDates, 5, 145, 166, 166);
-    reportDates.add(UiComponents.fieldGroup("From", reportFromDate), 0, 0);
-    reportDates.add(UiComponents.fieldGroup("To", reportToDate), 1, 0);
-    reportDates.add(UiComponents.fieldGroup(PATIENT_LABEL, reportPatient), 2, 0);
-    reportDates.add(UiComponents.fieldGroup(DOCTOR_LABEL, reportDoctor), 3, 0);
-    reportDates.add(UiComponents.fieldGroup("Payment method", reportMethod), 4, 0);
-    reportDates.add(reportButton, 5, 0);
+    reportDates.setRowValignment(VPos.BOTTOM);
+    reportDates
+        .getChildren()
+        .addAll(
+            UiComponents.fieldGroup("From", reportFromDate),
+            UiComponents.fieldGroup("To", reportToDate),
+            UiComponents.fieldGroup(PATIENT_LABEL, reportPatient),
+            UiComponents.fieldGroup(DOCTOR_LABEL, reportDoctor),
+            UiComponents.fieldGroup("Payment method", reportMethod),
+            reportButton);
     alignFilterAction(reportButton);
     VBox revenueCard =
         UiComponents.card(
