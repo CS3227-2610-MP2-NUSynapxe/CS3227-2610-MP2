@@ -80,6 +80,36 @@ public final class CalendarService {
   }
 
   /**
+   * Returns the signed-in Doctor's administrative calendar projection for an inclusive date
+   * range.
+   *
+   * @param actor authenticated Doctor session
+   * @param from first visible date, inclusive
+   * @param to final visible date, inclusive
+   * @return the Doctor's non-clinical appointments in the requested range
+   * @throws AuthorizationException if the actor is not a valid Doctor session
+   * @throws ValidationException if the range is invalid
+   * @throws SQLException if the account, settings, or appointment query fails
+   */
+  public DoctorCalendarWeek getRange(Session actor, LocalDate from, LocalDate to)
+      throws SQLException {
+    Account doctor = requireDoctor(actor);
+    Objects.requireNonNull(from, "from");
+    Objects.requireNonNull(to, "to");
+    if (to.isBefore(from)) {
+      throw new ValidationException("Calendar To date must not be before From date");
+    }
+    DoctorCalendarSettings calendarSettings = getSettings(actor);
+    LocalDateTime rangeStart = from.atStartOfDay();
+    LocalDateTime rangeEnd = to.plusDays(1).atStartOfDay();
+    return new DoctorCalendarWeek(
+        doctor.id(),
+        from,
+        calendarSettings,
+        appointments.findCalendarByDoctor(doctor.id(), rangeStart, rangeEnd));
+  }
+
+  /**
    * Returns non-clinical appointments overlapping a selected seven-day period.
    *
    * @param actor authenticated Doctor session

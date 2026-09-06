@@ -5,6 +5,8 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import javafx.animation.KeyFrame;
@@ -14,6 +16,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
@@ -33,10 +36,11 @@ import nusynapxe.service.CalendarService;
 import nusynapxe.service.ClinicServices;
 import nusynapxe.service.ValidationException;
 
-/** Builds and manages the Week and Schedule Calendar views for a Doctor. */
+/** Builds and manages the Calendar and Schedule views for a Doctor. */
 public final class DoctorCalendarView {
   private static final String WEEK_MODE = "Week";
   private static final String SCHEDULE_MODE = "Schedule";
+  private static final long MAX_RANGE_DAYS = 31;
   private static final DateTimeFormatter SCHEDULE_LABEL_FORMATTER =
       DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH);
   private final ClinicServices services;
@@ -45,11 +49,16 @@ public final class DoctorCalendarView {
   private final Label feedback;
   private final Clock clock;
   private final BorderPane root;
+  private final Button previous;
+  private final Button next;
   private final Button rangeButton;
+  private final DatePicker from;
+  private final DatePicker to;
+  private final VBox fromField;
+  private final VBox toField;
   private final ComboBox<String> viewMode;
   private final Timeline currentTimeTicker;
   private final CalendarWeekPicker weekPicker;
-  private CalendarWeek week;
   private LocalDate scheduleAnchor;
   private CalendarTimeGrid grid;
   private CalendarScheduleList scheduleList;
@@ -76,16 +85,26 @@ public final class DoctorCalendarView {
     this.onSettings = Objects.requireNonNull(onSettings, "onSettings");
     this.feedback = Objects.requireNonNull(feedback, "feedback");
     this.clock = Objects.requireNonNull(clock, "clock").withZone(CalendarService.CLINIC_ZONE);
-    DoctorCalendarSettings settings = loadSettings();
-    week = CalendarWeek.today(clock, settings.firstDayOfWeek());
-    scheduleAnchor = CalendarScheduleCalculations.today(clock);
-    rangeButton = new Button(week.label());
+    LocalDate today = LocalDate.now(this.clock);
+    scheduleAnchor = CalendarScheduleCalculations.today(this.clock);
+    previous = UiComponents.secondaryButton("‹", "doctor-calendar-previous");
+    next = UiComponents.secondaryButton("›", "doctor-calendar-next");
+    rangeButton = new Button();
+    from = new DatePicker(today);
+    from.setId("doctor-calendar-from");
+    from.setShowWeekNumbers(false);
+    to = new DatePicker(today.plusDays(6));
+    to.setId("doctor-calendar-to");
+    to.setShowWeekNumbers(false);
+    fromField = UiComponents.fieldGroup("From", from);
+    toField = UiComponents.fieldGroup("To", to);
     viewMode = UiComponents.compactSelector();
-    weekPicker = new CalendarWeekPicker(this::selectDate, clock);
+    weekPicker = new CalendarWeekPicker(this::selectDate, this.clock);
     root = buildRoot();
     currentTimeTicker =
         new Timeline(new KeyFrame(Duration.minutes(1), event -> updateCurrentTime()));
     currentTimeTicker.setCycleCount(Timeline.INDEFINITE);
+    applyModeVisibility();
     refresh();
   }
 
@@ -102,14 +121,14 @@ public final class DoctorCalendarView {
   @SuppressWarnings("PMD.NullAssignment")
   public void refresh() {
     try {
-      DoctorCalendarSettings settings = services.calendarService().getSettings(session);
       if (isWeekMode()) {
         disposeScheduleList();
-        week = CalendarWeek.containing(week.start(), settings.firstDayOfWeek());
-        DoctorCalendarWeek data = services.calendarService().getWeek(session, week.start());
+        List<LocalDate> dates = selectedDates();
+        DoctorCalendarWeek data =
+            services.calendarService().getRange(session, from.getValue(), to.getValue());
         grid =
             new CalendarTimeGrid(
-                week,
+                dates,
                 data,
                 clock,
                 new CalendarTimeGrid.InteractionHandlers(
@@ -160,20 +179,22 @@ public final class DoctorCalendarView {
     Button today = UiComponents.secondaryButton("Today", "doctor-calendar-today");
     today.setAccessibleText("Go to today");
     today.setOnAction(event -> goToToday());
-    Button previous = UiComponents.secondaryButton("‹", "doctor-calendar-previous");
-    previous.setAccessibleText("Previous week");
+    previous.setAccessibleText("Previous");
     previous.setOnAction(event -> goToPrevious());
-    Button next = UiComponents.secondaryButton("›", "doctor-calendar-next");
-    next.setAccessibleText("Next week");
+    next.setAccessibleText("Next");
     next.setOnAction(event -> goToNext());
     Button addAppointment =
         UiComponents.primaryButton("Add appointment", "doctor-calendar-add-appointment");
     addAppointment.setAccessibleText("Add appointment to my schedule");
     addAppointment.setOnAction(event -> openCreateAppointment(null));
     rangeButton.setId("doctor-calendar-week-picker");
-    rangeButton.setAccessibleText("Choose a week");
+    rangeButton.setAccessibleText("Choose a Schedule start date");
     rangeButton.getStyleClass().add("calendar-range-button");
     rangeButton.setOnAction(event -> weekPicker.show(rangeButton, pickerWeek()));
+    from.setOnAction(event -> refresh());
+    to.setOnAction(event -> refresh());
+    fromField.setPrefWidth(190);
+    toField.setPrefWidth(190);
     viewMode.setId("doctor-calendar-view-mode");
     viewMode.setAccessibleText("Choose Calendar view");
     viewMode.getItems().addAll(WEEK_MODE, SCHEDULE_MODE);
@@ -193,7 +214,18 @@ public final class DoctorCalendarView {
     Region spacer = new Region();
     HBox.setHgrow(spacer, Priority.ALWAYS);
     HBox toolbar =
-        new HBox(8, today, previous, next, rangeButton, viewMode, addAppointment, spacer, settings);
+        new HBox(
+            8,
+            today,
+            previous,
+            next,
+            rangeButton,
+            fromField,
+            toField,
+            viewMode,
+            addAppointment,
+            spacer,
+            settings);
     toolbar.setId("doctor-calendar-toolbar");
     toolbar.getStyleClass().add("calendar-toolbar");
     toolbar.setAlignment(Pos.CENTER_LEFT);
@@ -211,46 +243,30 @@ public final class DoctorCalendarView {
     return page;
   }
 
-  private void goTo(CalendarWeek selectedWeek) {
-    week = Objects.requireNonNull(selectedWeek, "selectedWeek");
-    refresh();
-  }
-
   private void goToToday() {
     if (isScheduleMode()) {
       scheduleAnchor = CalendarScheduleCalculations.today(clock);
-      refresh();
     } else {
-      goTo(CalendarWeek.today(clock, currentSettings().firstDayOfWeek()));
+      LocalDate current = LocalDate.now(clock);
+      from.setValue(current);
+      to.setValue(current.plusDays(6));
     }
+    refresh();
   }
 
   private void goToPrevious() {
-    if (isScheduleMode()) {
-      scheduleAnchor = CalendarScheduleCalculations.moveAnchor(scheduleAnchor, -1);
-      refresh();
-    } else {
-      goTo(week.previous());
-    }
+    scheduleAnchor = CalendarScheduleCalculations.moveAnchor(scheduleAnchor, -1);
+    refresh();
   }
 
   private void goToNext() {
-    if (isScheduleMode()) {
-      scheduleAnchor = CalendarScheduleCalculations.moveAnchor(scheduleAnchor, 1);
-      refresh();
-    } else {
-      goTo(week.next());
-    }
+    scheduleAnchor = CalendarScheduleCalculations.moveAnchor(scheduleAnchor, 1);
+    refresh();
   }
 
   private void selectDate(LocalDate date) {
-    if (isScheduleMode()) {
-      scheduleAnchor = Objects.requireNonNull(date, "date");
-      refresh();
-    } else {
-      DoctorCalendarSettings settings = currentSettings();
-      goTo(CalendarWeek.containing(date, settings.firstDayOfWeek()));
-    }
+    scheduleAnchor = Objects.requireNonNull(date, "date");
+    refresh();
   }
 
   private void changeMode(String selectedMode) {
@@ -258,7 +274,22 @@ public final class DoctorCalendarView {
       return;
     }
     weekPicker.hide();
+    applyModeVisibility();
     refresh();
+  }
+
+  private void applyModeVisibility() {
+    boolean scheduleMode = isScheduleMode();
+    previous.setVisible(scheduleMode);
+    previous.setManaged(scheduleMode);
+    next.setVisible(scheduleMode);
+    next.setManaged(scheduleMode);
+    rangeButton.setVisible(scheduleMode);
+    rangeButton.setManaged(scheduleMode);
+    fromField.setVisible(!scheduleMode);
+    fromField.setManaged(!scheduleMode);
+    toField.setVisible(!scheduleMode);
+    toField.setManaged(!scheduleMode);
   }
 
   private boolean isWeekMode() {
@@ -270,20 +301,30 @@ public final class DoctorCalendarView {
   }
 
   private CalendarWeek pickerWeek() {
-    if (isScheduleMode()) {
-      return CalendarWeek.containing(scheduleAnchor, currentSettings().firstDayOfWeek());
-    }
-    return week;
+    return CalendarWeek.containing(scheduleAnchor, currentSettings().firstDayOfWeek());
   }
 
   private void updateRangeLabel() {
     if (isScheduleMode()) {
       rangeButton.setText(SCHEDULE_LABEL_FORMATTER.format(scheduleAnchor));
       rangeButton.setAccessibleText("Choose a Schedule start date");
-    } else {
-      rangeButton.setText(week.label());
-      rangeButton.setAccessibleText("Choose a week");
     }
+  }
+
+  private List<LocalDate> selectedDates() {
+    LocalDate start = from.getValue();
+    LocalDate end = to.getValue();
+    if (start == null || end == null) {
+      throw new ValidationException("Select both From and To dates");
+    }
+    if (end.isBefore(start)) {
+      throw new ValidationException("Calendar To date must not be before From date");
+    }
+    if (ChronoUnit.DAYS.between(start, end) >= MAX_RANGE_DAYS) {
+      throw new ValidationException(
+          "Select a calendar range of " + MAX_RANGE_DAYS + " days or fewer");
+    }
+    return start.datesUntil(end.plusDays(1)).toList();
   }
 
   @SuppressWarnings("PMD.NullAssignment")
@@ -302,10 +343,6 @@ public final class DoctorCalendarView {
           feedback, userMessage(exception, "Calendar settings are temporarily unavailable"));
       return DoctorCalendarSettings.defaults(session.accountId());
     }
-  }
-
-  private DoctorCalendarSettings loadSettings() {
-    return currentSettings();
   }
 
   private void updateCurrentTime() {
