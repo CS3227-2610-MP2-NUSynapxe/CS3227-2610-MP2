@@ -324,6 +324,36 @@ final class ReceptionistViewTest extends ApplicationTest {
     LocalDate selectedDate = LocalDate.now(java.time.ZoneId.of("Asia/Singapore"));
     DatePicker from = lookup("#reception-calendar-from").queryAs(DatePicker.class);
     DatePicker to = lookup("#reception-calendar-to").queryAs(DatePicker.class);
+    TextField calendarDoctor = textField("#reception-calendar-doctor");
+    verifyThat("#reception-calendar-doctor-field", isVisible());
+    clickOn(calendarDoctor);
+    SearchSuggestionField<?> calendarDoctorSuggestions =
+        (SearchSuggestionField<?>) calendarDoctor.getParent();
+    interact(
+        () ->
+            calendarDoctor.fireEvent(
+                new javafx.scene.input.KeyEvent(
+                    javafx.scene.input.KeyEvent.KEY_PRESSED,
+                    "",
+                    "",
+                    javafx.scene.input.KeyCode.DOWN,
+                    false,
+                    false,
+                    false,
+                    false)));
+    assertFalse(calendarDoctorSuggestions.suggestionList().getItems().isEmpty());
+    interact(
+        () ->
+            calendarDoctor.fireEvent(
+                new javafx.scene.input.KeyEvent(
+                    javafx.scene.input.KeyEvent.KEY_PRESSED,
+                    "",
+                    "",
+                    javafx.scene.input.KeyCode.ENTER,
+                    false,
+                    false,
+                    false,
+                    false)));
     assertFalse(from.isShowWeekNumbers());
     assertFalse(to.isShowWeekNumbers());
     assertTrue(lookup("#reception-calendar-week-picker").tryQuery().isEmpty());

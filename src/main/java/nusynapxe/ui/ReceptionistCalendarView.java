@@ -16,7 +16,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import nusynapxe.domain.Account;
@@ -148,16 +148,20 @@ final class ReceptionistCalendarView {
           to.setValue(current.plusDays(6));
           refresh();
         });
-    HBox toolbar =
-        new HBox(
-            12,
-            today,
-            UiComponents.fieldGroup("From", from),
-            UiComponents.fieldGroup("To", to),
-            UiComponents.fieldGroup("Doctor", doctor));
+    VBox fromField = UiComponents.fieldGroup("From", from);
+    VBox toField = UiComponents.fieldGroup("To", to);
+    VBox doctorField = UiComponents.fieldGroup("Doctor", doctor);
+    fromField.setPrefWidth(190);
+    toField.setPrefWidth(190);
+    doctorField.setId("reception-calendar-doctor-field");
+    doctorField.setMinWidth(300);
+    doctorField.setPrefWidth(360);
+    doctorField.setMaxWidth(420);
+    doctor.setMinWidth(300);
+    doctor.setPrefWidth(360);
+    FlowPane toolbar = new FlowPane(12, 10, today, fromField, toField, doctorField);
     toolbar.setAlignment(Pos.CENTER_LEFT);
     toolbar.getStyleClass().add("calendar-toolbar");
-    HBox.setHgrow(doctor, Priority.ALWAYS);
     VBox heading = new VBox(4, UiComponents.sectionHeading("Doctor schedule"), toolbar);
     heading.setPadding(new Insets(0, 0, 12, 0));
     BorderPane page = new BorderPane();
