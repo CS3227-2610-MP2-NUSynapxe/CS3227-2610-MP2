@@ -80,8 +80,7 @@ public final class CalendarService {
   }
 
   /**
-   * Returns the signed-in Doctor's administrative calendar projection for an inclusive date
-   * range.
+   * Returns the signed-in Doctor's administrative calendar projection for an inclusive date range.
    *
    * @param actor authenticated Doctor session
    * @param from first visible date, inclusive

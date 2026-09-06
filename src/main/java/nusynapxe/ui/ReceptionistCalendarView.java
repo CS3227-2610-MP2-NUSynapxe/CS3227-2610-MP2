@@ -127,7 +127,6 @@ final class ReceptionistCalendarView {
     }
   }
 
-  @SuppressWarnings("PMD.NullAssignment")
   void refresh() {
     Account selected = doctor.getValue();
     if (selected == null) {
@@ -191,8 +190,7 @@ final class ReceptionistCalendarView {
     viewMode.setEditable(false);
     viewMode.setValue(WEEK_MODE);
     viewMode.setOnAction(event -> changeMode());
-    HBox toolbar =
-        new HBox(12, today, previous, next, fromField, toField, doctorField, viewMode);
+    HBox toolbar = new HBox(12, today, previous, next, fromField, toField, doctorField, viewMode);
     toolbar.setAlignment(Pos.BOTTOM_LEFT);
     toolbar.getStyleClass().add("calendar-toolbar");
     VBox heading = new VBox(4, UiComponents.sectionHeading("Doctor schedule"), toolbar);
