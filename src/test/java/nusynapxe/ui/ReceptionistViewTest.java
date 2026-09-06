@@ -18,13 +18,18 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
-import javafx.scene.control.ListView;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.Pane;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
@@ -90,7 +95,15 @@ final class ReceptionistViewTest extends ApplicationTest {
   void receptionistBooksChecksInChecksOutAndViewsRevenue() throws SQLException {
     loginAsReceptionist();
     verifyThat("#receptionist-workspace", isVisible());
-    assertEquals(5, workspaceTabs().getTabs().size());
+    assertEquals(6, workspaceTabs().getTabs().size());
+    verifyThat("#reception-navigation-title", hasText("Navigation"));
+    verifyThat("#reception-nav-directory", hasText("Directory"));
+    verifyThat("#reception-nav-appointments", hasText("Appointments"));
+    verifyThat("#reception-nav-calendar", hasText("Calendar"));
+    fire("#reception-nav-calendar");
+    verifyThat("#reception-calendar-page", isVisible());
+    assertTrue(lookup("#reception-calendar-doctor").tryQuery().isPresent());
+    fire("#reception-nav-directory");
     assertTrue(lookup("#reception-schedule-date").tryQuery().isPresent());
     assertTrue(lookup("#reception-schedule-doctor").tryQuery().isPresent());
     assertTrue(lookup("#reception-schedule-status").tryQuery().isPresent());
@@ -122,9 +135,9 @@ final class ReceptionistViewTest extends ApplicationTest {
     fire("#reception-book");
     verifyThat("#reception-feedback", hasText("Appointment booked and awaiting Doctor acceptance"));
     assertTrue(textLabel("#reception-schedule-summary").contains("Pending: 1"));
-    selectCombo("#reception-schedule-status", AppointmentStatus.PENDING);
+    selectCombo("#reception-schedule-status", "Pending");
     assertEquals(1, appointmentList().getItems().size());
-    interact(() -> combo("#reception-schedule-status").setValue(null));
+    selectCombo("#reception-schedule-status", "All statuses");
 
     Session receptionistSession =
         new Session(receptionist.id(), receptionist.username(), Role.RECEPTIONIST);
@@ -135,7 +148,7 @@ final class ReceptionistViewTest extends ApplicationTest {
     Appointment appointment = bookedAppointments.get(0);
     services.appointmentService().accept(doctorSession, appointment.id());
 
-    selectWorkspaceTab(2);
+    selectWorkspaceTab(3);
     assertTrue(lookup("#reception-check-in-queue-list").tryQuery().isPresent());
     assertTrue(lookup("#reception-check-in-queue-summary").tryQuery().isPresent());
     selectFirstAppointment("#reception-check-in-queue-list");
@@ -144,13 +157,13 @@ final class ReceptionistViewTest extends ApplicationTest {
         AppointmentStatus.CHECKED_IN, services.appointmentService().get(appointment.id()).status());
     services.appointmentService().complete(doctorSession, appointment.id());
 
-    selectWorkspaceTab(3);
+    selectWorkspaceTab(4);
     selectFirstAppointment("#reception-checkout-appointment-list");
     setText("#reception-charge", "45.00");
     fire("#reception-checkout");
     verifyThat("#reception-feedback", hasText("Checkout completed"));
 
-    selectWorkspaceTab(4);
+    selectWorkspaceTab(5);
     setText("#reception-revenue-date", LocalDate.now().toString());
     fire("#reception-revenue-submit");
     verifyThat("#reception-revenue", hasText("1 successful payment(s), total 45.00"));
@@ -160,24 +173,17 @@ final class ReceptionistViewTest extends ApplicationTest {
   }
 
   @Test
-  void doctorSelectionSurvivesFocusChangesAndReceptionistDropdownsAreCompact() {
+  void doctorAndPatientSearchFieldsShowKeyboardSelectableSuggestions() {
     loginAsReceptionist();
     selectWorkspaceTab(1);
 
     String[] selectors = {
-      "#reception-doctor",
       "#reception-start-hour",
       "#reception-start-minute",
       "#reception-end-hour",
       "#reception-end-minute",
-      "#reception-schedule-doctor",
       "#reception-schedule-status",
-      "#reception-check-in-queue-doctor",
       "#reception-check-in-queue-status",
-      "#reception-appointment-patient",
-      "#reception-checkout-doctor",
-      "#reception-receipt-doctor",
-      "#reception-revenue-report-doctor",
       "#reception-revenue-report-method"
     };
     for (String selector : selectors) {
@@ -186,15 +192,202 @@ final class ReceptionistViewTest extends ApplicationTest {
           "Expected compact selector style for " + selector);
     }
 
-    ComboBox<Account> doctorSelector = combo("#reception-doctor");
+    TextField doctorSearch = textField("#reception-doctor");
+    interact(() -> doctorSearch.clear());
+    clickOn(doctorSearch);
+    interact(() -> doctorSearch.setText(doctor.displayName()));
+    SearchSuggestionField<?> doctorSuggestions =
+        (SearchSuggestionField<?>) doctorSearch.getParent();
+    assertFalse(doctorSuggestions.suggestionList().getItems().isEmpty());
     interact(
-        () -> {
-          doctorSelector.getSelectionModel().select(doctor);
-          doctorSelector.requestFocus();
-        });
+        () ->
+            doctorSearch.fireEvent(
+                new javafx.scene.input.KeyEvent(
+                    javafx.scene.input.KeyEvent.KEY_PRESSED,
+                    "",
+                    "",
+                    javafx.scene.input.KeyCode.DOWN,
+                    false,
+                    false,
+                    false,
+                    false)));
+    interact(
+        () ->
+            doctorSearch.fireEvent(
+                new javafx.scene.input.KeyEvent(
+                    javafx.scene.input.KeyEvent.KEY_PRESSED,
+                    "",
+                    "",
+                    javafx.scene.input.KeyCode.ENTER,
+                    false,
+                    false,
+                    false,
+                    false)));
     interact(() -> combo("#reception-start-hour").requestFocus());
     WaitForAsyncUtils.waitForFxEvents();
-    assertEquals(doctor, doctorSelector.getValue());
+    assertTrue(
+        doctorSearch.getText().contains(doctor.displayName()),
+        () -> "Doctor search text after keyboard selection: " + doctorSearch.getText());
+    assertTrue(lookup("#reception-appointment-patient").query() instanceof TextField);
+
+    assertEquals(
+        GridPane.getRowIndex(lookup("#reception-appointment-date").query().getParent()),
+        GridPane.getRowIndex(lookup("#reception-start").query().getParent()));
+    assertEquals(
+        GridPane.getRowIndex(lookup("#reception-appointment-date").query().getParent()),
+        GridPane.getRowIndex(lookup("#reception-end").query().getParent()));
+    layoutWorkspace();
+    Node appointmentDate = lookup("#reception-appointment-date").query();
+    Node appointmentStart = lookup("#reception-start").query();
+    Node appointmentEnd = lookup("#reception-end").query();
+    assertEquals(
+        appointmentDate.getBoundsInParent().getWidth(),
+        appointmentStart.getBoundsInParent().getWidth(),
+        2.0);
+    assertEquals(
+        appointmentDate.getBoundsInParent().getWidth(),
+        appointmentEnd.getBoundsInParent().getWidth(),
+        2.0);
+  }
+
+  @Test
+  void checkoutAndReceiptFiltersShowSelectedDatesAtUniformWidths() {
+    loginAsReceptionist();
+    selectWorkspaceTab(4);
+    DatePicker checkoutDate = lookup("#reception-checkout-date").queryAs(DatePicker.class);
+    interact(() -> checkoutDate.setValue(LocalDate.of(2026, Month.SEPTEMBER, 6)));
+    WaitForAsyncUtils.waitForFxEvents();
+    layoutWorkspace();
+    assertFalse(checkoutDate.getEditor().getText().isBlank());
+    assertEquals(
+        lookup("#reception-checkout-patient").query().getBoundsInParent().getWidth(),
+        checkoutDate.getBoundsInParent().getWidth(),
+        1.0);
+    assertTrue(
+        lookup("#reception-checkout-ready-tab").queryAs(VBox.class).getPadding().getTop() >= 20);
+
+    interact(
+        () ->
+            lookup("#reception-checkout-tabs")
+                .queryAs(TabPane.class)
+                .getSelectionModel()
+                .select(1));
+    DatePicker receiptDate = lookup("#reception-receipt-date").queryAs(DatePicker.class);
+    interact(() -> receiptDate.setValue(LocalDate.of(2026, Month.SEPTEMBER, 6)));
+    WaitForAsyncUtils.waitForFxEvents();
+    layoutWorkspace();
+    assertFalse(receiptDate.getEditor().getText().isBlank());
+    assertEquals(
+        lookup("#reception-receipt-patient").query().getBoundsInParent().getWidth(),
+        receiptDate.getBoundsInParent().getWidth(),
+        1.0);
+    assertTrue(lookup("#reception-receipts-tab").queryAs(VBox.class).getPadding().getTop() >= 20);
+  }
+
+  @Test
+  void patientBookingSearchSupportsMouseSelection() throws SQLException {
+    new PatientRepository(database)
+        .create(new Patient(0, "Pat", "Lee", "1900-01-01", "555-0100", "", ""));
+    loginAsReceptionist();
+    selectWorkspaceTab(1);
+
+    TextField patientSearch = textField("#reception-appointment-patient");
+    interact(patientSearch::clear);
+    clickOn(patientSearch);
+    write("Pat Lee");
+    SearchSuggestionField<?> patientSuggestions =
+        (SearchSuggestionField<?>) patientSearch.getParent();
+    interact(
+        () ->
+            patientSearch.fireEvent(
+                new javafx.scene.input.KeyEvent(
+                    javafx.scene.input.KeyEvent.KEY_PRESSED,
+                    "",
+                    "",
+                    javafx.scene.input.KeyCode.DOWN,
+                    false,
+                    false,
+                    false,
+                    false)));
+    clickOn(patientSuggestions.suggestionList());
+
+    assertTrue(patientSearch.getText().contains("Pat Lee"));
+  }
+
+  @Test
+  void calendarSlotOpensBookingPopupAndRefreshesAfterSave() throws SQLException {
+    Patient patient =
+        new PatientRepository(database)
+            .create(new Patient(0, "Pat", "Lee", "1900-01-01", "555-0100", "", ""));
+    loginAsReceptionist();
+    fire("#reception-nav-calendar");
+    LocalDate selectedDate = LocalDate.now(java.time.ZoneId.of("Asia/Singapore"));
+    DatePicker from = lookup("#reception-calendar-from").queryAs(DatePicker.class);
+    DatePicker to = lookup("#reception-calendar-to").queryAs(DatePicker.class);
+    assertFalse(from.isShowWeekNumbers());
+    assertFalse(to.isShowWeekNumbers());
+    assertTrue(lookup("#reception-calendar-week-picker").tryQuery().isEmpty());
+    interact(
+        () -> {
+          from.setValue(selectedDate);
+          to.setValue(selectedDate.plusDays(2));
+          to.getOnAction().handle(new javafx.event.ActionEvent());
+        });
+    WaitForAsyncUtils.waitForFxEvents();
+    assertTrue(lookup("#doctor-calendar-day-column-" + selectedDate).tryQuery().isPresent());
+    assertTrue(
+        lookup("#doctor-calendar-day-column-" + selectedDate.plusDays(1)).tryQuery().isPresent());
+    assertTrue(
+        lookup("#doctor-calendar-day-column-" + selectedDate.plusDays(2)).tryQuery().isPresent());
+    assertTrue(
+        lookup("#doctor-calendar-day-column-" + selectedDate.plusDays(3)).tryQuery().isEmpty());
+
+    interact(
+        () ->
+            lookup("#doctor-calendar-events-" + selectedDate)
+                .queryAs(Pane.class)
+                .getOnMouseClicked()
+                .handle(
+                    new MouseEvent(
+                        MouseEvent.MOUSE_CLICKED,
+                        20,
+                        20 * 100 + 4,
+                        20,
+                        20 * 100 + 4,
+                        MouseButton.PRIMARY,
+                        1,
+                        false,
+                        false,
+                        false,
+                        false,
+                        true,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        null)));
+    waitForNode("#reception-calendar-appointment-dialog-content");
+    verifyThat("#reception-calendar-appointment-dialog-scroll", isVisible());
+    Stage dialog =
+        (Stage)
+            lookup("#reception-calendar-appointment-dialog-submit")
+                .queryAs(Button.class)
+                .getScene()
+                .getWindow();
+    assertEquals("Book appointment", dialog.getTitle());
+    fire("#reception-calendar-appointment-dialog-submit");
+
+    Appointment created =
+        services.appointmentService().allAppointments(receptionistSession()).stream()
+            .filter(appointment -> appointment.patientId() == patient.id())
+            .findFirst()
+            .orElseThrow();
+    assertEquals(AppointmentStatus.PENDING, created.status());
+    assertTrue(
+        lookup("#doctor-calendar-appointment-" + created.id() + "-" + selectedDate)
+            .tryQuery()
+            .isPresent());
   }
 
   @Test
@@ -219,7 +412,7 @@ final class ReceptionistViewTest extends ApplicationTest {
 
     loginAsReceptionist();
     selectWorkspaceTab(1);
-    selectCombo("#reception-schedule-status", AppointmentStatus.DECLINED);
+    selectCombo("#reception-schedule-status", "Declined");
     assertEquals(1, appointmentList().getItems().size());
     selectFirstAppointment("#reception-appointment-list");
     fire("#reception-reschedule");
@@ -238,17 +431,19 @@ final class ReceptionistViewTest extends ApplicationTest {
 
     assertEquals(
         AppointmentStatus.PENDING, services.appointmentService().get(appointment.id()).status());
-    interact(() -> combo("#reception-schedule-status").setValue(null));
+    selectCombo("#reception-schedule-status", "All statuses");
     assertEquals(AppointmentStatus.PENDING, appointmentList().getItems().get(0).status());
   }
 
   @Test
   void revenueReportSupportsFiltersAndEmptyState() {
     loginAsReceptionist();
-    selectWorkspaceTab(4);
+    selectWorkspaceTab(5);
     assertTrue(lookup("#reception-revenue-report-patient").tryQuery().isPresent());
     assertTrue(lookup("#reception-revenue-report-doctor").tryQuery().isPresent());
     assertTrue(lookup("#reception-revenue-report-method").tryQuery().isPresent());
+    assertTrue(combo("#reception-revenue-report-method").getItems().contains("All methods"));
+    assertEquals("All methods", combo("#reception-revenue-report-method").getValue());
     assertTrue(lookup("#reception-revenue-export-csv").tryQuery().isPresent());
     assertTrue(lookup("#reception-revenue-export-json").tryQuery().isPresent());
 
@@ -256,10 +451,14 @@ final class ReceptionistViewTest extends ApplicationTest {
     setDatePicker("#reception-revenue-report-to", LocalDate.of(2030, 1, 1));
     setText("#reception-revenue-report-patient", "does-not-exist");
     fire("#reception-revenue-report");
+    assertTrue(textLabel("#reception-revenue-report-summary").startsWith("Successful payments: 0"));
     assertTrue(
-        textLabel("#reception-revenue-report-summary").startsWith("0 successful payment(s)"));
+        lookup("#reception-revenue-report-list").queryAs(TableView.class).getItems().isEmpty());
     assertTrue(
-        lookup("#reception-revenue-report-list").queryAs(ListView.class).getItems().isEmpty());
+        lookup("#reception-revenue-report-list-empty")
+            .query()
+            .getStyleClass()
+            .contains("table-empty-row"));
   }
 
   @Test
@@ -301,7 +500,7 @@ final class ReceptionistViewTest extends ApplicationTest {
     assertFalse(lookup("#reception-refresh").tryQuery().isPresent());
     assertFalse(lookup("#reception-register-id").tryQuery().isPresent());
     assertEquals(
-        List.of("Patient ID", "Name", "Date of birth", "Phone", "Email", "Status", "Actions"),
+        List.of("Name", "Date of birth", "Phone", "Email", "Status", "Actions"),
         patientTable().getColumns().stream().map(column -> column.getText()).toList());
     assertCompactPatientSelectors("reception-register");
     assertEquals(2, combo("#reception-register-sex").getItems().size());
@@ -350,12 +549,14 @@ final class ReceptionistViewTest extends ApplicationTest {
     assertEquals(1, patientTable().getItems().size());
     Patient editedPatient = patientTable().getItems().get(0);
     preparePatientTable();
-    fire("#reception-patient-edit-" + editedPatient.id());
-    waitForNode("#reception-patient-edit-view");
+    fire("#reception-patient-view-" + editedPatient.id());
+    waitForNode("#reception-patient-view");
     assertFalse(lookup("#reception-patient-details-window").tryQuery().isPresent());
-    assertCompactPatientSelectors("reception-patient");
-    assertTrue(lookup("#reception-patient-id").tryQuery().isPresent());
     verifyThat("#reception-patient-deactivate", hasText("Deactivate patient"));
+    fire("#reception-patient-edit");
+    waitForNode("#reception-patient-edit-view");
+    assertCompactPatientSelectors("reception-patient");
+    assertFalse(lookup("#reception-patient-id").tryQuery().isPresent());
     assertEquals("ABFOREIGN9", text("#reception-patient-identity-number"));
     setText("#reception-patient-phone-number", "not-digits");
     fire("#reception-patient-update");
@@ -369,7 +570,8 @@ final class ReceptionistViewTest extends ApplicationTest {
     setText("#reception-patient-phone-number", "123456789");
     fire("#reception-patient-update");
     verifyThat("#reception-feedback", hasText("Patient changes saved"));
-    verifyThat("#reception-patient-directory-view", isVisible());
+    verifyThat("#reception-patient-view", isVisible());
+    fire("#reception-patient-view-back");
 
     fire("#reception-patient-open-register");
     verifyThat("#reception-patient-register-view", isVisible());
@@ -402,8 +604,8 @@ final class ReceptionistViewTest extends ApplicationTest {
     assertEquals(1, patientTable().getItems().size());
     Patient activePatient = patientTable().getItems().get(0);
     preparePatientTable();
-    fire("#reception-patient-edit-" + activePatient.id());
-    waitForNode("#reception-patient-edit-view");
+    fire("#reception-patient-view-" + activePatient.id());
+    waitForNode("#reception-patient-view");
     fire("#reception-patient-deactivate");
     verifyThat("#reception-feedback", hasText("Patient deactivated"));
     verifyThat("#reception-patient-deactivate", hasText("Activate patient"));
@@ -434,15 +636,17 @@ final class ReceptionistViewTest extends ApplicationTest {
     assertEquals(1, patientTable().getItems().size());
     Patient registeredPatient = patientTable().getItems().get(0);
     preparePatientTable();
-    assertTrue(lookup("#reception-patient-edit-" + registeredPatient.id()).tryQuery().isPresent());
-    fire("#reception-patient-edit-" + registeredPatient.id());
-    waitForNode("#reception-patient-edit-view");
+    assertTrue(lookup("#reception-patient-view-" + registeredPatient.id()).tryQuery().isPresent());
+    fire("#reception-patient-view-" + registeredPatient.id());
+    waitForNode("#reception-patient-view");
     assertFalse(lookup("#reception-patient-details-window").tryQuery().isPresent());
-    assertEquals("P000001", text("#reception-patient-id"));
+    fire("#reception-patient-edit");
+    waitForNode("#reception-patient-edit-view");
+    assertFalse(lookup("#reception-patient-id").tryQuery().isPresent());
 
     setText("#reception-patient-phone-number", "draft-only");
     fire("#reception-patient-edit-cancel");
-    verifyThat("#reception-patient-directory-view", isVisible());
+    verifyThat("#reception-patient-view", isVisible());
     assertEquals(
         "+656565656565",
         services
@@ -450,16 +654,12 @@ final class ReceptionistViewTest extends ApplicationTest {
             .getAdministrative(receptionistSession(), registeredPatient.id())
             .phone());
 
-    preparePatientTable();
-    fire("#reception-patient-edit-" + registeredPatient.id());
-    waitForNode("#reception-patient-edit-view");
-
     Thread cancelThread = new Thread(() -> fire("#reception-patient-delete"));
     cancelThread.start();
     waitForNode("#reception-patient-delete-confirm-window");
     fire("#reception-patient-delete-cancel");
     join(cancelThread);
-    verifyThat("#reception-patient-edit-view", isVisible());
+    verifyThat("#reception-patient-view", isVisible());
 
     Thread deleteThread = new Thread(() -> fire("#reception-patient-delete"));
     deleteThread.start();
@@ -490,7 +690,9 @@ final class ReceptionistViewTest extends ApplicationTest {
     verifyThat("#reception-patient-directory-view", isVisible());
     Patient editedPatient = patientTable().getItems().get(0);
     preparePatientTable();
-    fire("#reception-patient-edit-" + editedPatient.id());
+    fire("#reception-patient-view-" + editedPatient.id());
+    waitForNode("#reception-patient-view");
+    fire("#reception-patient-edit");
     waitForNode("#reception-patient-edit-view");
 
     // Verify patient information is displayed on the edit page.
@@ -505,7 +707,7 @@ final class ReceptionistViewTest extends ApplicationTest {
     setText("#reception-patient-email", "jane.updated@example.test");
     fire("#reception-patient-update");
     verifyThat("#reception-feedback", hasText("Patient changes saved"));
-    verifyThat("#reception-patient-directory-view", isVisible());
+    verifyThat("#reception-patient-view", isVisible());
 
     // Verify changes persisted
     assertEquals(
@@ -534,8 +736,8 @@ final class ReceptionistViewTest extends ApplicationTest {
     verifyThat("#reception-patient-directory-view", isVisible());
     Patient activePatient = patientTable().getItems().get(0);
     preparePatientTable();
-    fire("#reception-patient-edit-" + activePatient.id());
-    waitForNode("#reception-patient-edit-view");
+    fire("#reception-patient-view-" + activePatient.id());
+    waitForNode("#reception-patient-view");
 
     // Verify initial status is "Deactivate patient"
     verifyThat("#reception-patient-deactivate", hasText("Deactivate patient"));
@@ -585,8 +787,8 @@ final class ReceptionistViewTest extends ApplicationTest {
   }
 
   @SuppressWarnings("unchecked")
-  private ListView<Appointment> appointmentList() {
-    return lookup("#reception-appointment-list").queryAs(ListView.class);
+  private TableView<Appointment> appointmentList() {
+    return lookup("#reception-appointment-list").queryAs(TableView.class);
   }
 
   @SuppressWarnings("unchecked")
@@ -628,9 +830,18 @@ final class ReceptionistViewTest extends ApplicationTest {
     return lookup("#reception-workspace-tabs").queryAs(TabPane.class);
   }
 
+  private void layoutWorkspace() {
+    interact(
+        () -> {
+          Pane workspace = lookup("#receptionist-workspace").queryAs(Pane.class);
+          workspace.applyCss();
+          workspace.layout();
+        });
+  }
+
   @SuppressWarnings("unchecked")
   private void selectFirstAppointment(String selector) {
-    interact(() -> lookup(selector).queryAs(ListView.class).getSelectionModel().selectFirst());
+    interact(() -> lookup(selector).queryAs(TableView.class).getSelectionModel().selectFirst());
   }
 
   @SuppressWarnings("unchecked")

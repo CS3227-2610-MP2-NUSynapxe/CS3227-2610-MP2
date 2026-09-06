@@ -163,7 +163,7 @@ final class DoctorViewTest extends ApplicationTest {
     assertFalse(lookup("#doctor-consultation-save").tryQuery().isPresent());
     assertFalse(lookup("#doctor-prescription-submit").tryQuery().isPresent());
     assertEquals(
-        List.of("Patient ID", "Name", "Date of birth", "Phone", "Email", "Status", "Actions"),
+        List.of("Name", "Date of birth", "Phone", "Email", "Status", "Actions"),
         patientTable().getColumns().stream().map(column -> column.getText()).toList());
     assertCompactPatientSelectors("doctor-register");
 
@@ -196,37 +196,35 @@ final class DoctorViewTest extends ApplicationTest {
     fire("#doctor-patient-search-submit");
     assertEquals(1, patientTable().getItems().size());
     Patient registeredPatient = patientTable().getItems().get(0);
-    assertEquals(registeredPatient.displayedId(), tableValue(0, registeredPatient));
-    assertEquals("New Patient", tableValue(1, registeredPatient));
-    assertEquals("1990-01-01", tableValue(2, registeredPatient));
-    assertEquals("+65 5550101", tableValue(3, registeredPatient));
-    assertEquals("new.patient@example.test", tableValue(4, registeredPatient));
-    assertEquals("Active", tableValue(5, registeredPatient));
+    assertEquals("New Patient", tableValue(0, registeredPatient));
+    assertEquals("1990-01-01", tableValue(1, registeredPatient));
+    assertEquals("+65 5550101", tableValue(2, registeredPatient));
+    assertEquals("new.patient@example.test", tableValue(3, registeredPatient));
+    assertEquals("Active", tableValue(4, registeredPatient));
     interact(() -> patientTable().getSelectionModel().selectFirst());
     assertFalse(lookup("#doctor-patient-details-window").tryQuery().isPresent());
     assertFalse(lookup("#doctor-patient-edit-view").query().isVisible());
     preparePatientTable();
-    assertTrue(lookup("#doctor-patient-edit-" + registeredPatient.id()).tryQuery().isPresent());
-    fire("#doctor-patient-edit-" + registeredPatient.id());
-    waitForNode("#doctor-patient-edit-view");
+    assertTrue(lookup("#doctor-patient-view-" + registeredPatient.id()).tryQuery().isPresent());
+    fire("#doctor-patient-view-" + registeredPatient.id());
+    waitForNode("#doctor-patient-view");
     assertFalse(lookup("#doctor-patient-details-window").tryQuery().isPresent());
+    fire("#doctor-patient-edit");
+    waitForNode("#doctor-patient-edit-view");
     assertCompactPatientSelectors("doctor-patient");
 
     setText("#doctor-patient-phone-number", "5550102");
     fire("#doctor-patient-update");
     verifyThat("#doctor-feedback", hasText("Patient changes saved"));
-    verifyThat("#doctor-patient-directory-view", isVisible());
+    verifyThat("#doctor-patient-view", isVisible());
     assertFalse(lookup("#doctor-patient-edit-view").query().isVisible());
-    preparePatientTable();
-    fire("#doctor-patient-edit-" + registeredPatient.id());
-    waitForNode("#doctor-patient-edit-view");
 
     Thread cancelThread = new Thread(() -> fire("#doctor-patient-delete"));
     cancelThread.start();
     waitForNode("#doctor-patient-delete-confirm-window");
     fire("#doctor-patient-delete-cancel");
     join(cancelThread);
-    verifyThat("#doctor-patient-edit-view", isVisible());
+    verifyThat("#doctor-patient-view", isVisible());
 
     Thread deleteThread = new Thread(() -> fire("#doctor-patient-delete"));
     deleteThread.start();
@@ -253,8 +251,8 @@ final class DoctorViewTest extends ApplicationTest {
     fire("#doctor-patient-search-submit");
     Patient referencedPatient = patientTable().getItems().get(0);
     preparePatientTable();
-    fire("#doctor-patient-edit-" + referencedPatient.id());
-    waitForNode("#doctor-patient-edit-view");
+    fire("#doctor-patient-view-" + referencedPatient.id());
+    waitForNode("#doctor-patient-view");
 
     Thread deleteThread = new Thread(() -> fire("#doctor-patient-delete"));
     deleteThread.start();
@@ -272,7 +270,7 @@ final class DoctorViewTest extends ApplicationTest {
             .contains("deactivate the patient instead"));
     fire("#doctor-patient-delete-blocked-close");
     join(deleteThread);
-    verifyThat("#doctor-patient-edit-view", isVisible());
+    verifyThat("#doctor-patient-view", isVisible());
   }
 
   private void selectFirst(String selector) {

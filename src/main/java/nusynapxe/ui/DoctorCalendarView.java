@@ -128,7 +128,8 @@ public final class DoctorCalendarView {
         currentTimeTicker.play();
       }
     } catch (SQLException | AuthorizationException | ValidationException exception) {
-      feedback.setText(userMessage(exception, "Calendar is temporarily unavailable"));
+      UiComponents.showError(
+          feedback, userMessage(exception, "Calendar is temporarily unavailable"));
     }
   }
 
@@ -297,7 +298,8 @@ public final class DoctorCalendarView {
     try {
       return services.calendarService().getSettings(session);
     } catch (SQLException | AuthorizationException | ValidationException exception) {
-      feedback.setText(userMessage(exception, "Calendar settings are temporarily unavailable"));
+      UiComponents.showError(
+          feedback, userMessage(exception, "Calendar settings are temporarily unavailable"));
       return DoctorCalendarSettings.defaults(session.accountId());
     }
   }
@@ -340,7 +342,8 @@ public final class DoctorCalendarView {
       }
       refresh();
     } catch (SQLException | AuthorizationException | ValidationException exception) {
-      feedback.setText(userMessage(exception, "Appointment decision is temporarily unavailable"));
+      UiComponents.showError(
+          feedback, userMessage(exception, "Appointment decision is temporarily unavailable"));
       refresh();
     }
   }

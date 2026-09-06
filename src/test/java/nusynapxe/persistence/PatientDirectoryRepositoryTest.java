@@ -66,6 +66,8 @@ final class PatientDirectoryRepositoryTest {
       assertTrue(patients.search(Long.toString(alpha.id())).contains(alpha));
       assertEquals(List.of(alpha), patients.search("ab%_"));
       assertEquals(List.of(alpha), patients.search("percent%"));
+      assertEquals(List.of(alpha), patients.search("Percent% Patient"));
+      assertEquals(List.of(beta), patients.search("Patient Zeta"));
       assertEquals(List.of(beta), patients.search("fin"));
       assertEquals(List.of(beta), patients.search("g765"));
       assertEquals(List.of(alpha, beta), patients.search("+441234"));

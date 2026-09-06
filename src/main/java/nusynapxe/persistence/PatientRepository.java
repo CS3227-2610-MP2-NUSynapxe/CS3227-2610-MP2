@@ -48,6 +48,8 @@ public final class PatientRepository {
           + " WHERE (identity_type LIKE ? ESCAPE '\\' "
           + "OR identity_number LIKE ? ESCAPE '\\' OR issuing_country LIKE ? ESCAPE '\\' "
           + "OR first_name LIKE ? ESCAPE '\\' OR last_name LIKE ? ESCAPE '\\' "
+          + "OR (first_name || ' ' || last_name) LIKE ? ESCAPE '\\' "
+          + "OR (last_name || ' ' || first_name) LIKE ? ESCAPE '\\' "
           + "OR phone_country_code LIKE ? ESCAPE '\\' OR phone_number LIKE ? ESCAPE '\\' "
           + "OR ('+' || phone_country_code || phone_number) LIKE ? ESCAPE '\\' "
           + "OR email LIKE ? ESCAPE '\\' "
@@ -324,15 +326,15 @@ public final class PatientRepository {
     Long patientId = parsePatientId(query);
     try (PreparedStatement statement = database.connection().prepareStatement(SEARCH_PATIENTS)) {
       String pattern = "%" + escapeLike(query) + "%";
-      for (int index = 1; index <= 9; index++) {
+      for (int index = 1; index <= 11; index++) {
         statement.setString(index, pattern);
       }
       if (patientId == null) {
-        statement.setNull(10, Types.BIGINT);
-        statement.setNull(11, Types.BIGINT);
+        statement.setNull(12, Types.BIGINT);
+        statement.setNull(13, Types.BIGINT);
       } else {
-        statement.setLong(10, patientId);
-        statement.setLong(11, patientId);
+        statement.setLong(12, patientId);
+        statement.setLong(13, patientId);
       }
       return SqliteQueries.readAll(statement, PatientRepository::readPatient);
     }
