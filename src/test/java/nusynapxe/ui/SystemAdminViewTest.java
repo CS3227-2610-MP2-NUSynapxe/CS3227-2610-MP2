@@ -59,6 +59,24 @@ final class SystemAdminViewTest extends ApplicationTest {
     setText("#admin-account-username", "doctor");
     setText("#admin-account-display-name", "Dr. Ada");
     setText("#admin-account-password", "doctor-pass");
+    setText("#admin-account-confirm-password", "different-pass");
+    fire("#admin-account-submit");
+    verifyThat("#admin-account-feedback", hasText("Passwords do not match"));
+    assertTrue(
+        lookup("#admin-account-feedback")
+                .query()
+                .localToScene(lookup("#admin-account-feedback").query().getBoundsInLocal())
+                .getMinY()
+            <= 12);
+    assertEquals(1, accountTable.getItems().size());
+
+    setText("#admin-account-confirm-password", "doctor-pass");
+    fire("#admin-account-password-toggle");
+    TextInputControl visiblePassword =
+        lookup("#admin-account-password-visible").queryAs(TextInputControl.class);
+    assertTrue(visiblePassword.isVisible());
+    assertEquals("doctor-pass", visiblePassword.getText());
+    fire("#admin-account-password-toggle");
     fire("#admin-account-submit");
 
     verifyThat("#admin-account-feedback", hasText("Account created"));
@@ -67,10 +85,13 @@ final class SystemAdminViewTest extends ApplicationTest {
 
     fire("#admin-account-submit");
     verifyThat("#admin-account-feedback", hasText("Username is required"));
+    assertTrue(
+        lookup("#admin-account-feedback").query().getStyleClass().contains("error-feedback"));
 
     setText("#admin-account-username", "doctor");
     setText("#admin-account-display-name", "Dr. Duplicate");
     setText("#admin-account-password", "doctor-pass");
+    setText("#admin-account-confirm-password", "doctor-pass");
     fire("#admin-account-submit");
     verifyThat(
         "#admin-account-feedback",

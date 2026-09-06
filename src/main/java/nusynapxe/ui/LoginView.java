@@ -6,7 +6,6 @@ import javafx.geometry.Insets;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -31,9 +30,9 @@ public final class LoginView {
     TextField username = new TextField();
     username.setId("login-username");
     username.setPromptText("Username");
-    PasswordField password = new PasswordField();
-    password.setId("login-password");
-    password.setPromptText("Password");
+    UiComponents.PasswordInput passwordInput =
+        UiComponents.passwordInput("login-password", "Password");
+    var password = passwordInput.field();
     Label feedback = UiComponents.feedback("login-feedback");
     Button submit = UiComponents.primaryButton("Log in", "login-submit");
     submit.setDefaultButton(true);
@@ -46,10 +45,10 @@ public final class LoginView {
               feedback.setText("");
               onSuccess.accept(session.orElseThrow());
             } else {
-              feedback.setText("Invalid username or password");
+              UiComponents.showError(feedback, "Invalid username or password");
             }
           } catch (SQLException exception) {
-            feedback.setText("Login is temporarily unavailable");
+            UiComponents.showError(feedback, "Login is temporarily unavailable");
           }
         });
 
@@ -66,15 +65,14 @@ public final class LoginView {
             UiComponents.pageTitle("Welcome back"),
             UiComponents.supportingText("Sign in to access your authorised clinic workspace."),
             UiComponents.fieldGroup("Username", username),
-            UiComponents.fieldGroup("Password", password),
-            UiComponents.actionBar(submit),
-            feedback);
+            UiComponents.fieldGroup("Password", passwordInput.view()),
+            UiComponents.actionBar(submit));
     VBox content = new VBox(24, identity, form);
     content.getStyleClass().add("auth-content");
-    StackPane root = new StackPane(content);
+    StackPane root = UiComponents.notificationOverlay(content, feedback);
     root.setId("login-view");
     root.getStyleClass().add("auth-screen");
-    root.setPadding(new Insets(32));
+    StackPane.setMargin(content, new Insets(32));
     return root;
   }
 

@@ -2,19 +2,29 @@ package nusynapxe.ui;
 
 import java.util.Locale;
 import java.util.Objects;
+import javafx.animation.FadeTransition;
+import javafx.animation.PauseTransition;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.PasswordField;
+import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.util.Duration;
 
 /** Small presentation-only factories shared by the JavaFX views. */
 final class UiComponents {
+  private static final String ERROR_FEEDBACK_STYLE = "error-feedback";
+  private static final String SHOW_PASSWORD = "Show password";
+
   private UiComponents() {
     throw new AssertionError("Utility class");
   }
@@ -71,6 +81,9 @@ final class UiComponents {
     label.getStyleClass().add("field-label");
     if (control != null) {
       label.setLabelFor(control);
+      if (control instanceof Region region) {
+        region.setMaxWidth(Double.MAX_VALUE);
+      }
     }
     VBox group = new VBox(6, label, control);
     group.getStyleClass().add("field-group");
@@ -139,6 +152,16 @@ final class UiComponents {
     label.setMaxWidth(Double.MAX_VALUE);
     label.setVisible(false);
     label.setManaged(false);
+    PauseTransition dismiss = new PauseTransition(Duration.seconds(6));
+    FadeTransition fade = new FadeTransition(Duration.millis(350), label);
+    fade.setFromValue(1);
+    fade.setToValue(0);
+    dismiss.setOnFinished(event -> fade.playFromStart());
+    fade.setOnFinished(
+        event -> {
+          label.setText("");
+          label.setOpacity(1);
+        });
     label
         .textProperty()
         .addListener(
@@ -146,8 +169,91 @@ final class UiComponents {
               boolean hasMessage = currentText != null && !currentText.isBlank();
               label.setVisible(hasMessage);
               label.setManaged(hasMessage);
+              if (hasMessage) {
+                fade.stop();
+                label.setOpacity(1);
+                dismiss.playFromStart();
+              } else {
+                dismiss.stop();
+                fade.stop();
+                label.setOpacity(1);
+                label.getStyleClass().remove(ERROR_FEEDBACK_STYLE);
+              }
             });
     return label;
+  }
+
+  /** Presents a feedback label as a centered notification at the top window edge. */
+  static StackPane notificationArea(Label feedback) {
+    StackPane area = new StackPane(feedback);
+    area.getStyleClass().add("notification-area");
+    area.setPickOnBounds(false);
+    StackPane.setAlignment(feedback, Pos.TOP_CENTER);
+    return area;
+  }
+
+  /** Places transient feedback above page content at the top centre of its window. */
+  static StackPane notificationOverlay(Node content, Label feedback) {
+    StackPane root = new StackPane(content, notificationArea(feedback));
+    StackPane.setAlignment(content, Pos.CENTER);
+    return root;
+  }
+
+  /** Shows an error using the shared red notification treatment. */
+  static void showError(Label feedback, String message) {
+    if (!feedback.getStyleClass().contains(ERROR_FEEDBACK_STYLE)) {
+      feedback.getStyleClass().add(ERROR_FEEDBACK_STYLE);
+    }
+    feedback.setText(message);
+  }
+
+  /** Shows a non-error operation notice. */
+  static void showMessage(Label feedback, String message) {
+    feedback.getStyleClass().remove(ERROR_FEEDBACK_STYLE);
+    feedback.setText(message);
+  }
+
+  /** Creates a password field with an accessible show/hide control. */
+  static PasswordInput passwordInput(String id, String promptText) {
+    PasswordField hidden = new PasswordField();
+    hidden.setId(id);
+    hidden.setPromptText(promptText);
+    TextField visible = new TextField();
+    visible.setId(id + "-visible");
+    visible.setPromptText(promptText);
+    visible.textProperty().bindBidirectional(hidden.textProperty());
+    visible.setVisible(false);
+    visible.setManaged(false);
+
+    StackPane fields = new StackPane(hidden, visible);
+    Button toggle = new Button("\ud83d\udc41");
+    toggle.setId(id + "-toggle");
+    toggle.getStyleClass().add("password-visibility-toggle");
+    toggle.setAccessibleText(SHOW_PASSWORD);
+    toggle.setTooltip(new Tooltip(SHOW_PASSWORD));
+    toggle.setOnAction(
+        event -> {
+          boolean reveal = !visible.isVisible();
+          visible.setVisible(reveal);
+          visible.setManaged(reveal);
+          hidden.setVisible(!reveal);
+          hidden.setManaged(!reveal);
+          toggle.setAccessibleText(reveal ? "Hide password" : SHOW_PASSWORD);
+          toggle.getTooltip().setText(reveal ? "Hide password" : SHOW_PASSWORD);
+          (reveal ? visible : hidden).requestFocus();
+          (reveal ? visible : hidden).positionCaret(hidden.getText().length());
+        });
+    StackPane.setAlignment(toggle, Pos.CENTER_RIGHT);
+    StackPane.setMargin(toggle, new javafx.geometry.Insets(0, 7, 0, 0));
+    fields.getChildren().add(toggle);
+    fields.getStyleClass().add("password-input");
+    fields.setMaxWidth(Double.MAX_VALUE);
+    return new PasswordInput(hidden, fields);
+  }
+
+  /** Password value control and its combined show/hide presentation. */
+  record PasswordInput(PasswordField field, StackPane view) {
+    // Groups the semantic password control with its presentation node.
   }
 
   /** Creates a visible empty-state message for a list or result surface. */
