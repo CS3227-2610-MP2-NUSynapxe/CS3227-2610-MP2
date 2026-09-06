@@ -190,6 +190,10 @@ final class SearchSuggestionField<T> extends VBox {
   }
 
   private void filterSuggestions(String query) {
+    T selected = value.get();
+    if (selected != null && Objects.equals(query, displayText.apply(selected))) {
+      query = "";
+    }
     String normalized = query == null ? "" : query.strip().toLowerCase(Locale.ROOT);
     suggestions.setItems(
         FXCollections.observableArrayList(
