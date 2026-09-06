@@ -228,7 +228,7 @@ public final class DoctorCalendarView {
             settings);
     toolbar.setId("doctor-calendar-toolbar");
     toolbar.getStyleClass().add("calendar-toolbar");
-    toolbar.setAlignment(Pos.CENTER_LEFT);
+    toolbar.setAlignment(Pos.BOTTOM_LEFT);
     Label title = UiComponents.pageTitle("Calendar");
     Label supporting =
         UiComponents.supportingText(

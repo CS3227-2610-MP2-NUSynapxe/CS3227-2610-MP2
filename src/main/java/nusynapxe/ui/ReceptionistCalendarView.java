@@ -17,7 +17,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import nusynapxe.domain.Account;
@@ -191,10 +191,9 @@ final class ReceptionistCalendarView {
     viewMode.setEditable(false);
     viewMode.setValue(WEEK_MODE);
     viewMode.setOnAction(event -> changeMode());
-    FlowPane toolbar =
-        new FlowPane(
-            12, 10, today, previous, next, fromField, toField, doctorField, viewMode);
-    toolbar.setAlignment(Pos.CENTER_LEFT);
+    HBox toolbar =
+        new HBox(12, today, previous, next, fromField, toField, doctorField, viewMode);
+    toolbar.setAlignment(Pos.BOTTOM_LEFT);
     toolbar.getStyleClass().add("calendar-toolbar");
     VBox heading = new VBox(4, UiComponents.sectionHeading("Doctor schedule"), toolbar);
     heading.setPadding(new Insets(0, 0, 12, 0));
