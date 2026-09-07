@@ -259,6 +259,13 @@ minimum size of `980 x 640`, and keeps the stage resizable.
 `UiComponents` contains presentation-only factories for cards, headings,
 field groups, action bars, feedback, empty states, buttons, status badges, and
 the authenticated header. It has no service or persistence dependency.
+`UiComponents.statusBadge` renders a `Label` with a `status-badge` style class
+plus a semantic `status-<value>` class defined in `ui.css`; it is the single
+source of status colour across the app (Doctor Calendar blocks and schedule
+list, `SystemAdminView` account status, `PatientDirectoryView` patient status,
+and the Receptionist appointment/queue/checkout `TableView`s), so a status
+`TableColumn` uses a `TableCell` `cellFactory` that calls it via `setGraphic`
+rather than rendering plain text.
 
 Views are built programmatically so semantic ids remain easy to assert. The
 patient area has one default directory view with search controls, a `TableView`
@@ -404,4 +411,42 @@ npm run start
 as documentation pages. Broken site links fail the production build. GitHub
 Actions uses JDK 25, Node.js 24, `xvfb-run`, `./gradlew check javadoc`, and
 `npm ci && npm run build`; it publishes the generated `build/reports/` files
-as a quality-report artifact.
+as a quality-report artifact. `website/src/css/custom.css` mirrors the desktop
+app's palette from `src/main/resources/nusynapxe/ui.css` (teal `#0f8f83`
+primary, navy `#17324d` headings, slate `#52677b` body text) in both light and
+dark Docusaurus themes.
+
+## Native packaging and releases
+
+The `packageNative` Gradle task (registered near the bottom of `build.gradle`)
+builds a platform-native installer with `jpackage`, using the current
+toolchain's bundled JDK:
+
+```powershell
+.\gradlew.bat installDist packageNative "-PreleaseVersion=0.1.0" --no-daemon
+```
+
+`-PreleaseVersion` is required and must be `<major>.<minor>.<patch>`; the task
+fails fast without it. It packages whichever installer type matches the host
+OS (`.msi` on Windows, `.dmg` on macOS, `.deb` on Linux), reading the app image
+from `build/install/CS3227-2610-MP2/lib` (populated by `installDist`) and the
+platform-specific JavaFX modules resolved on `runtimeClasspath` by the OpenJFX
+Gradle plugin. The finished installer is copied to
+`build/packages/NUSynapxe-<version>-<platform>.<extension>`. Building an
+`.msi` on Windows requires the [WiX Toolset](https://wixtoolset.org) v3+ on
+`PATH`.
+
+`.github/workflows/release.yml` runs this task on a matrix of
+`windows-latest`, `macos-latest`, and `ubuntu-latest` runners whenever a tag
+matching `vX.Y.Z` is pushed. Each job re-runs the quality gate for its
+platform (macOS skips the TestFX-dependent `check`/`jacocoTestReport` tasks
+because there is no `xvfb` equivalent there), builds its installer, and
+uploads it as a workflow artifact. A final `publish` job downloads all three
+installers and attaches them to a GitHub Release for that tag using
+`softprops/action-gh-release`, with auto-generated release notes. To cut a
+release, push a tag from `master`:
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```

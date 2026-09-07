@@ -7,7 +7,7 @@ keeping administrative and medical information separate.
 
 All screens use the same calm clinical visual language: a light workspace
 background, white content cards, clear section headings, teal primary actions,
-and text labels for every workflow status. The desktop window opens maximized so
+and a colour-coded badge for every workflow status. The desktop window opens maximized so
 it uses the available monitor work area while retaining normal window controls.
 When restored, it uses a compact `1200 x 760` scene and can be resized down to the
 supported minimum of `980 x 640`; longer forms and result lists scroll inside
@@ -22,6 +22,14 @@ selectable destination. Doctors use the same rail pattern for **Dashboard**,
 **Patients**, and **Calendar**. The selected destination is highlighted.
 Short operation notices appear below the header and close automatically after
 six seconds.
+
+## Installing NUSynapxe
+
+Tagged releases publish native installers for Windows (`.msi`), macOS
+(`.dmg`), and Linux (`.deb`) as GitHub Release assets. Download the installer
+for your platform from the repository's Releases page and run it; no separate
+Java installation is required, since the installer bundles a matching Java
+runtime. To build and run from source instead, see **First launch** below.
 
 ## First launch
 
@@ -169,7 +177,11 @@ returns to Calendar, and successful changes refresh the grid immediately.
 The scheduling dashboard shows a chronological all-Doctor table and summary
 counts for Pending, Accepted, Checked in, and Completed appointments. Each row
 has **Date**, **Time**, **Patient**, **Doctor**, and **Status** columns; generated
-Patient and Doctor IDs are not displayed.
+Patient and Doctor IDs are not displayed. The **Status** column renders a
+colour-coded badge using the same colours as the Doctor Calendar: amber for
+Pending, teal for Accepted/Checked in, blue for Completed/Checked out, orange
+for Declined, and red for Cancelled. The Check-in Queue and Checkout tables
+use the same status badges.
 Use the
 optional date, Doctor, status, and patient administrative filters to narrow
 the table; choose **All statuses** to clear a previous status choice. Changing a
