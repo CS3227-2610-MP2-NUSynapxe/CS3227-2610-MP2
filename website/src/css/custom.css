@@ -1,9 +1,128 @@
+/**
+ * Palette matches the NUSynapxe desktop app (src/main/resources/nusynapxe/ui.css):
+ * teal accent #0f8f83, navy text #17324d, muted slate #52677b, soft background #f4f7fb.
+ */
 :root {
-  --ifm-color-primary: #155e75;
-  --ifm-color-primary-dark: #12546a;
-  --ifm-color-primary-darker: #114f64;
-  --ifm-color-primary-darkest: #0e4152;
-  --ifm-color-primary-light: #186b80;
-  --ifm-color-primary-lighter: #196f85;
-  --ifm-color-primary-lightest: #1d8098;
+  --ifm-color-primary: #0f8f83;
+  --ifm-color-primary-dark: #0d8075;
+  --ifm-color-primary-darker: #0c786e;
+  --ifm-color-primary-darkest: #0a635b;
+  --ifm-color-primary-light: #119e91;
+  --ifm-color-primary-lighter: #12a698;
+  --ifm-color-primary-lightest: #15bfaf;
+
+  --ifm-background-color: #f4f7fb;
+  --ifm-navbar-background-color: #ffffff;
+  --ifm-heading-color: #17324d;
+  --ifm-font-color-base: #17324d;
+  --ifm-color-emphasis-700: #52677b;
+
+  --ifm-code-font-size: 92%;
+  --ifm-font-family-base: 'Segoe UI', 'Noto Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --ifm-card-border-radius: 12px;
+  --ifm-global-radius: 8px;
+
+  --ifm-toc-border-color: #d9e3ed;
+  --ifm-table-border-color: #d9e3ed;
+  --ifm-hr-border-color: #d9e3ed;
+
+  --docusaurus-highlighted-code-line-bg: rgba(15, 143, 131, 0.12);
+
+  /* Status accents lifted from the app's appointment status badges. */
+  --ifm-color-info: #5e7fb5;
+  --ifm-color-info-contrast-background: #e2eaf8;
+  --ifm-color-info-contrast-foreground: #294d7d;
+
+  --ifm-color-success: #0f8f83;
+  --ifm-color-success-contrast-background: #d9efed;
+  --ifm-color-success-contrast-foreground: #175c58;
+
+  --ifm-color-warning: #d4ae4d;
+  --ifm-color-warning-contrast-background: #fff3d6;
+  --ifm-color-warning-contrast-foreground: #805b00;
+
+  --ifm-color-danger: #b45d5d;
+  --ifm-color-danger-contrast-background: #ffe5e5;
+  --ifm-color-danger-contrast-foreground: #9f2f3d;
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #2fc2b3;
+  --ifm-color-primary-dark: #17b3a3;
+  --ifm-color-primary-darker: #15a897;
+  --ifm-color-primary-darkest: #128a7c;
+  --ifm-color-primary-light: #4dcdc0;
+  --ifm-color-primary-lighter: #5cd2c6;
+  --ifm-color-primary-lightest: #85e0d7;
+
+  --ifm-background-color: #0b1c2c;
+  --ifm-background-surface-color: #102a43;
+  --ifm-navbar-background-color: #102a43;
+  --ifm-heading-color: #e7eef5;
+  --ifm-font-color-base: #d9e3ed;
+  --ifm-color-emphasis-700: #9fb1c2;
+
+  --ifm-toc-border-color: #1d3a54;
+  --ifm-table-border-color: #1d3a54;
+  --ifm-hr-border-color: #1d3a54;
+
+  --docusaurus-highlighted-code-line-bg: rgba(47, 194, 179, 0.16);
+}
+
+.navbar {
+  box-shadow: 0 1px 0 0 #d9e3ed;
+}
+
+[data-theme='dark'] .navbar {
+  box-shadow: 0 1px 0 0 #1d3a54;
+}
+
+.navbar__title {
+  font-weight: 700;
+  color: #0f766e;
+}
+
+[data-theme='dark'] .navbar__title {
+  color: #4dcdc0;
+}
+
+.menu__link--active,
+.menu__link:hover {
+  background-color: rgba(15, 143, 131, 0.1);
+}
+
+.table-of-contents__link--active {
+  color: var(--ifm-color-primary);
+  font-weight: 600;
+}
+
+.markdown h1,
+.markdown h2 {
+  color: #17324d;
+}
+
+[data-theme='dark'] .markdown h1,
+[data-theme='dark'] .markdown h2 {
+  color: #e7eef5;
+}
+
+.markdown h2 {
+  border-bottom: 1px solid var(--ifm-hr-border-color);
+  padding-bottom: 8px;
+}
+
+.footer {
+  --ifm-footer-background-color: #17324d;
+  --ifm-footer-color: #c9d6e3;
+  --ifm-footer-link-color: #85e0d7;
+  --ifm-footer-title-color: #ffffff;
+}
+
+.alert {
+  border-radius: var(--ifm-global-radius);
+}
+
+.badge {
+  border-radius: 999px;
 }
