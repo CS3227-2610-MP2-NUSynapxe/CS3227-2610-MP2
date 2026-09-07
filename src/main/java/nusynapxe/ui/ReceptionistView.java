@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
+import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
@@ -29,6 +30,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
+import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
@@ -1131,10 +1133,28 @@ public final class ReceptionistView {
         textColumn(
             DOCTOR_LABEL,
             appointment -> doctorDisplayName(services, session, appointment.doctorId()));
-    TableColumn<Appointment, String> status =
-        textColumn("Status", appointment -> displayStatus(appointment.status()));
-    table.getColumns().addAll(List.of(date, time, patient, doctor, status));
+    TableColumn<Appointment, AppointmentStatus> status = statusColumn("Status");
+    table.getColumns().add(date);
+    table.getColumns().add(time);
+    table.getColumns().add(patient);
+    table.getColumns().add(doctor);
+    table.getColumns().add(status);
     return table;
+  }
+
+  private static TableColumn<Appointment, AppointmentStatus> statusColumn(String title) {
+    TableColumn<Appointment, AppointmentStatus> column = new TableColumn<>(title);
+    column.setCellValueFactory(data -> new ReadOnlyObjectWrapper<>(data.getValue().status()));
+    column.setCellFactory(
+        tableColumn ->
+            new TableCell<>() {
+              @Override
+              protected void updateItem(AppointmentStatus item, boolean empty) {
+                super.updateItem(item, empty);
+                setGraphic(empty || item == null ? null : UiComponents.statusBadge(item.name()));
+              }
+            });
+    return column;
   }
 
   private static TableView<Receipt> receiptTable(String id) {

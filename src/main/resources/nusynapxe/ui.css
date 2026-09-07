@@ -274,6 +274,10 @@
     -fx-border-color: transparent transparent #e19a9a transparent;
 }
 
+.list-cell.record-status-declined {
+    -fx-border-color: transparent transparent #d99456 transparent;
+}
+
 .compact-selector {
     -fx-pref-height: 34px;
     -fx-min-height: 34px;
@@ -527,9 +531,15 @@
 }
 
 .status-cancelled,
-.status-disabled {
+.status-disabled,
+.status-inactive {
     -fx-background-color: #ffe5e5;
     -fx-text-fill: #9f2f3d;
+}
+
+.status-declined {
+    -fx-background-color: #fde3d3;
+    -fx-text-fill: #9a4a12;
 }
 
 .status-active,
@@ -843,6 +853,11 @@
     -fx-opacity: 0.78;
 }
 
+.calendar-appointment-status-declined {
+    -fx-background-color: #fbe3d0;
+    -fx-border-color: #d99456;
+}
+
 .calendar-appointment-content {
     -fx-alignment: top-left;
     -fx-max-width: infinity;
@@ -955,6 +970,10 @@
 
 .calendar-schedule-status-cancelled .calendar-schedule-status-marker {
     -fx-background-color: #b45d5d;
+}
+
+.calendar-schedule-status-declined .calendar-schedule-status-marker {
+    -fx-background-color: #d99456;
 }
 
 .calendar-schedule-past-cue {
