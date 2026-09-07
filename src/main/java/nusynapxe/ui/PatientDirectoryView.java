@@ -321,6 +321,16 @@ final class PatientDirectoryView {
         textColumn(EMAIL_LABEL, patient -> valueOrEmpty(patient.email()));
     TableColumn<Patient, String> status =
         textColumn("Status", patient -> patient.active() ? "Active" : "Inactive");
+    status.setCellFactory(
+        column ->
+            new TableCell<>() {
+              @Override
+              protected void updateItem(String value, boolean empty) {
+                super.updateItem(value, empty);
+                setText(null);
+                setGraphic(empty || value == null ? null : UiComponents.statusBadge(value));
+              }
+            });
     TableColumn<Patient, Void> actions = editColumn();
     actions.setMinWidth(108);
     actions.setPrefWidth(108);
