@@ -132,7 +132,10 @@ public final class DoctorCalendarView {
                 data,
                 clock,
                 new CalendarTimeGrid.InteractionHandlers(
-                    this::openAppointment, this::changeDecision, this::openCreateAppointment));
+                    this::openAppointment,
+                    this::changeDecision,
+                    this::openCreateAppointment,
+                    this::openTimeOff));
         root.setCenter(grid);
       } else {
         grid = null;
@@ -187,6 +190,15 @@ public final class DoctorCalendarView {
         UiComponents.primaryButton("Add appointment", "doctor-calendar-add-appointment");
     addAppointment.setAccessibleText("Add appointment to my schedule");
     addAppointment.setOnAction(event -> openCreateAppointment(null));
+    Button blockTime = UiComponents.secondaryButton("Block time", "doctor-calendar-block-time");
+    blockTime.setAccessibleText("Block time on my schedule");
+    blockTime.setOnAction(event -> openCreateTimeOff());
+    Button refreshButton = new Button("↻");
+    refreshButton.setId("doctor-calendar-refresh");
+    refreshButton.setAccessibleText("Refresh Calendar");
+    refreshButton.setTooltip(new javafx.scene.control.Tooltip("Refresh Calendar"));
+    refreshButton.getStyleClass().add("calendar-settings-button");
+    refreshButton.setOnAction(event -> refresh());
     rangeButton.setId("doctor-calendar-week-picker");
     rangeButton.setAccessibleText("Choose a Schedule start date");
     rangeButton.getStyleClass().add("calendar-range-button");
@@ -224,7 +236,9 @@ public final class DoctorCalendarView {
             toField,
             viewMode,
             addAppointment,
+            blockTime,
             spacer,
+            refreshButton,
             settings);
     toolbar.setId("doctor-calendar-toolbar");
     toolbar.getStyleClass().add("calendar-toolbar");
@@ -358,6 +372,24 @@ public final class DoctorCalendarView {
   private void openCreateAppointment(LocalDateTime initialStart) {
     AppointmentDialog.showCreate(
         services, session, session.accountId(), initialStart, feedback, this::refresh);
+  }
+
+  private void openCreateTimeOff() {
+    LocalDate today = LocalDate.now(clock);
+    List<LocalDate> visibleDates = selectedDates();
+    LocalDate date = visibleDates.contains(today) ? today : visibleDates.getFirst();
+    LocalDateTime now = LocalDateTime.now(clock);
+    int minute = date.equals(today) ? (now.getMinute() < 30 ? 0 : 30) : 0;
+    int hour = date.equals(today) ? now.getHour() : 9;
+    if (hour == 23 && minute == 30) {
+      hour = 23;
+      minute = 0;
+    }
+    TimeOffDialog.showCreate(services, session, date.atTime(hour, minute), feedback, this::refresh);
+  }
+
+  private void openTimeOff(nusynapxe.domain.DoctorTimeOff timeOff) {
+    TimeOffDialog.showDetails(services, session, timeOff, feedback, this::refresh);
   }
 
   private void openAppointment(CalendarAppointment appointment) {

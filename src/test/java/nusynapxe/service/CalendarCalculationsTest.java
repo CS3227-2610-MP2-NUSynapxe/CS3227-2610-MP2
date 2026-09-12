@@ -12,6 +12,7 @@ import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.CalendarAppointment;
 import nusynapxe.domain.CalendarTimeSegment.SegmentKind;
 import nusynapxe.domain.DoctorCalendarSettings;
+import nusynapxe.domain.DoctorTimeOff;
 import nusynapxe.domain.WorkingInterval;
 import org.junit.jupiter.api.Test;
 
@@ -64,6 +65,24 @@ final class CalendarCalculationsTest {
     assertEquals(2, secondBlock.orElseThrow().laneCount());
     assertEquals(0, overnightBlock.orElseThrow().startMinute());
     assertEquals(30, overnightBlock.orElseThrow().endMinute());
+  }
+
+  @Test
+  void clipsTimeOffAtDayBoundariesAndPreservesDuration() {
+    LocalDate day = LocalDate.of(2026, 9, 7);
+    DoctorTimeOff overnight =
+        new DoctorTimeOff(1, 7, day.minusDays(1).atTime(23, 30), day.atTime(0, 30));
+    DoctorTimeOff oneHour = new DoctorTimeOff(2, 7, day.atTime(9, 0), day.atTime(10, 0));
+    DoctorTimeOff adjacent =
+        new DoctorTimeOff(3, 7, day.plusDays(1).atStartOfDay(), day.plusDays(1).atTime(0, 30));
+
+    var blocks =
+        CalendarCalculations.timeOffBlocksForDay(day, List.of(overnight, oneHour, adjacent));
+
+    assertEquals(2, blocks.size());
+    assertEquals(0, blocks.get(0).startMinute());
+    assertEquals(30, blocks.get(0).endMinute());
+    assertEquals(60, blocks.get(1).endMinute() - blocks.get(1).startMinute());
   }
 
   private DoctorCalendarSettings settings() {

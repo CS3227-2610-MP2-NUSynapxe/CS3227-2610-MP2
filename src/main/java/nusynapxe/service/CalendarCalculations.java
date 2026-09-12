@@ -9,9 +9,11 @@ import java.util.List;
 import java.util.Objects;
 import nusynapxe.domain.CalendarAppointment;
 import nusynapxe.domain.CalendarAppointmentBlock;
+import nusynapxe.domain.CalendarTimeOffBlock;
 import nusynapxe.domain.CalendarTimeSegment;
 import nusynapxe.domain.CalendarTimeSegment.SegmentKind;
 import nusynapxe.domain.DoctorCalendarSettings;
+import nusynapxe.domain.DoctorTimeOff;
 import nusynapxe.domain.WorkingInterval;
 
 /** Pure calculations shared by the Doctor Calendar renderer and its tests. */
@@ -146,6 +148,36 @@ public final class CalendarCalculations {
               lanes.size()));
     }
     return List.copyOf(blocks);
+  }
+
+  /**
+   * Clips Doctor time off to the visible portion of one day.
+   *
+   * @param day displayed Singapore-local date
+   * @param timeOff intervals whose visible portions should be laid out
+   * @return immutable blocks ordered by start and identifier
+   */
+  public static List<CalendarTimeOffBlock> timeOffBlocksForDay(
+      LocalDate day, List<DoctorTimeOff> timeOff) {
+    Objects.requireNonNull(day, DAY_ARGUMENT);
+    Objects.requireNonNull(timeOff, "timeOff");
+    LocalDateTime dayStart = day.atStartOfDay();
+    LocalDateTime dayEnd = day.plusDays(1).atStartOfDay();
+    return timeOff.stream()
+        .filter(interval -> interval.startsAt().isBefore(dayEnd))
+        .filter(interval -> interval.endsAt().isAfter(dayStart))
+        .map(
+            interval -> {
+              int start = minuteOffset(dayStart, interval.startsAt(), 0);
+              int end = minuteOffset(dayStart, interval.endsAt(), WorkingInterval.MINUTES_PER_DAY);
+              start = Math.max(0, Math.min(start, WorkingInterval.MINUTES_PER_DAY - 1));
+              end = Math.max(start + 1, Math.min(end, WorkingInterval.MINUTES_PER_DAY));
+              return new CalendarTimeOffBlock(interval, day, start, end);
+            })
+        .sorted(
+            Comparator.comparingInt(CalendarTimeOffBlock::startMinute)
+                .thenComparingLong(block -> block.timeOff().id()))
+        .toList();
   }
 
   private static int firstAvailableLane(List<List<BlockSeed>> lanes, BlockSeed seed) {

@@ -157,7 +157,10 @@ final class ReceptionistCalendarView {
                 data,
                 clock,
                 new CalendarTimeGrid.InteractionHandlers(
-                    onAppointmentSelected, null, start -> onSlotSelected.accept(selected, start)));
+                    onAppointmentSelected,
+                    null,
+                    start -> onSlotSelected.accept(selected, start),
+                    null));
         grid.setId("reception-calendar-time-grid");
         root.setCenter(grid);
       }

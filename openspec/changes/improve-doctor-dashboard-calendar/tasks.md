@@ -8,7 +8,7 @@
 
 ## 2. Shared Timeline Presentation
 
-- [ ] 2.1 Extend shared calendar calculations to clip appointment and time-off intervals to each day while preserving duration; verify unit tests cover partial-day, range-boundary, cross-midnight, 30-minute, and 60-minute geometry.
+- [x] 2.1 Extend shared calendar calculations to clip appointment and time-off intervals to each day while preserving duration; verify unit tests cover partial-day, range-boundary, cross-midnight, 30-minute, and 60-minute geometry.
 - [ ] 2.2 Introduce explicit full-Calendar and compact-Dashboard grid profiles, retaining the full profile's existing row geometry and using minimal select-only appointment content in compact mode; verify `DoctorCalendarViewTest` keeps existing containment assertions and new tests prove compact narrow-column containment plus proportional duration.
 - [ ] 2.3 Render labelled time-off blocks above working-hours shading and below the current-time line; verify JavaFX tests cover their text, style, accessibility, selection behavior, and day-boundary clipping, and confirm declined/cancelled appointments produce no block.
 - [ ] 2.4 Add reusable timeline scrolling and empty-state behavior for current time, earliest appointment or time off, first working interval, and an otherwise empty day; verify deterministic clock-based JavaFX tests cover all four initial-scroll paths and full-day accessibility.

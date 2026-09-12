@@ -829,6 +829,45 @@
     -fx-background-color: #d2ece8;
 }
 
+.calendar-time-off-block {
+    -fx-background-color: #f2e8ff;
+    -fx-background-radius: 7px;
+    -fx-border-color: #8d6db3;
+    -fx-border-radius: 7px;
+    -fx-border-width: 1px;
+    -fx-padding: 5px 7px;
+}
+
+.calendar-time-off-block:hover {
+    -fx-background-color: #e8d9fa;
+}
+
+.calendar-time-off-title {
+    -fx-font-weight: bold;
+    -fx-text-fill: #452c63;
+}
+
+.calendar-time-off-time {
+    -fx-font-size: 11px;
+    -fx-text-fill: #604477;
+}
+
+.calendar-time-grid-compact .calendar-appointment-block,
+.calendar-time-grid-compact .calendar-time-off-block {
+    -fx-padding: 2px 4px;
+}
+
+.calendar-time-grid-compact .calendar-appointment-patient,
+.calendar-time-grid-compact .calendar-time-off-title {
+    -fx-font-size: 11px;
+}
+
+.calendar-time-grid-compact .calendar-appointment-time,
+.calendar-time-grid-compact .calendar-time-off-time,
+.calendar-time-grid-compact .calendar-appointment-status {
+    -fx-font-size: 9px;
+}
+
 .calendar-appointment-status-pending {
     -fx-background-color: #fff3d6;
     -fx-border-color: #d4ae4d;
