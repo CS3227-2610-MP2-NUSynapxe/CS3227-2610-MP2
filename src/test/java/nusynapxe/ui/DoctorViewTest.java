@@ -2,6 +2,7 @@ package nusynapxe.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.testfx.api.FxAssert.verifyThat;
 import static org.testfx.matcher.base.NodeMatchers.isVisible;
@@ -247,6 +248,62 @@ final class DoctorViewTest extends ApplicationTest {
     assertTrue(
         table.getHeight() > 304.0,
         "Patient Directory table should grow beyond its former fixed maximum height");
+  }
+
+  @Test
+  void patientSearchKeepsViewActionForEveryReturnedRow() throws SQLException {
+    PatientRepository repository = new PatientRepository(database);
+    for (int index = 0; index < 6; index++) {
+      repository.create(
+          new Patient(
+              0,
+              "Search Alpha",
+              "Patient" + index,
+              "",
+              "555-02" + String.format("%02d", index),
+              "",
+              ""));
+      repository.create(
+          new Patient(
+              0,
+              "Search Beta",
+              "Patient" + index,
+              "",
+              "555-03" + String.format("%02d", index),
+              "",
+              ""));
+    }
+
+    loginAsDoctor();
+    fire("#doctor-nav-patients");
+    setText("#doctor-patient-search", "Search Alpha Patient0");
+    fire("#doctor-patient-search-submit");
+
+    setText("#doctor-patient-search", "does-not-exist");
+    fire("#doctor-patient-search-submit");
+
+    setText("#doctor-patient-search", "Search Beta");
+    fire("#doctor-patient-search-submit");
+
+    TableView<Patient> table = patientTable();
+    assertEquals(6, table.getItems().size());
+    for (int index = 0; index < table.getItems().size(); index++) {
+      Patient patient = table.getItems().get(index);
+      var actionValue = table.getColumns().getLast().getCellObservableValue(patient);
+      assertTrue(actionValue != null, "Actions column should expose a row value");
+      assertSame(patient, actionValue.getValue(), "Actions column should retain the row patient");
+      int rowIndex = index;
+      interact(
+          () -> {
+            table.scrollTo(rowIndex);
+            table.applyCss();
+            table.layout();
+          });
+      WaitForAsyncUtils.waitForFxEvents();
+      assertTrue(
+          lookup("#doctor-patient-view-" + patient.id()).tryQuery().isPresent(),
+          "Search result row " + patient.id() + " should expose a View action");
+    }
   }
 
   @Test

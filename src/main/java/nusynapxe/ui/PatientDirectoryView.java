@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.LongConsumer;
+import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
@@ -331,7 +332,7 @@ final class PatientDirectoryView {
                 setGraphic(empty || value == null ? null : UiComponents.statusBadge(value));
               }
             });
-    TableColumn<Patient, Void> actions = editColumn();
+    TableColumn<Patient, Patient> actions = editColumn();
     actions.setMinWidth(108);
     actions.setPrefWidth(108);
     actions.setMaxWidth(108);
@@ -347,8 +348,9 @@ final class PatientDirectoryView {
     return column;
   }
 
-  private TableColumn<Patient, Void> editColumn() {
-    TableColumn<Patient, Void> actions = new TableColumn<>("Actions");
+  private TableColumn<Patient, Patient> editColumn() {
+    TableColumn<Patient, Patient> actions = new TableColumn<>("Actions");
+    actions.setCellValueFactory(data -> new ReadOnlyObjectWrapper<>(data.getValue()));
     actions.setCellFactory(
         column ->
             new TableCell<>() {
@@ -359,7 +361,7 @@ final class PatientDirectoryView {
                 view.getStyleClass().add("table-row-action");
                 view.setOnAction(
                     event -> {
-                      Patient patient = getTableRow().getItem();
+                      Patient patient = getItem();
                       if (patient != null) {
                         showPatientView(patient);
                       }
@@ -367,10 +369,10 @@ final class PatientDirectoryView {
               }
 
               @Override
-              protected void updateItem(Void value, boolean empty) {
-                super.updateItem(value, empty);
-                Patient patient = empty ? null : getTableRow().getItem();
-                if (patient == null) {
+              protected void updateItem(Patient patient, boolean empty) {
+                super.updateItem(patient, empty);
+                if (empty || patient == null) {
+                  setText(null);
                   setGraphic(null);
                 } else {
                   view.setId(prefix + "-patient-view-" + patient.id());
