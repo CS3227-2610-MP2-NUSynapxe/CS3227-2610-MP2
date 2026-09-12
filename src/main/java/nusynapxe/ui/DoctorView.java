@@ -288,9 +288,10 @@ public final class DoctorView {
     VBox scheduleCard =
         UiComponents.card(
             "doctor-schedule-card",
-            UiComponents.pageTitle("My day"),
+            UiComponents.pageTitle("Dashboard"),
             UiComponents.supportingText(
-                "Select an appointment to open its clinical context. Manage blocked time in Calendar."),
+                "Select an appointment to open its clinical context.\n"
+                    + "Manage blocked time in Calendar."),
             dashboardHolder[0].view());
     VBox consultationCard =
         UiComponents.card(

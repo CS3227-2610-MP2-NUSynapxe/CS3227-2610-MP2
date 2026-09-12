@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
@@ -61,7 +62,7 @@ final class DoctorDashboardDayView {
     this.feedback = Objects.requireNonNull(feedback, "feedback");
     this.onSelectionChanged = Objects.requireNonNull(onSelectionChanged, "onSelectionChanged");
     this.clock = Objects.requireNonNull(clock, "clock").withZone(CalendarService.CLINIC_ZONE);
-    date = new DatePicker(LocalDate.now(this.clock));
+    date = UiComponents.compactDatePicker(LocalDate.now(this.clock));
     date.setId("doctor-dashboard-date");
     date.setShowWeekNumbers(false);
     date.setAccessibleText("Dashboard date");
@@ -128,6 +129,7 @@ final class DoctorDashboardDayView {
               CalendarTimeGrid.DisplayProfile.COMPACT);
       grid.setId("doctor-dashboard-time-grid");
       root.setCenter(grid);
+      BorderPane.setMargin(grid, new Insets(12, 0, 0, 0));
       if (retained != null) {
         onSelectionChanged.accept(retained);
       }

@@ -174,11 +174,34 @@
 }
 
 .date-picker {
-    -fx-padding: 0;
+    -fx-padding: 0 8px;
+    -fx-pref-height: 34px;
+    -fx-min-height: 34px;
+    -fx-max-height: 34px;
 }
 
 .date-picker > .text-field {
-    -fx-padding: 9px 11px;
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-background-radius: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 0 8px;
+    -fx-text-fill: #17324d;
+}
+
+.date-picker > .arrow-button {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-background-radius: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 0 6px;
+}
+
+.date-picker > .arrow-button:hover {
+    -fx-background-color: #e7f2f1;
+    -fx-background-radius: 5px;
 }
 
 .text-area .content {
@@ -193,6 +216,11 @@
 .text-area:focused {
     -fx-border-color: #0f8f83;
     -fx-border-width: 2px;
+}
+
+.date-picker > .text-field:focused {
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
 }
 
 .feedback-banner {

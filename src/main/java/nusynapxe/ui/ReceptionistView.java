@@ -99,7 +99,7 @@ public final class ReceptionistView {
     Button cancel = button("Cancel selected", "reception-cancel");
     TableView<Appointment> appointmentList =
         appointmentTable("reception-appointment-list", services, session);
-    DatePicker scheduleDate = new DatePicker();
+    DatePicker scheduleDate = UiComponents.compactDatePicker();
     scheduleDate.setId("reception-schedule-date");
     scheduleDate.setPromptText("Any date");
     SearchSuggestionField<Account> scheduleDoctor =
@@ -116,7 +116,7 @@ public final class ReceptionistView {
     scheduleSummary.setId("reception-schedule-summary");
     TableView<Appointment> queueList =
         appointmentTable("reception-check-in-queue-list", services, session);
-    DatePicker queueDate = new DatePicker(LocalDate.now(SINGAPORE_ZONE));
+    DatePicker queueDate = UiComponents.compactDatePicker(LocalDate.now(SINGAPORE_ZONE));
     queueDate.setId("reception-check-in-queue-date");
     SearchSuggestionField<Account> queueDoctor =
         doctorSelector("reception-check-in-queue-doctor", ALL_DOCTORS);
@@ -129,7 +129,7 @@ public final class ReceptionistView {
     Label queueSummary = new Label();
     queueSummary.setId("reception-check-in-queue-summary");
     Button queueSearch = button("Search", "reception-check-in-queue-search");
-    DatePicker appointmentDate = new DatePicker(LocalDate.now());
+    DatePicker appointmentDate = UiComponents.compactDatePicker(LocalDate.now());
     appointmentDate.setId("reception-appointment-date");
     SearchSuggestionField<Patient> appointmentPatient =
         PatientDirectoryView.patientSearchField("reception-appointment-patient");
@@ -139,13 +139,13 @@ public final class ReceptionistView {
     boolean[] checkoutMouseSelection = {false};
     boolean[] checkoutTabActive = {false};
     TextField checkoutPatient = field("reception-checkout-patient", PATIENT_NAME_ID);
-    DatePicker checkoutDate = new DatePicker();
+    DatePicker checkoutDate = UiComponents.compactDatePicker();
     checkoutDate.setId("reception-checkout-date");
     SearchSuggestionField<Account> checkoutDoctor =
         doctorSelector("reception-checkout-doctor", ALL_DOCTORS);
     Button checkoutSearch = button("Search checkout", "reception-checkout-search");
     TextField receiptPatient = field("reception-receipt-patient", PATIENT_NAME_ID);
-    DatePicker receiptDate = new DatePicker();
+    DatePicker receiptDate = UiComponents.compactDatePicker();
     receiptDate.setId("reception-receipt-date");
     SearchSuggestionField<Account> receiptDoctor =
         doctorSelector("reception-receipt-doctor", ALL_DOCTORS);
@@ -153,9 +153,9 @@ public final class ReceptionistView {
     Button receiptSearch = button("Search receipts", "reception-receipt-search");
     Label receiptPreview = new Label();
     receiptPreview.setId("reception-receipt-preview");
-    DatePicker reportFromDate = new DatePicker(LocalDate.now(SINGAPORE_ZONE));
+    DatePicker reportFromDate = UiComponents.compactDatePicker(LocalDate.now(SINGAPORE_ZONE));
     reportFromDate.setId("reception-revenue-report-from");
-    DatePicker reportToDate = new DatePicker(LocalDate.now(SINGAPORE_ZONE));
+    DatePicker reportToDate = UiComponents.compactDatePicker(LocalDate.now(SINGAPORE_ZONE));
     reportToDate.setId("reception-revenue-report-to");
     TextField reportPatient = field("reception-revenue-report-patient", "Patient name or ID");
     SearchSuggestionField<Account> reportDoctor =

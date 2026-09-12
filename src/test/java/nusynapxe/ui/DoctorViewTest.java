@@ -18,10 +18,12 @@ import java.util.concurrent.TimeoutException;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
+import javafx.scene.control.Label;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextInputControl;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import nusynapxe.domain.Account;
@@ -123,8 +125,18 @@ final class DoctorViewTest extends ApplicationTest {
     verifyThat("#doctor-dashboard-day-calendar", isVisible());
     assertTrue(lookup("#doctor-appointment-list").tryQuery().isEmpty());
     assertTrue(lookup("#doctor-timeoff-submit").tryQuery().isEmpty());
+    DatePicker dashboardDate = lookup("#doctor-dashboard-date").queryAs(DatePicker.class);
+    assertEquals(appointmentDate, dashboardDate.getValue());
+    assertTrue(dashboardDate.getStyleClass().contains("compact-date-picker"));
     assertEquals(
-        appointmentDate, lookup("#doctor-dashboard-date").queryAs(DatePicker.class).getValue());
+        "Dashboard", lookup("#doctor-schedule-card .page-title").queryAs(Label.class).getText());
+    Label dashboardHelp = lookup("#doctor-schedule-card .supporting-text").queryAs(Label.class);
+    assertTrue(dashboardHelp.isWrapText());
+    assertTrue(dashboardHelp.getText().contains("\nManage blocked time in Calendar."));
+    assertEquals(
+        12.0,
+        BorderPane.getMargin(lookup("#doctor-dashboard-time-grid").query()).getTop(),
+        0.1);
     selectDashboardAppointment(1);
     verifyThat("#doctor-selected-appointment", isVisible());
 

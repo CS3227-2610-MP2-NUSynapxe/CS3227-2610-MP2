@@ -120,6 +120,8 @@ final class DoctorCalendarViewTest extends ApplicationTest {
     assertFalse(lookup("#doctor-calendar-next").queryAs(Button.class).isVisible());
     DatePicker from = lookup("#doctor-calendar-from").queryAs(DatePicker.class);
     DatePicker to = lookup("#doctor-calendar-to").queryAs(DatePicker.class);
+    assertTrue(from.getStyleClass().contains("compact-date-picker"));
+    assertTrue(to.getStyleClass().contains("compact-date-picker"));
     assertEquals(today(), from.getValue());
     assertEquals(today().plusDays(6), to.getValue());
     interact(
@@ -178,6 +180,11 @@ final class DoctorCalendarViewTest extends ApplicationTest {
     assertEquals(
         selectedDate,
         lookup("#doctor-calendar-time-off-dialog-date").queryAs(DatePicker.class).getValue());
+    assertTrue(
+        lookup("#doctor-calendar-time-off-dialog-date")
+            .queryAs(DatePicker.class)
+            .getStyleClass()
+            .contains("compact-date-picker"));
     selectCombo("#doctor-calendar-time-off-dialog-start-hour", "10");
     selectCombo("#doctor-calendar-time-off-dialog-start-minute", "00");
     selectCombo("#doctor-calendar-time-off-dialog-end-hour", "11");

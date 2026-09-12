@@ -90,10 +90,10 @@ public final class DoctorCalendarView {
     previous = UiComponents.secondaryButton("‹", "doctor-calendar-previous");
     next = UiComponents.secondaryButton("›", "doctor-calendar-next");
     rangeButton = new Button();
-    from = new DatePicker(today);
+    from = UiComponents.compactDatePicker(today);
     from.setId("doctor-calendar-from");
     from.setShowWeekNumbers(false);
-    to = new DatePicker(today.plusDays(6));
+    to = UiComponents.compactDatePicker(today.plusDays(6));
     to.setId("doctor-calendar-to");
     to.setShowWeekNumbers(false);
     fromField = UiComponents.fieldGroup("From", from);

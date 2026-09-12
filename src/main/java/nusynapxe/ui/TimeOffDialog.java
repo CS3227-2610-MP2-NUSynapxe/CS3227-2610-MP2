@@ -37,7 +37,7 @@ final class TimeOffDialog {
       Label workspaceFeedback,
       Runnable onUpdated) {
     Objects.requireNonNull(initialStart, "initialStart");
-    DatePicker date = new DatePicker(initialStart.toLocalDate());
+    DatePicker date = UiComponents.compactDatePicker(initialStart.toLocalDate());
     date.setId(PREFIX + "-date");
     AppointmentDialog.TimeFields start = AppointmentDialog.timeSelector(PREFIX + "-start");
     AppointmentDialog.TimeFields end = AppointmentDialog.timeSelector(PREFIX + "-end");

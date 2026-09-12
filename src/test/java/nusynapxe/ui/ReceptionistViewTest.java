@@ -251,6 +251,27 @@ final class ReceptionistViewTest extends ApplicationTest {
   }
 
   @Test
+  void everyReceptionDatePickerUsesTheSharedMinimalStyle() {
+    loginAsReceptionist();
+    String[] selectors = {
+      "#reception-schedule-date",
+      "#reception-appointment-date",
+      "#reception-calendar-from",
+      "#reception-calendar-to",
+      "#reception-check-in-queue-date",
+      "#reception-checkout-date",
+      "#reception-receipt-date",
+      "#reception-revenue-report-from",
+      "#reception-revenue-report-to"
+    };
+    for (String selector : selectors) {
+      assertTrue(
+          lookup(selector).queryAs(DatePicker.class).getStyleClass().contains("compact-date-picker"),
+          "Expected minimal date-picker style for " + selector);
+    }
+  }
+
+  @Test
   void checkoutAndReceiptFiltersShowSelectedDatesAtUniformWidths() {
     loginAsReceptionist();
     selectWorkspaceTab(4);

@@ -75,10 +75,10 @@ final class ReceptionistCalendarView {
             account -> account.displayName() + " " + account.username());
     LocalDate today = LocalDate.now(clock);
     scheduleAnchor = CalendarScheduleCalculations.today(clock);
-    from = new DatePicker(today);
+    from = UiComponents.compactDatePicker(today);
     from.setId("reception-calendar-from");
     from.setShowWeekNumbers(false);
-    to = new DatePicker(today.plusDays(6));
+    to = UiComponents.compactDatePicker(today.plusDays(6));
     to.setId("reception-calendar-to");
     to.setShowWeekNumbers(false);
     fromField = UiComponents.fieldGroup("From", from);
