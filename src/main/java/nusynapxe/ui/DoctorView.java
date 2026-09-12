@@ -289,9 +289,7 @@ public final class DoctorView {
         UiComponents.card(
             "doctor-schedule-card",
             UiComponents.pageTitle("Dashboard"),
-            UiComponents.supportingText(
-                "Select an appointment to open its clinical context.\n"
-                    + "Manage blocked time in Calendar."),
+            UiComponents.supportingText("Select an appointment to open its clinical context."),
             dashboardHolder[0].view());
     VBox consultationCard =
         UiComponents.card(
@@ -345,6 +343,7 @@ public final class DoctorView {
     ScrollPane patientsPage = new ScrollPane(patientDirectory.view());
     patientsPage.setId("doctor-patients-page");
     patientsPage.setFitToWidth(true);
+    patientsPage.setFitToHeight(true);
 
     StackPane pages = new StackPane(masterDetail);
     pages.setId("doctor-page-content");

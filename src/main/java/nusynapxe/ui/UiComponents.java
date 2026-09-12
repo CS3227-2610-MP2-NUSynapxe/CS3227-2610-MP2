@@ -84,7 +84,7 @@ final class UiComponents {
     label.getStyleClass().add("field-label");
     if (control != null) {
       label.setLabelFor(control);
-      if (control instanceof Region region) {
+      if (control instanceof Region region && !(control instanceof DatePicker)) {
         region.setMaxWidth(Double.MAX_VALUE);
       }
     }

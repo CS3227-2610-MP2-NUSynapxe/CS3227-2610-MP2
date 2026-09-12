@@ -448,8 +448,28 @@
     -fx-max-width: infinity;
 }
 
+.date-picker.compact-date-picker {
+    -fx-min-width: 132px;
+    -fx-pref-width: 150px;
+    -fx-max-width: 170px;
+}
+
 .search-suggestion-field > .text-field {
     -fx-pref-height: 38px;
+}
+
+.patient-directory-page {
+    -fx-max-height: infinity;
+}
+
+.patient-directory-search-bar {
+    -fx-alignment: center-left;
+    -fx-max-width: infinity;
+}
+
+.patient-directory-search-bar > .text-field {
+    -fx-pref-width: 420px;
+    -fx-max-width: infinity;
 }
 
 .search-suggestions {

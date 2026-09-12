@@ -108,17 +108,17 @@ final class PatientDirectoryView {
           refresh();
         });
 
+    patientSearch.setPrefWidth(420);
+    patientSearch.setMaxWidth(Double.MAX_VALUE);
+    HBox.setHgrow(patientSearch, Priority.ALWAYS);
     HBox patientSearchBar = new HBox(8, patientSearch, searchPatients, clearPatientSearch);
+    patientSearchBar.setId(prefix + "-patient-search-bar");
+    patientSearchBar.getStyleClass().add("patient-directory-search-bar");
     Button openRegistration = button("Register new patient", prefix + "-patient-open-register");
-    VBox directoryCard =
-        UiComponents.card(
-            prefix + "-patient-directory-card",
-            UiComponents.sectionHeading("Patient results"),
-            patientSearchBar,
-            patientTable,
-            UiComponents.actionBar(openRegistration));
-    directoryContent = new VBox(10, directoryCard);
+    directoryContent =
+        new VBox(10, patientSearchBar, patientTable, UiComponents.actionBar(openRegistration));
     directoryContent.setId(prefix + "-patient-directory-view");
+    directoryContent.setMaxHeight(Double.MAX_VALUE);
     VBox.setVgrow(patientTable, Priority.ALWAYS);
 
     Button cancelRegistration = button("Cancel", prefix + "-patient-register-cancel");
@@ -152,15 +152,15 @@ final class PatientDirectoryView {
     StackPane patientContent =
         new StackPane(directoryContent, registrationContent, viewingContent, editingContent);
     patientContent.setId(prefix + "-patient-content");
-    pageTitle = UiComponents.pageTitle("Patient directory");
-    root =
-        new VBox(
-            12,
-            pageTitle,
-            UiComponents.supportingText(
-                "Search by name, NRIC/FIN, phone number, or email address."),
-            patientContent);
+    pageTitle = UiComponents.pageTitle("Patient Directory");
+    VBox directoryCard =
+        UiComponents.card(prefix + "-patient-directory-card", pageTitle, patientContent);
+    directoryCard.getStyleClass().add("patient-directory-page");
+    VBox.setVgrow(patientContent, Priority.ALWAYS);
+    root = new VBox(directoryCard);
     root.setId(prefix + "-patient-directory");
+    root.setMaxHeight(Double.MAX_VALUE);
+    VBox.setVgrow(directoryCard, Priority.ALWAYS);
     showDirectory();
   }
 
@@ -183,7 +183,7 @@ final class PatientDirectoryView {
   }
 
   private void showDirectory() {
-    pageTitle.setText("Patient directory");
+    pageTitle.setText("Patient Directory");
     directoryContent.setManaged(true);
     directoryContent.setVisible(true);
     registrationContent.setManaged(false);

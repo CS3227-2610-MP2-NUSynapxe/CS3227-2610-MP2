@@ -681,7 +681,9 @@ public final class ReceptionistView {
     HBox header =
         UiComponents.workspaceHeader("RECEPTIONIST workspace", session.username(), logout);
 
-    VBox patientContent = new VBox(12, patientDirectory.view());
+    Parent patientDirectoryPage = patientDirectory.view();
+    VBox patientContent = new VBox(12, patientDirectoryPage);
+    VBox.setVgrow(patientDirectoryPage, Priority.ALWAYS);
     GridPane appointmentForm = new GridPane();
     appointmentForm.getStyleClass().add("appointment-form-grid");
     appointmentForm.setHgap(16);
@@ -1085,6 +1087,7 @@ public final class ReceptionistView {
   private static Tab featureTab(String title, VBox content) {
     ScrollPane scroll = new ScrollPane(content);
     scroll.setFitToWidth(true);
+    scroll.setFitToHeight(true);
     Tab tab = new Tab(title, scroll);
     tab.setClosable(false);
     return tab;
