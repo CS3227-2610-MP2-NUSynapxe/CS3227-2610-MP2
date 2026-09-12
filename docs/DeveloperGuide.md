@@ -49,8 +49,8 @@ existing database. Seeding only accepts an empty database, while
 `seed-demo-data.ps1 -Reset` explicitly replaces the target before seeding. The
 reset operation removes only the SQLite file and its adjacent `-wal`, `-shm`,
 and `-journal` files, then reinitializes the current schema. The generated data
-is time-relative to the Singapore clinic date so the current-week Calendar and
-future Schedule views remain useful during a local demonstration.
+is time-relative to the Singapore clinic date so the current Calendar range and
+future Agenda views remain useful during a local demonstration.
 
 ## Package layout and boundaries
 
@@ -248,16 +248,16 @@ non-clinical time-off projection after their role and ownership checks.
 Calendar preferences are
 owned by the authenticated Doctor and are persisted transactionally. The
 fixed clinic zone is `Asia/Singapore`; it is shown as informational text and
-is not configurable or stored as a preference. Schedule mode uses the same
+is not configurable or stored as a preference. Agenda mode uses the same
 administrative projection through `CalendarService.getSchedulePage`: it takes
-an inclusive Singapore-local date, a bounded page size, and an optional
+an inclusive Singapore-local start date, a bounded page size, and an optional
 `CalendarScheduleCursor` containing `(startsAt, appointmentId)`. The repository
 orders by `starts_at, id` and reads one look-ahead row to derive `hasMore`, so
 equal timestamps cannot cause skips or duplicates. `CalendarScheduleList` is a
 virtualized, append-only JavaFX list; it groups each page by start date and
 does not add a duplicate date header when a page boundary splits a group.
-Schedule navigation clears the cursor and list, while a failed later page
-keeps prior rows and exposes Retry. Schedule working-hour and break shading is
+Agenda navigation clears the cursor and list, while a failed later page
+keeps prior rows and exposes Retry. Agenda working-hour and break shading is
 intentionally confined to the weekly grid; it never blocks appointment writes.
 
 `CalendarTimeGrid` shares day clipping, working-hour shading, current-time
@@ -344,10 +344,12 @@ control. Important ids include `login-submit`, `setup-submit`,
 
 Doctor navigation adds `doctor-nav-calendar`. The Calendar page uses
 `doctor-calendar-today`, `doctor-calendar-previous`, `doctor-calendar-next`,
-`doctor-calendar-week-picker`, `doctor-calendar-view-mode`, and
-`doctor-calendar-settings`. Its custom picker exposes
-`doctor-calendar-week-picker-popup`, month/week controls, and
-keyboard-accessible labels. Schedule mode uses
+`doctor-calendar-schedule-date`, `doctor-calendar-view-mode`, and
+`doctor-calendar-settings`. The view mode values are `Calendar` and `Agenda`;
+Agenda's date picker is a shared compact `DatePicker` and has no custom popup
+identifier. The responsive toolbar exposes
+`doctor-calendar-toolbar-main`, `doctor-calendar-toolbar-actions`, and
+`doctor-calendar-action-group`. Agenda mode uses
 `doctor-calendar-schedule-list`, `doctor-calendar-schedule-date-<date>`,
 `doctor-calendar-schedule-appointment-<id>`, and explicit
 `doctor-calendar-schedule-loading`, `doctor-calendar-schedule-empty`,

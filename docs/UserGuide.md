@@ -274,26 +274,29 @@ opening a feature tab reloads information that another workflow may have changed
    there using the same administrative fields as Receptionists. The directory
    includes inactive patients and contains no diagnosis, consultation,
    follow-up, prescription, or other clinical controls. Return to **Dashboard**
-   to resume appointment and clinical work.
+   to resume appointment and clinical work. The results card fills the page and
+   its table expands to use the available vertical space.
 3. Select **Calendar** to open the full time-grid view of your assigned
    appointments and explicitly blocked time. Use **Today** or the inclusive
    **From** and **To** date pickers to change the displayed range. The refresh
    icon reloads the current range without changing it.
-4. Use the compact **Week** / **Schedule** selector to switch views. **Week**
-   keeps the seven-day time grid. **Schedule** starts at today's Singapore
-   clinic date and loads all later appointments in chronological pages as you
-   scroll, without stopping at the selected week. It groups rows by date and
-   shows the time range, Patient ID/name, and a written appointment status.
+4. Use the compact **Calendar** / **Agenda** selector to switch views.
+   **Calendar** keeps the configurable date-range time grid. **Agenda** starts
+   at its selected inclusive Singapore clinic date and loads all later
+   appointments in chronological pages as you scroll. It groups rows by date
+   and shows the time range, Patient ID/name, and a written appointment status.
    Cancelled rows remain visible but are muted, while a **Past** cue identifies
-   elapsed appointments. Today, previous/next, and the custom picker re-anchor
-   the Schedule stream; its range button shows the selected anchor month and
-   year. Empty schedules, the end of the stream, and retryable loading failures
-   have their own messages. Schedule rows are read-only and never show
-   diagnoses, consultation notes, follow-up notes, prescriptions, locations,
-   or invented all-day events.
+   elapsed appointments. In Agenda, the compact date picker sits between the
+   previous/next arrows; those arrows move one day at a time, while **Today**
+   and the refresh icon return to or reload the same anchor date. Empty
+   schedules, the end of the stream, and retryable loading failures have their
+   own messages. Agenda rows are read-only and never show diagnoses,
+   consultation notes, follow-up notes, prescriptions, locations, or invented
+   all-day events. At narrow window widths, **Add appointment** and **Block
+   time** move together onto a second toolbar row.
 5. Calendar greys dates and periods that have elapsed, disabled days, and time
    outside the configured working intervals. A red current-time line appears
-   on the current date when that date is in the displayed week. Appointments
+   on the current date when that date is in the displayed Calendar range. Appointments
    remain visible even when they fall outside working hours. Purple **Blocked
    time** cards show unavailable intervals at their actual start, end, and
    proportional duration; Receptionists can see these blocks but cannot remove
