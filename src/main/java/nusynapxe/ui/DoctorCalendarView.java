@@ -4,10 +4,8 @@ import java.sql.SQLException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
@@ -26,8 +24,6 @@ import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.CalendarAppointment;
-import nusynapxe.domain.CalendarWeek;
-import nusynapxe.domain.DoctorCalendarSettings;
 import nusynapxe.domain.DoctorCalendarWeek;
 import nusynapxe.domain.Session;
 import nusynapxe.service.AuthorizationException;
@@ -36,13 +32,11 @@ import nusynapxe.service.CalendarService;
 import nusynapxe.service.ClinicServices;
 import nusynapxe.service.ValidationException;
 
-/** Builds and manages the Calendar and Schedule views for a Doctor. */
+/** Builds and manages the Calendar and Agenda views for a Doctor. */
 public final class DoctorCalendarView {
-  private static final String WEEK_MODE = "Week";
-  private static final String SCHEDULE_MODE = "Schedule";
+  private static final String CALENDAR_MODE = "Calendar";
+  private static final String AGENDA_MODE = "Agenda";
   private static final long MAX_RANGE_DAYS = 31;
-  private static final DateTimeFormatter SCHEDULE_LABEL_FORMATTER =
-      DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH);
   private final ClinicServices services;
   private final Session session;
   private final Runnable onSettings;
@@ -51,14 +45,19 @@ public final class DoctorCalendarView {
   private final BorderPane root;
   private final Button previous;
   private final Button next;
-  private final Button rangeButton;
+  private final DatePicker scheduleDate;
   private final DatePicker from;
   private final DatePicker to;
   private final VBox fromField;
   private final VBox toField;
   private final ComboBox<String> viewMode;
   private final Timeline currentTimeTicker;
-  private final CalendarWeekPicker weekPicker;
+  private VBox toolbar;
+  private HBox toolbarNavigationGroup;
+  private HBox toolbarActionGroup;
+  private HBox toolbarTrailingGroup;
+  private HBox toolbarMainRow;
+  private HBox toolbarActionsRow;
   private LocalDate scheduleAnchor;
   private CalendarTimeGrid grid;
   private CalendarScheduleList scheduleList;
@@ -89,7 +88,9 @@ public final class DoctorCalendarView {
     scheduleAnchor = CalendarScheduleCalculations.today(this.clock);
     previous = UiComponents.secondaryButton("‹", "doctor-calendar-previous");
     next = UiComponents.secondaryButton("›", "doctor-calendar-next");
-    rangeButton = new Button();
+    scheduleDate = UiComponents.compactDatePicker(scheduleAnchor);
+    scheduleDate.setId("doctor-calendar-schedule-date");
+    scheduleDate.setShowWeekNumbers(false);
     from = UiComponents.compactDatePicker(today);
     from.setId("doctor-calendar-from");
     from.setShowWeekNumbers(false);
@@ -99,7 +100,6 @@ public final class DoctorCalendarView {
     fromField = UiComponents.fieldGroup("From", from);
     toField = UiComponents.fieldGroup("To", to);
     viewMode = UiComponents.compactSelector();
-    weekPicker = new CalendarWeekPicker(this::selectDate, this.clock);
     root = buildRoot();
     currentTimeTicker =
         new Timeline(new KeyFrame(Duration.minutes(1), event -> updateCurrentTime()));
@@ -121,7 +121,7 @@ public final class DoctorCalendarView {
   @SuppressWarnings("PMD.NullAssignment")
   public void refresh() {
     try {
-      if (isWeekMode()) {
+      if (isCalendarMode()) {
         disposeScheduleList();
         List<LocalDate> dates = selectedDates();
         DoctorCalendarWeek data =
@@ -145,7 +145,7 @@ public final class DoctorCalendarView {
                 services, session, scheduleAnchor, clock, this::openAppointment);
         root.setCenter(scheduleList);
       }
-      updateRangeLabel();
+      scheduleDate.setValue(scheduleAnchor);
       if (shown) {
         currentTimeTicker.play();
       }
@@ -166,7 +166,6 @@ public final class DoctorCalendarView {
   public void hide() {
     shown = false;
     currentTimeTicker.pause();
-    weekPicker.hide();
     disposeScheduleList();
   }
 
@@ -174,7 +173,6 @@ public final class DoctorCalendarView {
   public void dispose() {
     shown = false;
     currentTimeTicker.stop();
-    weekPicker.hide();
     disposeScheduleList();
   }
 
@@ -199,19 +197,17 @@ public final class DoctorCalendarView {
     refreshButton.setTooltip(new javafx.scene.control.Tooltip("Refresh Calendar"));
     refreshButton.getStyleClass().add("calendar-settings-button");
     refreshButton.setOnAction(event -> refresh());
-    rangeButton.setId("doctor-calendar-week-picker");
-    rangeButton.setAccessibleText("Choose a Schedule start date");
-    rangeButton.getStyleClass().add("calendar-range-button");
-    rangeButton.setOnAction(event -> weekPicker.show(rangeButton, pickerWeek()));
+    scheduleDate.setAccessibleText("Choose Agenda start date");
+    scheduleDate.setOnAction(event -> selectDate(scheduleDate.getValue()));
     from.setOnAction(event -> refresh());
     to.setOnAction(event -> refresh());
     fromField.setPrefWidth(190);
     toField.setPrefWidth(190);
     viewMode.setId("doctor-calendar-view-mode");
     viewMode.setAccessibleText("Choose Calendar view");
-    viewMode.getItems().addAll(WEEK_MODE, SCHEDULE_MODE);
+    viewMode.getItems().addAll(CALENDAR_MODE, AGENDA_MODE);
     viewMode.setEditable(false);
-    viewMode.setValue(WEEK_MODE);
+    viewMode.setValue(CALENDAR_MODE);
     viewMode.setOnAction(event -> changeMode(viewMode.getValue()));
     Button settings = new Button("⚙");
     settings.setId("doctor-calendar-settings");
@@ -223,26 +219,28 @@ public final class DoctorCalendarView {
           hide();
           onSettings.run();
         });
+    toolbarNavigationGroup = new HBox(8, today, previous, scheduleDate, next, fromField, toField, viewMode);
+    toolbarNavigationGroup.setAlignment(Pos.BOTTOM_LEFT);
+    toolbarNavigationGroup.getStyleClass().add("calendar-toolbar-group");
+    toolbarActionGroup = new HBox(8, addAppointment, blockTime);
+    toolbarActionGroup.setId("doctor-calendar-action-group");
+    toolbarActionGroup.setAlignment(Pos.BOTTOM_LEFT);
+    toolbarActionGroup.getStyleClass().add("calendar-toolbar-actions");
+    toolbarTrailingGroup = new HBox(8, refreshButton, settings);
+    toolbarTrailingGroup.setAlignment(Pos.BOTTOM_LEFT);
+    toolbarTrailingGroup.getStyleClass().add("calendar-toolbar-group");
     Region spacer = new Region();
     HBox.setHgrow(spacer, Priority.ALWAYS);
-    HBox toolbar =
-        new HBox(
-            8,
-            today,
-            previous,
-            next,
-            rangeButton,
-            fromField,
-            toField,
-            viewMode,
-            addAppointment,
-            blockTime,
-            spacer,
-            refreshButton,
-            settings);
+    toolbarMainRow = new HBox(8, toolbarNavigationGroup, toolbarActionGroup, spacer, toolbarTrailingGroup);
+    toolbarMainRow.setId("doctor-calendar-toolbar-main");
+    toolbarMainRow.setAlignment(Pos.BOTTOM_LEFT);
+    toolbarActionsRow = new HBox(8);
+    toolbarActionsRow.setId("doctor-calendar-toolbar-actions");
+    toolbarActionsRow.setAlignment(Pos.BOTTOM_LEFT);
+    toolbar = new VBox(8, toolbarMainRow);
     toolbar.setId("doctor-calendar-toolbar");
     toolbar.getStyleClass().add("calendar-toolbar");
-    toolbar.setAlignment(Pos.BOTTOM_LEFT);
+    toolbar.widthProperty().addListener((observable, oldWidth, newWidth) -> updateToolbarLayout());
     Label title = UiComponents.pageTitle("Calendar");
     Label supporting =
         UiComponents.supportingText(
@@ -254,12 +252,14 @@ public final class DoctorCalendarView {
     page.getStyleClass().add("calendar-page");
     page.setPadding(new Insets(4, 0, 0, 0));
     page.setTop(heading);
+    updateToolbarLayout();
     return page;
   }
 
   private void goToToday() {
-    if (isScheduleMode()) {
+    if (isAgendaMode()) {
       scheduleAnchor = CalendarScheduleCalculations.today(clock);
+      scheduleDate.setValue(scheduleAnchor);
     } else {
       LocalDate current = LocalDate.now(clock);
       from.setValue(current);
@@ -270,16 +270,23 @@ public final class DoctorCalendarView {
 
   private void goToPrevious() {
     scheduleAnchor = CalendarScheduleCalculations.moveAnchor(scheduleAnchor, -1);
+    scheduleDate.setValue(scheduleAnchor);
     refresh();
   }
 
   private void goToNext() {
     scheduleAnchor = CalendarScheduleCalculations.moveAnchor(scheduleAnchor, 1);
+    scheduleDate.setValue(scheduleAnchor);
     refresh();
   }
 
   private void selectDate(LocalDate date) {
-    scheduleAnchor = Objects.requireNonNull(date, "date");
+    if (date == null) {
+      scheduleDate.setValue(scheduleAnchor);
+      return;
+    }
+    scheduleAnchor = date;
+    scheduleDate.setValue(scheduleAnchor);
     refresh();
   }
 
@@ -287,42 +294,31 @@ public final class DoctorCalendarView {
     if (selectedMode == null) {
       return;
     }
-    weekPicker.hide();
     applyModeVisibility();
     refresh();
   }
 
   private void applyModeVisibility() {
-    boolean scheduleMode = isScheduleMode();
-    previous.setVisible(scheduleMode);
-    previous.setManaged(scheduleMode);
-    next.setVisible(scheduleMode);
-    next.setManaged(scheduleMode);
-    rangeButton.setVisible(scheduleMode);
-    rangeButton.setManaged(scheduleMode);
-    fromField.setVisible(!scheduleMode);
-    fromField.setManaged(!scheduleMode);
-    toField.setVisible(!scheduleMode);
-    toField.setManaged(!scheduleMode);
+    boolean agendaMode = isAgendaMode();
+    previous.setVisible(agendaMode);
+    previous.setManaged(agendaMode);
+    next.setVisible(agendaMode);
+    next.setManaged(agendaMode);
+    scheduleDate.setVisible(agendaMode);
+    scheduleDate.setManaged(agendaMode);
+    fromField.setVisible(!agendaMode);
+    fromField.setManaged(!agendaMode);
+    toField.setVisible(!agendaMode);
+    toField.setManaged(!agendaMode);
+    updateToolbarLayout();
   }
 
-  private boolean isWeekMode() {
-    return WEEK_MODE.equals(viewMode.getValue());
+  private boolean isCalendarMode() {
+    return CALENDAR_MODE.equals(viewMode.getValue());
   }
 
-  private boolean isScheduleMode() {
-    return SCHEDULE_MODE.equals(viewMode.getValue());
-  }
-
-  private CalendarWeek pickerWeek() {
-    return CalendarWeek.containing(scheduleAnchor, currentSettings().firstDayOfWeek());
-  }
-
-  private void updateRangeLabel() {
-    if (isScheduleMode()) {
-      rangeButton.setText(SCHEDULE_LABEL_FORMATTER.format(scheduleAnchor));
-      rangeButton.setAccessibleText("Choose a Schedule start date");
-    }
+  private boolean isAgendaMode() {
+    return AGENDA_MODE.equals(viewMode.getValue());
   }
 
   private List<LocalDate> selectedDates() {
@@ -341,21 +337,37 @@ public final class DoctorCalendarView {
     return start.datesUntil(end.plusDays(1)).toList();
   }
 
+  private void updateToolbarLayout() {
+    if (toolbar == null) {
+      return;
+    }
+    double availableWidth = toolbar.getWidth();
+    double requiredWidth =
+        toolbarNavigationGroup.prefWidth(-1)
+            + toolbarActionGroup.prefWidth(-1)
+            + toolbarTrailingGroup.prefWidth(-1)
+            + toolbarMainRow.getSpacing() * 3;
+    boolean shouldWrap = availableWidth > 0 && availableWidth + 0.5 < requiredWidth;
+    boolean isWrapped = toolbarActionsRow.getChildren().contains(toolbarActionGroup);
+    if (shouldWrap == isWrapped) {
+      return;
+    }
+    if (shouldWrap) {
+      toolbarMainRow.getChildren().remove(toolbarActionGroup);
+      toolbarActionsRow.getChildren().setAll(toolbarActionGroup);
+      toolbar.getChildren().setAll(toolbarMainRow, toolbarActionsRow);
+    } else {
+      toolbarActionsRow.getChildren().clear();
+      toolbarMainRow.getChildren().add(1, toolbarActionGroup);
+      toolbar.getChildren().setAll(toolbarMainRow);
+    }
+  }
+
   @SuppressWarnings("PMD.NullAssignment")
   private void disposeScheduleList() {
     if (scheduleList != null) {
       scheduleList.dispose();
       scheduleList = null;
-    }
-  }
-
-  private DoctorCalendarSettings currentSettings() {
-    try {
-      return services.calendarService().getSettings(session);
-    } catch (SQLException | AuthorizationException | ValidationException exception) {
-      UiComponents.showError(
-          feedback, userMessage(exception, "Calendar settings are temporarily unavailable"));
-      return DoctorCalendarSettings.defaults(session.accountId());
     }
   }
 

@@ -39,17 +39,17 @@ public final class CalendarScheduleCalculations {
   }
 
   /**
-   * Moves a schedule anchor by a whole number of seven-day periods.
+   * Moves a schedule anchor by a number of days.
    *
    * @param anchor starting schedule date
-   * @param weekDelta number of weeks to move, positive or negative
+   * @param dayDelta number of days to move, positive or negative
    * @return moved schedule date
    * @throws NullPointerException if {@code anchor} is {@code null}
    * @throws ArithmeticException if the day offset overflows
    */
-  public static LocalDate moveAnchor(LocalDate anchor, int weekDelta) {
+  public static LocalDate moveAnchor(LocalDate anchor, int dayDelta) {
     Objects.requireNonNull(anchor, "anchor");
-    return anchor.plusDays(Math.multiplyExact((long) weekDelta, 7L));
+    return anchor.plusDays(dayDelta);
   }
 
   /**

@@ -13,9 +13,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import javafx.geometry.Bounds;
@@ -31,6 +29,8 @@ import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
@@ -115,7 +115,7 @@ final class DoctorCalendarViewTest extends ApplicationTest {
     assertTrue(
         lookup("#doctor-calendar-current-time-line-" + today()).queryAs(Region.class).isVisible());
 
-    assertFalse(lookup("#doctor-calendar-week-picker").queryAs(Button.class).isVisible());
+    assertFalse(lookup("#doctor-calendar-schedule-date").queryAs(DatePicker.class).isVisible());
     assertFalse(lookup("#doctor-calendar-previous").queryAs(Button.class).isVisible());
     assertFalse(lookup("#doctor-calendar-next").queryAs(Button.class).isVisible());
     DatePicker from = lookup("#doctor-calendar-from").queryAs(DatePicker.class);
@@ -536,21 +536,21 @@ final class DoctorCalendarViewTest extends ApplicationTest {
   }
 
   @Test
-  void switchesToChronologicalLazyScheduleAndReanchors() throws SQLException {
+  void switchesToAgendaAndNavigatesByOneDayAnchor() throws SQLException {
     loginAsDoctor();
     fire("#doctor-nav-calendar");
     waitForNode("#doctor-calendar-page");
 
     ComboBox<String> mode = calendarMode();
-    assertEquals("Week", mode.getValue());
+    assertEquals("Calendar", mode.getValue());
     assertEquals("Choose Calendar view", mode.getAccessibleText());
-    interact(() -> mode.setValue("Schedule"));
+    interact(() -> mode.setValue("Agenda"));
     WaitForAsyncUtils.waitForFxEvents();
 
     waitForNode("#doctor-calendar-schedule-list");
-    assertEquals(
-        today().format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy")),
-        lookup("#doctor-calendar-week-picker").queryAs(Button.class).getText());
+    DatePicker anchor = lookup("#doctor-calendar-schedule-date").queryAs(DatePicker.class);
+    assertEquals(today(), anchor.getValue());
+    assertEquals("Choose Agenda start date", anchor.getAccessibleText());
     ListView<?> schedule = scheduleList();
     assertEquals(46, schedule.getItems().size());
     assertTrue(lookup("#doctor-calendar-schedule-date-" + today()).tryQuery().isPresent());
@@ -601,32 +601,28 @@ final class DoctorCalendarViewTest extends ApplicationTest {
 
     int loadedScheduleEntryCount = scheduleList().getItems().size();
     fire("#doctor-calendar-next");
+    assertEquals(today().plusDays(1), anchor.getValue());
     assertEquals(50, scheduleList().getItems().size());
     assertNotEquals(loadedScheduleEntryCount, scheduleList().getItems().size());
     fire("#doctor-calendar-previous");
+    assertEquals(today(), anchor.getValue());
     assertEquals(46, scheduleList().getItems().size());
     fire("#doctor-calendar-today");
+    assertEquals(today(), anchor.getValue());
     assertEquals(46, scheduleList().getItems().size());
 
-    fire("#doctor-calendar-week-picker");
-    waitForNode("#doctor-calendar-week-picker-popup");
-    verifyThat("#doctor-calendar-picker-month-grid", isVisible());
     LocalDate targetDate = today().plusDays(8);
-    String targetMonth =
-        targetDate.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH));
-    for (int index = 0;
-        index < 12
-            && !targetMonth.equals(
-                lookup("#doctor-calendar-picker-month-label").queryAs(Label.class).getText());
-        index++) {
-      fire("#doctor-calendar-picker-next-month");
-    }
-    fire("#doctor-calendar-picker-date-" + targetDate);
+    interact(
+        () -> {
+          anchor.setValue(targetDate);
+          anchor.getOnAction().handle(new javafx.event.ActionEvent());
+        });
+    WaitForAsyncUtils.waitForFxEvents();
     assertEquals(50, scheduleList().getItems().size());
     assertTrue(lookup("#doctor-calendar-schedule-date-" + targetDate).tryQuery().isPresent());
     fire("#doctor-calendar-today");
 
-    interact(() -> mode.setValue("Week"));
+    interact(() -> mode.setValue("Calendar"));
     WaitForAsyncUtils.waitForFxEvents();
     assertEquals(7, lookup(".calendar-day-header").queryAll().size());
     assertTrue(lookup("#doctor-calendar-schedule-list").tryQuery().isEmpty());
@@ -666,16 +662,42 @@ final class DoctorCalendarViewTest extends ApplicationTest {
     loginAsDoctor();
     fire("#doctor-nav-calendar");
     ComboBox<String> mode = calendarMode();
-    interact(() -> mode.setValue("Schedule"));
+    interact(() -> mode.setValue("Agenda"));
     fire("#doctor-calendar-next");
-    Button range = lookup("#doctor-calendar-week-picker").queryAs(Button.class);
-    String anchorLabel = range.getText();
+    DatePicker anchor = lookup("#doctor-calendar-schedule-date").queryAs(DatePicker.class);
+    LocalDate anchorDate = anchor.getValue();
 
     fire("#doctor-calendar-refresh");
 
-    assertEquals("Schedule", mode.getValue());
-    assertEquals(anchorLabel, range.getText());
+    assertEquals("Agenda", mode.getValue());
+    assertEquals(anchorDate, anchor.getValue());
     assertTrue(lookup("#doctor-calendar-schedule-list").tryQuery().isPresent());
+  }
+
+  @Test
+  void calendarToolbarWrapsSchedulingActionsAtNarrowWidths() {
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    waitForNode("#doctor-calendar-page");
+    interact(
+        () -> {
+          Stage stage =
+              (Stage) lookup("#doctor-calendar-toolbar").query().getScene().getWindow();
+          stage.setWidth(980);
+          lookup("#doctor-calendar-toolbar").query().applyCss();
+          lookup("#doctor-calendar-toolbar").queryAs(VBox.class).layout();
+        });
+    HBox actionGroup = lookup("#doctor-calendar-action-group").queryAs(HBox.class);
+    assertEquals("doctor-calendar-toolbar-actions", actionGroup.getParent().getId());
+    interact(
+        () -> {
+          Stage stage =
+              (Stage) lookup("#doctor-calendar-toolbar").query().getScene().getWindow();
+          stage.setWidth(1400);
+          lookup("#doctor-calendar-toolbar").query().applyCss();
+          lookup("#doctor-calendar-toolbar").queryAs(VBox.class).layout();
+        });
+    assertEquals("doctor-calendar-toolbar-main", actionGroup.getParent().getId());
   }
 
   private void openSeededTimeOff() {

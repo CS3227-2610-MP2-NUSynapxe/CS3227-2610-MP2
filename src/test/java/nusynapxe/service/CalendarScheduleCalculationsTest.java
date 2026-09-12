@@ -19,21 +19,21 @@ class CalendarScheduleCalculationsTest {
   private static final ZoneId CLINIC_ZONE = CalendarService.CLINIC_ZONE;
 
   @Test
-  void usesSingaporeDateAndMovesBySevenDays() {
+  void usesSingaporeDateAndMovesByOneDay() {
     Clock fixedClock = clockAt(LocalDateTime.of(2026, 9, 3, 0, 15));
 
     assertEquals(LocalDate.of(2026, 9, 3), CalendarScheduleCalculations.today(fixedClock));
     assertEquals(
-        LocalDate.of(2026, 8, 27),
+        LocalDate.of(2026, 9, 2),
         CalendarScheduleCalculations.moveAnchor(LocalDate.of(2026, 9, 3), -1));
     assertEquals(
-        LocalDate.of(2026, 9, 10),
+        LocalDate.of(2026, 9, 4),
         CalendarScheduleCalculations.moveAnchor(LocalDate.of(2026, 9, 3), 1));
     assertEquals(
-        LocalDate.of(2027, 1, 1),
+        LocalDate.of(2026, 12, 26),
         CalendarScheduleCalculations.moveAnchor(LocalDate.of(2026, 12, 25), 1));
     assertEquals(
-        LocalDate.of(2025, 12, 31),
+        LocalDate.of(2026, 1, 6),
         CalendarScheduleCalculations.moveAnchor(LocalDate.of(2026, 1, 7), -1));
   }
 
