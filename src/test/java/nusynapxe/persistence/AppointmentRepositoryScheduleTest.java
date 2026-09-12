@@ -17,6 +17,7 @@ import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.CalendarScheduleCursor;
 import nusynapxe.domain.CalendarSchedulePage;
+import nusynapxe.domain.DoctorTimeOff;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.Role;
 import org.junit.jupiter.api.Test;
@@ -196,6 +197,127 @@ final class AppointmentRepositoryScheduleTest {
           () ->
               appointments.findCalendarPageByDoctor(
                   1, LocalDate.of(2026, 9, 3).atStartOfDay(), null, 1));
+    }
+  }
+
+  @Test
+  void declinedAndCancelledAppointmentsReleaseTheirIntervals() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      Account doctor = createAccount(database, "doctor", "Dr. Ada", Role.DOCTOR);
+      Patient patient = createPatient(database, "Grace", "Hopper");
+      AppointmentRepository appointments = new AppointmentRepository(database);
+      LocalDateTime start = LocalDateTime.of(2026, 9, 3, 9, 0);
+
+      Appointment declined =
+          createAppointment(appointments, patient, doctor, start, AppointmentStatus.PENDING);
+      appointments.updateStatus(declined.id(), AppointmentStatus.DECLINED);
+      Appointment replacement =
+          createAppointment(appointments, patient, doctor, start, AppointmentStatus.PENDING);
+      appointments.updateStatus(replacement.id(), AppointmentStatus.CANCELLED);
+
+      assertEquals(
+          AppointmentStatus.PENDING,
+          createAppointment(appointments, patient, doctor, start, AppointmentStatus.PENDING)
+              .status());
+      assertEquals(
+          AppointmentStatus.DECLINED, appointments.findById(declined.id()).orElseThrow().status());
+    }
+  }
+
+  @Test
+  void activeAppointmentStatesBlockBookingReschedulingAndTimeOff() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      Account doctor = createAccount(database, "doctor", "Dr. Ada", Role.DOCTOR);
+      Patient patient = createPatient(database, "Grace", "Hopper");
+      AppointmentRepository appointments = new AppointmentRepository(database);
+      List<AppointmentStatus> blockingStatuses =
+          List.of(
+              AppointmentStatus.PENDING,
+              AppointmentStatus.ACCEPTED,
+              AppointmentStatus.CHECKED_IN,
+              AppointmentStatus.COMPLETED,
+              AppointmentStatus.CHECKED_OUT);
+
+      for (int index = 0; index < blockingStatuses.size(); index++) {
+        LocalDateTime start = LocalDateTime.of(2026, 9, 4 + index, 9, 0);
+        createAppointment(appointments, patient, doctor, start, blockingStatuses.get(index));
+        assertThrows(
+            SQLException.class,
+            () ->
+                createAppointment(appointments, patient, doctor, start, AppointmentStatus.PENDING));
+        assertThrows(
+            SQLException.class,
+            () -> appointments.createTimeOff(doctor.id(), start, start.plusMinutes(30)));
+      }
+
+      LocalDateTime declinedStart = LocalDateTime.of(2026, 9, 12, 9, 0);
+      Appointment declined =
+          createAppointment(
+              appointments, patient, doctor, declinedStart, AppointmentStatus.DECLINED);
+      DoctorTimeOff replacement =
+          appointments.createTimeOff(doctor.id(), declinedStart, declinedStart.plusMinutes(30));
+      assertEquals(
+          AppointmentStatus.DECLINED, appointments.findById(declined.id()).orElseThrow().status());
+      assertEquals(declinedStart, replacement.startsAt());
+    }
+  }
+
+  @Test
+  void rescheduleCanReuseDeclinedIntervalAndStillChecksReplacementConflicts() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      Account doctor = createAccount(database, "doctor", "Dr. Ada", Role.DOCTOR);
+      Patient patient = createPatient(database, "Grace", "Hopper");
+      AppointmentRepository appointments = new AppointmentRepository(database);
+      LocalDateTime releasedStart = LocalDateTime.of(2026, 9, 3, 9, 0);
+      Appointment declined =
+          createAppointment(
+              appointments, patient, doctor, releasedStart, AppointmentStatus.DECLINED);
+      Appointment moving =
+          createAppointment(
+              appointments, patient, doctor, releasedStart.plusHours(1), AppointmentStatus.PENDING);
+
+      Appointment moved =
+          appointments.reschedule(moving.id(), releasedStart, releasedStart.plusMinutes(30));
+      assertEquals(releasedStart, moved.startsAt());
+      assertEquals(
+          AppointmentStatus.DECLINED, appointments.findById(declined.id()).orElseThrow().status());
+
+      Appointment blocker =
+          createAppointment(
+              appointments,
+              patient,
+              doctor,
+              releasedStart.plusHours(2),
+              AppointmentStatus.ACCEPTED);
+      assertThrows(
+          SQLException.class,
+          () -> appointments.reschedule(moved.id(), blocker.startsAt(), blocker.endsAt()));
+      assertEquals(releasedStart, appointments.findById(moved.id()).orElseThrow().startsAt());
+    }
+  }
+
+  @Test
+  void readsOverlappingTimeOffByRangeAndDeletesOnlyForItsOwner() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      Account doctor = createAccount(database, "doctor", "Dr. Ada", Role.DOCTOR);
+      Account otherDoctor = createAccount(database, "other", "Dr. Grace", Role.DOCTOR);
+      AppointmentRepository appointments = new AppointmentRepository(database);
+      LocalDateTime dayStart = LocalDate.of(2026, 9, 3).atStartOfDay();
+      DoctorTimeOff crossing =
+          appointments.createTimeOff(doctor.id(), dayStart.minusHours(1), dayStart.plusHours(1));
+      appointments.createTimeOff(doctor.id(), dayStart.minusHours(2), dayStart.minusHours(1));
+      appointments.createTimeOff(
+          doctor.id(), dayStart.plusDays(1), dayStart.plusDays(1).plusHours(1));
+      appointments.createTimeOff(otherDoctor.id(), dayStart.plusHours(2), dayStart.plusHours(3));
+
+      assertEquals(
+          List.of(crossing),
+          appointments.findTimeOffByDoctor(doctor.id(), dayStart, dayStart.plusDays(1)));
+      assertTrue(!appointments.deleteTimeOff(crossing.id(), otherDoctor.id()));
+      assertTrue(appointments.deleteTimeOff(crossing.id(), doctor.id()));
+      assertTrue(
+          appointments.findTimeOffByDoctor(doctor.id()).stream()
+              .noneMatch(item -> item.id() == crossing.id()));
     }
   }
 

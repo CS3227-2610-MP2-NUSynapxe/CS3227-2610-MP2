@@ -283,6 +283,22 @@ public final class AppointmentService {
   }
 
   /**
+   * Removes a time-off interval owned by the signed-in Doctor.
+   *
+   * @param actor Doctor session that owns the interval
+   * @param timeOffId time-off identifier
+   * @throws AuthorizationException if the actor is not a Doctor
+   * @throws ValidationException if the interval is missing or belongs to another Doctor
+   * @throws SQLException if the delete fails
+   */
+  public void removeTimeOff(Session actor, long timeOffId) throws SQLException {
+    Authorization.requireRole(actor, Role.DOCTOR);
+    if (!appointments.deleteTimeOff(timeOffId, actor.accountId())) {
+      throw new ValidationException("Time off does not exist");
+    }
+  }
+
+  /**
    * Finds an appointment or reports a user-safe validation failure.
    *
    * @param appointmentId appointment identifier

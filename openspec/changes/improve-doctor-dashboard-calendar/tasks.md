@@ -1,10 +1,10 @@
 ## 1. Calendar Availability Data
 
-- [ ] 1.1 Extend the Doctor Calendar range projection with an immutable time-off collection; verify constructor tests reject invalid data and preserve defensive copies.
-- [ ] 1.2 Add a range-bounded repository query for overlapping Doctor time off using strict interval-overlap semantics; verify repository tests cover in-range, boundary-adjacent, cross-midnight, and other-Doctor cases.
-- [ ] 1.3 Update the shared availability query so `DECLINED` and `CANCELLED` appointments do not block booking, rescheduling, or time-off creation while all active workflow statuses still conflict; verify service tests cover replacement booking, time off over a declined record, active-status conflicts, Receptionist rescheduling, and retained declined history.
-- [ ] 1.4 Add an owner-scoped time-off delete operation and Doctor-only service method with a safe zero-row outcome; verify service tests cover owner success, other-Doctor isolation, non-Doctor rejection, missing IDs, unchanged appointments, and post-removal conflict behavior.
-- [ ] 1.5 Populate ranged time off in authorized Doctor and Receptionist Calendar reads; verify `CalendarServiceTest` proves correct ownership, range filtering, and no clinical or patient leakage.
+- [x] 1.1 Extend the Doctor Calendar range projection with an immutable time-off collection; verify constructor tests reject invalid data and preserve defensive copies.
+- [x] 1.2 Add a range-bounded repository query for overlapping Doctor time off using strict interval-overlap semantics; verify repository tests cover in-range, boundary-adjacent, cross-midnight, and other-Doctor cases.
+- [x] 1.3 Update the shared availability query so `DECLINED` and `CANCELLED` appointments do not block booking, rescheduling, or time-off creation while all active workflow statuses still conflict; verify service tests cover replacement booking, time off over a declined record, active-status conflicts, Receptionist rescheduling, and retained declined history.
+- [x] 1.4 Add an owner-scoped time-off delete operation and Doctor-only service method with a safe zero-row outcome; verify service tests cover owner success, other-Doctor isolation, non-Doctor rejection, missing IDs, unchanged appointments, and post-removal conflict behavior.
+- [x] 1.5 Populate ranged time off in authorized Doctor and Receptionist Calendar reads; verify `CalendarServiceTest` proves correct ownership, range filtering, and no clinical or patient leakage.
 
 ## 2. Shared Timeline Presentation
 

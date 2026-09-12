@@ -15,6 +15,7 @@ import java.util.List;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
+import nusynapxe.domain.DoctorTimeOff;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
@@ -124,6 +125,35 @@ final class AppointmentServiceTest {
                   fixture.doctorSession(),
                   LocalDateTime.of(2026, 9, 1, 9, 45),
                   LocalDateTime.of(2026, 9, 1, 10, 15)));
+    }
+  }
+
+  @Test
+  void doctorRemovesOnlyOwnedTimeOff() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      Accounts fixture = accounts(database);
+      AppointmentService service = service(database);
+      DoctorTimeOff interval =
+          service.blockTimeOff(fixture.doctorSession(), APPOINTMENT_START, APPOINTMENT_END);
+
+      assertThrows(
+          AuthorizationException.class,
+          () -> service.removeTimeOff(fixture.receptionistSession(), interval.id()));
+      assertThrows(
+          ValidationException.class,
+          () -> service.removeTimeOff(fixture.otherDoctorSession(), interval.id()));
+      service.removeTimeOff(fixture.doctorSession(), interval.id());
+      Appointment replacement =
+          service.book(
+              fixture.receptionistSession(),
+              fixture.patient().id(),
+              fixture.doctor().id(),
+              APPOINTMENT_START,
+              APPOINTMENT_END);
+      assertEquals(AppointmentStatus.PENDING, replacement.status());
+      assertThrows(
+          ValidationException.class,
+          () -> service.removeTimeOff(fixture.doctorSession(), interval.id()));
     }
   }
 

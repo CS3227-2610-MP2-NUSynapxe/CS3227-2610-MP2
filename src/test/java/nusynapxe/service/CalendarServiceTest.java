@@ -51,6 +51,11 @@ final class CalendarServiceTest {
           LocalDateTime.of(2026, 9, 6, 10, 0),
           LocalDateTime.of(2026, 9, 6, 10, 30),
           AppointmentStatus.ACCEPTED);
+      var timeOff =
+          appointments.createTimeOff(
+              fixture.doctor().id(),
+              LocalDateTime.of(2026, 9, 7, 23, 30),
+              LocalDateTime.of(2026, 9, 8, 0, 30));
 
       CalendarService service = ClinicServices.forDatabase(database).calendarService();
       var week = service.getWeek(fixture.doctorSession(), LocalDate.of(2026, 9, 6));
@@ -59,6 +64,7 @@ final class CalendarServiceTest {
       assertEquals(AppointmentStatus.ACCEPTED, week.appointments().get(0).status());
       assertEquals("Grace Hopper", week.appointments().get(0).patientDisplayName());
       assertEquals(0, week.settings().intervals(DayOfWeek.SUNDAY).size());
+      assertEquals(List.of(timeOff), week.timeOff());
     }
   }
 
@@ -99,6 +105,10 @@ final class CalendarServiceTest {
           start,
           start.plusMinutes(30),
           AppointmentStatus.ACCEPTED);
+      var timeOff =
+          appointments.createTimeOff(fixture.doctor().id(), start.plusHours(2), start.plusHours(3));
+      appointments.createTimeOff(
+          fixture.otherDoctor().id(), start.plusHours(4), start.plusHours(5));
 
       CalendarService service = ClinicServices.forDatabase(database).calendarService();
       var week =
@@ -107,6 +117,7 @@ final class CalendarServiceTest {
 
       assertEquals(fixture.doctor().id(), week.doctorId());
       assertEquals(1, week.appointments().size());
+      assertEquals(List.of(timeOff), week.timeOff());
       var oneDay =
           service.getReceptionistRange(
               fixture.receptionistSession(),
@@ -114,6 +125,7 @@ final class CalendarServiceTest {
               start.toLocalDate(),
               start.toLocalDate());
       assertEquals(1, oneDay.appointments().size());
+      assertEquals(List.of(timeOff), oneDay.timeOff());
       assertThrows(
           ValidationException.class,
           () ->
