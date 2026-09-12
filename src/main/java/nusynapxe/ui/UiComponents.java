@@ -26,6 +26,9 @@ import javafx.util.Duration;
 final class UiComponents {
   private static final String ERROR_FEEDBACK_STYLE = "error-feedback";
   private static final String SHOW_PASSWORD = "Show password";
+  private static final double COMPACT_DATE_PICKER_MIN_WIDTH = 132;
+  private static final double COMPACT_DATE_PICKER_PREF_WIDTH = 150;
+  private static final double COMPACT_DATE_PICKER_MAX_WIDTH = 170;
 
   private UiComponents() {
     throw new AssertionError("Utility class");
@@ -146,6 +149,9 @@ final class UiComponents {
   /** Creates an optionally prefilled DatePicker using the shared minimal field style. */
   static DatePicker compactDatePicker(LocalDate initialValue) {
     DatePicker picker = initialValue == null ? new DatePicker() : new DatePicker(initialValue);
+    picker.setMinWidth(COMPACT_DATE_PICKER_MIN_WIDTH);
+    picker.setPrefWidth(COMPACT_DATE_PICKER_PREF_WIDTH);
+    picker.setMaxWidth(COMPACT_DATE_PICKER_MAX_WIDTH);
     applyCompactDatePicker(picker);
     return picker;
   }
