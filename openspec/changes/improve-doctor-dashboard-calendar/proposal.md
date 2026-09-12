@@ -6,6 +6,8 @@ The Doctor Dashboard's appointment list does not communicate the shape of a work
 
 - Replace the Dashboard's left-hand appointment list with a compact single-day timeline that defaults to the current Singapore clinic date.
 - Add Today, previous-day, next-day, date-selection, and accessible manual-refresh controls, with useful initial scrolling to the current time or first relevant appointment.
+- Polish the Dashboard card with a Dashboard heading, wrapped supporting copy, and clear separation between its controls and day timeline.
+- Give every application date-picker field a shared minimal presentation while preserving its date-selection and accessibility behavior.
 - Let selecting a Dashboard appointment block load the existing authorized clinical context and appointment actions in the right-hand pane.
 - Move Doctor time-off creation from Dashboard to the Calendar page through a dedicated, prefillable dialog.
 - Include the signed-in Doctor's time-off intervals in Calendar data, render them as labelled blocks distinct from visual working-hours shading, and allow the owning Doctor to remove a block.
@@ -22,6 +24,7 @@ The Doctor Dashboard's appointment list does not communicate the shape of a work
 
 - `doctor-calendar`: Adds visible time-off blocks, Calendar-based time-off management, and manual schedule refresh while retaining existing privacy and presentation rules.
 - `clinic-workflow`: Makes declined appointments non-blocking and adds authorized removal of a Doctor's own time-off interval while preserving all other appointment and time-off conflict behavior.
+- `modernize-clinic-ui`: Applies the shared minimal date-picker treatment across application views and dialogs.
 
 ## Impact
 
@@ -29,5 +32,6 @@ The Doctor Dashboard's appointment list does not communicate the shape of a work
 - Shared calendar projection, calculations, timeline rendering, dialogs, styles, and Doctor Calendar controls.
 - Appointment conflict queries plus service and repository reads/deletion for ranged, Doctor-owned time-off data.
 - Doctor Dashboard, Calendar, service, persistence, and accessibility-focused tests.
+- Shared date-picker factories, stylesheet rules, and cross-role UI regression tests.
 - User and developer documentation describing the revised Dashboard and Calendar time-off workflow.
 - No new external dependency or database column is expected; time-off removal uses the existing `doctor_time_off` identity and ownership data.

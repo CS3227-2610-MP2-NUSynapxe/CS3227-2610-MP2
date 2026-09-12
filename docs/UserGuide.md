@@ -267,6 +267,8 @@ opening a feature tab reloads information that another workflow may have changed
    appointment actions on the right; until a visit is selected, the detail area
    explains what to do. Changing to a day without that appointment clears the
    selection, while refreshing retains a selection that is still visible.
+   Date fields throughout the workspace use the same compact, minimal control
+   treatment.
 2. Select **Patients** to open the administrative directory. Doctors can
    register, search, edit, activate, deactivate, and safely delete patients
    there using the same administrative fields as Receptionists. The directory

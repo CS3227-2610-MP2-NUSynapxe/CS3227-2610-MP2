@@ -90,6 +90,23 @@ Repository/service tests will cover ranged time-off reads, midnight/range overla
 
 User and developer guides will be updated only after the implementation and quality checks pass, in keeping with the repository's test-before-documenting policy.
 
+### 9. Standardize date-picker presentation through the shared UI factory
+
+All JavaFX `DatePicker` controls will be created through a small
+`UiComponents` factory that adds a stable `compact-date-picker` style marker.
+The shared stylesheet will give those controls the same compact height, spacing,
+border, and quiet embedded calendar-button treatment used by the Calendar's
+compact selectors. The embedded text field will remain transparent so focus is
+shown by the outer control rather than nested borders. This applies to Dashboard,
+Calendar, appointment and time-off dialogs, Receptionist filters, and any other
+current date-picker field; it does not alter parsing, popup behavior, keyboard
+navigation, accessible labels, or date values.
+
+The Dashboard card will use the existing wrapped supporting-text factory with an
+explicit line break before the Calendar guidance. Its day grid will receive a
+small top margin from the toolbar so the controls and timeline remain visually
+separate at narrow master-pane widths.
+
 ## Risks / Trade-offs
 
 - **Risk: A shared grid gains too many conditional branches.** -> Encapsulate size and interaction differences in an immutable display profile and small availability renderers rather than scattering Dashboard checks.

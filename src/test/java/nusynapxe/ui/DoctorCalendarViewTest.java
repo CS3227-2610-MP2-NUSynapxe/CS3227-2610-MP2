@@ -382,6 +382,11 @@ final class DoctorCalendarViewTest extends ApplicationTest {
     assertEquals(
         emptyDate,
         lookup("#doctor-calendar-appointment-dialog-date").queryAs(DatePicker.class).getValue());
+    assertTrue(
+        lookup("#doctor-calendar-appointment-dialog-date")
+            .queryAs(DatePicker.class)
+            .getStyleClass()
+            .contains("compact-date-picker"));
     assertEquals(
         "07:30",
         lookup("#doctor-calendar-appointment-dialog-start-hour").queryAs(ComboBox.class).getValue()

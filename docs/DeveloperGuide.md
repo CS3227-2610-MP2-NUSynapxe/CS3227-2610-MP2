@@ -310,6 +310,13 @@ The telephone `+` is a fixed label outside the editable, digits-only country-cod
 field. Clicking a table row does not open a window; its explicit View action
 shows all permitted administrative details with Edit, status, delete, and back
 actions. Edit then opens a form with Save and Discard changes.
+
+All date-picker fields use `UiComponents.compactDatePicker()` and the shared
+`compact-date-picker` marker. The stylesheet keeps the control at the compact
+selector height, gives the embedded text field transparent treatment, and uses
+an understated calendar button while preserving the native popup, keyboard,
+focus, accessible-label, and validation behavior. New date-picker fields should
+use this factory rather than constructing `DatePicker` directly.
 The top-level `reception-workspace-tabs` is an internal page stack with hidden
 headers. The visible `reception-navigation` rail uses ordinary horizontal-text
 buttons for directory, appointments, Calendar, check-in, checkout, and revenue.
