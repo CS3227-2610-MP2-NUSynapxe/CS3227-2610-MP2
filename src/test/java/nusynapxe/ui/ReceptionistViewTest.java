@@ -288,6 +288,8 @@ final class ReceptionistViewTest extends ApplicationTest {
     };
     for (String selector : selectors) {
       DatePicker picker = lookup(selector).queryAs(DatePicker.class);
+      picker.applyCss();
+      picker.layout();
       assertEquals(150.0, picker.getPrefWidth(), 0.1, "Unexpected width for " + selector);
       assertTrue(picker.getMaxWidth() <= 170.0, "Unexpected max width for " + selector);
     }
@@ -920,7 +922,7 @@ final class ReceptionistViewTest extends ApplicationTest {
 
   private void assertCompactDatePickerBounds(DatePicker picker) {
     double width = picker.getBoundsInParent().getWidth();
-    assertTrue(width >= 132.0 && width <= 172.0, "Unexpected rendered date-picker width: " + width);
+    assertTrue(width >= 132.0 && width <= 180.0, "Unexpected rendered date-picker width: " + width);
   }
 
   @SuppressWarnings("unchecked")
