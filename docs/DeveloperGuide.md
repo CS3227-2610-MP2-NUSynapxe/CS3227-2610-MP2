@@ -49,8 +49,15 @@ existing database. Seeding only accepts an empty database, while
 `seed-demo-data.ps1 -Reset` explicitly replaces the target before seeding. The
 reset operation removes only the SQLite file and its adjacent `-wal`, `-shm`,
 and `-journal` files, then reinitializes the current schema. The generated data
-is time-relative to the Singapore clinic date so the current Calendar range and
-future Agenda views remain useful during a local demonstration.
+is time-relative to the Singapore clinic date: it creates 18 patients and two
+non-overlapping appointments for each Doctor on every date from seven days
+before today through fourteen days after today. Historical checked-in,
+completed, and checked-out appointments are persisted with deterministic
+clinical records, and completed or checked-out records receive a prescription.
+The wrapper prints the short showcase credentials `ada` / `ada1234!`, `grace` /
+`grace123!`, and `reception` / `recept123!`; the System Admin remains
+`admin.demo` / `DemoAdmin123!`. Keep these credentials and generated records
+limited to local demonstrations.
 
 ## Package layout and boundaries
 

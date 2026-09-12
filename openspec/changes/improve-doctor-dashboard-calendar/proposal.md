@@ -19,6 +19,7 @@ The Doctor Dashboard's appointment list does not communicate the shape of a work
 ### New Capabilities
 
 - `doctor-dashboard-calendar`: Covers the Doctor Dashboard's compact single-day timeline, date navigation, refresh behavior, appointment selection, and clinical-detail coordination.
+- `demo-data`: Covers representative local-development patients, appointments, historical clinical links, and showcase credentials.
 
 ### Modified Capabilities
 
@@ -51,3 +52,12 @@ The completed change is extended with two focused follow-ups:
 
 - Keep every Patient Directory View action present after search results are refreshed, including when JavaFX reuses table cells for a new result set.
 - Remove the obsolete Doctor Calendar first-day-of-week preference presentation now that Calendar uses an explicit date range and Agenda uses an explicit start date. Preserve the stored settings field and service/API shape for compatibility while keeping Work hours and the fixed clinic timezone available.
+
+## Follow-up demo data and credentials
+
+The completed change is extended with richer local-development seed data:
+
+- Seed 18 representative patients, including both active and inactive directory rows.
+- Seed appointments for every date from seven days before today through fourteen days after today, with both Doctors represented each day and varied lifecycle statuses.
+- Link eligible historical `CHECKED_IN`, `COMPLETED`, and `CHECKED_OUT` appointments to deterministic clinical records, and link prescriptions to completed or checked-out consultations.
+- Replace the long showcase Doctor and Receptionist usernames and passwords with shorter, clearly documented credentials that still satisfy the application's password policy.

@@ -185,6 +185,31 @@ hours and the fixed `Asia/Singapore` timezone remain visible. The existing
 `DoctorCalendarSettings` field and persistence path stay intact and are carried
 through saves using the loaded value to avoid an unnecessary schema/API change.
 
+### 17. Expand the local-development seed dataset
+
+The Java `DemoDataSeeder` remains the single source of truth invoked by
+`scripts/seed-demo-data.ps1`. A successful seed will create 18 deterministic
+patients, including inactive directory examples, and two non-overlapping
+appointments per Doctor for each date in the inclusive rolling window from
+`today.minusDays(7)` through `today.plusDays(14)` in `Asia/Singapore`. Appointment
+statuses will rotate across the full lifecycle so Calendar, Dashboard, search,
+and clinical workflows have useful data on every day. Declined and cancelled
+rows remain stored as history but continue to follow the existing non-blocking
+conflict policy.
+
+The seeder will retain the current settings and lunch-break examples, then use
+the returned appointment IDs to save deterministic `ClinicalRecord` values for
+historical `CHECKED_IN`, `COMPLETED`, and `CHECKED_OUT` appointments. Each
+historical `COMPLETED` or `CHECKED_OUT` appointment will also receive at least
+one `Prescription`; pending, accepted, declined, cancelled, and future rows
+will not receive clinical data.
+
+Showcase credentials will be concise while still satisfying the eight-character
+password policy: `ada` / `ada1234!`, `grace` / `grace123!`, and `reception` /
+`recept123!`. The System Admin credentials remain unchanged. The PowerShell
+wrapper and developer/user documentation will print and describe the same
+values.
+
 ## Risks / Trade-offs
 
 - **Risk: A shared grid gains too many conditional branches.** -> Encapsulate size and interaction differences in an immutable display profile and small availability renderers rather than scattering Dashboard checks.

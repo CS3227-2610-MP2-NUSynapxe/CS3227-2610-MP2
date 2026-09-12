@@ -50,3 +50,9 @@
 - [x] 8.1 Make the Patient Directory Actions column use the `Patient` cell value rather than a reused row lookup, and add Doctor and/or Receptionist UI coverage proving every row returned by Search patients exposes its View action.
 - [x] 8.2 Remove the Doctor Calendar settings first-day selector and Calendar Preferences card, preserve the loaded first-day value internally when saving existing settings, retain Work hours/timezone presentation, and update settings UI tests.
 - [x] 8.3 Update the User Guide and Developer Guide for the stable search actions and simplified Calendar settings; run focused tests, the full quality gate, strict OpenSpec validation, and `git diff --check`.
+
+## 9. Follow-up demo data and credentials
+
+- [x] 9.1 Expand `DemoDataSeeder` and its PowerShell wrapper to create 18 patients, a non-overlapping per-Doctor appointment matrix covering the previous 7 days through the next 14 days with varied statuses, and linked historical clinical records and prescriptions; shorten the seeded Doctor and Receptionist credentials while keeping passwords policy-compliant.
+- [x] 9.2 Extend `DemoDataSeederTest` to verify patient and appointment counts, the complete rolling date window, per-day coverage and lifecycle status distribution, historical clinical links and prescriptions, and successful login with each short credential pair.
+- [x] 9.3 Update the README, User Guide, and Developer Guide plus the OpenSpec delta artifacts with the expanded seed contents and exact showcase credentials; run focused tests, the full quality gate, strict OpenSpec validation, and `git diff --check`.

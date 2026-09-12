@@ -370,8 +370,21 @@ From the repository root, run:
 ```
 
 This replaces the default `%USERPROFILE%\.nusynapxe\nusynapxe.db` with demo
-staff, patients, calendar settings, a lunch break, and future appointments. The
-script prints the login credentials when it finishes. Start the application
+staff, 18 patients (including inactive directory examples), calendar settings,
+a lunch break, and two appointments per Doctor for each date from the previous
+seven days through the next fourteen days. Statuses span the appointment
+lifecycle. Historical checked-in, completed, and checked-out appointments are
+linked to clinical records, with prescriptions on completed and checked-out
+visits. The script prints these showcase login credentials when it finishes:
+
+```text
+Doctor       ada / ada1234!
+Doctor       grace / grace123!
+Receptionist reception / recept123!
+```
+
+The System Admin credential remains `admin.demo / DemoAdmin123!`. These
+accounts and passwords are for local demonstrations only. Start the application
 normally with:
 
 ```powershell
