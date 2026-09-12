@@ -39,7 +39,7 @@
 
 ## 7. Follow-up Directory and Calendar presentation
 
-- [ ] 7.1 Remove the Patient Directory results table's fixed maximum height and let it consume the remaining full-height card space while preserving fixed row geometry and table scrolling; add a regression test that resizes the directory and proves the table grows.
+- [x] 7.1 Remove the Patient Directory results table's fixed maximum height and let it consume the remaining full-height card space while preserving fixed row geometry and table scrolling; add a regression test that resizes the directory and proves the table grows.
 - [ ] 7.2 Make the Doctor Calendar toolbar responsive: keep navigation/date/view and refresh/settings usable on the first row, move Add appointment and Block time together to a second row below the measured narrow-width breakpoint, and add wide/narrow layout assertions.
 - [ ] 7.3 Rename the Calendar mode values and user-facing labels from `Week`/`Schedule` to `Calendar`/`Agenda` while preserving active-mode state and accessible descriptions; update focused UI tests and documentation identifiers.
 - [ ] 7.4 Replace Agenda's custom week picker with a shared compact date picker for the inclusive start date, place it between previous/next controls, move the anchor by one day, retain Today/refresh behavior, remove obsolete week-picker code/tests, and cover date selection, one-day navigation, and refresh retention.

@@ -231,6 +231,25 @@ final class DoctorViewTest extends ApplicationTest {
   }
 
   @Test
+  void patientDirectoryResultsTableConsumesAvailableCardHeight() {
+    loginAsDoctor();
+    fire("#doctor-nav-patients");
+    TableView<?> table = patientTable();
+    interact(
+        () -> {
+          table.applyCss();
+          table.layout();
+          lookup("#doctor-patient-directory").query().applyCss();
+          lookup("#doctor-patient-directory").queryAs(VBox.class).layout();
+        });
+
+    assertEquals(Double.MAX_VALUE, table.getMaxHeight());
+    assertTrue(
+        table.getHeight() > 304.0,
+        "Patient Directory table should grow beyond its former fixed maximum height");
+  }
+
+  @Test
   void compactDashboardKeepsProportionalAppointmentGeometryAndNoInlineActions() {
     loginAsDoctor();
     var thirtyMinutes =

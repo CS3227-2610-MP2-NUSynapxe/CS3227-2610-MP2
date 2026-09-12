@@ -304,7 +304,7 @@ final class PatientDirectoryView {
     table.setFixedCellSize(52);
     table.setPrefHeight(96);
     table.setMinHeight(96);
-    table.setMaxHeight(304);
+    table.setMaxHeight(Double.MAX_VALUE);
     table.setPlaceholder(
         UiComponents.emptyState(prefix + "-patient-empty", "No patients match this search."));
 
