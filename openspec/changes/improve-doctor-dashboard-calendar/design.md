@@ -107,6 +107,25 @@ explicit line break before the Calendar guidance. Its day grid will receive a
 small top margin from the toolbar so the controls and timeline remain visually
 separate at narrow master-pane widths.
 
+### 10. Keep the Patient Directory on one full-height content surface
+
+The shared `PatientDirectoryView` will use its existing results card as the page
+surface: the dynamic page title will be the first child of that card, while the
+standalone description and `Patient results` section heading will be removed.
+Registration, details, and edit states will retain the same title slot so the
+directory workflow remains labelled while switching views.
+
+The patient search field will grow into the available search-row space while
+the search and clear actions keep their intrinsic widths. Doctor and
+Receptionist containers will fit the directory view to their page viewport so
+the white surface stretches to the available height and only the results table
+needs to scroll when content exceeds it.
+
+The shared compact date-picker class will also set a shorter preferred and
+maximum width for every application date-picker. This width is presentation
+only; date values, popup behavior, keyboard interaction, and the existing
+calendar/report layout semantics remain unchanged.
+
 ## Risks / Trade-offs
 
 - **Risk: A shared grid gains too many conditional branches.** -> Encapsulate size and interaction differences in an immutable display profile and small availability renderers rather than scattering Dashboard checks.
