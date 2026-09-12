@@ -1,0 +1,113 @@
+name: Feature request
+description: Propose a focused improvement to NUSynapxe
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the user need before prescribing an implementation. Larger behavioural or architectural changes should be designed through OpenSpec before implementation.
+
+        Do not include real patient information, credentials, database files, or other sensitive data.
+
+  - type: dropdown
+    id: user-role
+    attributes:
+      label: Primary user or stakeholder
+      options:
+        - Doctor
+        - Receptionist
+        - System Admin
+        - Developer or maintainer
+        - Multiple roles
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or opportunity
+      description: Explain the current limitation, who experiences it, and why it matters.
+      placeholder: As a ..., I need ..., because ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Proposed outcome
+      description: Describe the desired behaviour without over-constraining the implementation.
+      placeholder: Describe what a successful solution should enable.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: List observable, testable conditions that define completion.
+      placeholder: |
+        - [ ] Given ..., when ..., then ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - JavaFX user interface
+        - Appointments and calendar
+        - Patient administration
+        - Consultations and prescriptions
+        - Checkout and revenue reporting
+        - Authentication and authorization
+        - Persistence and database
+        - Build, CI, or packaging
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Note any workarounds or alternative solutions you considered.
+      placeholder: Describe alternatives, or state that none are known.
+
+  - type: textarea
+    id: security-privacy
+    attributes:
+      label: Security, privacy, and data considerations
+      description: Identify authorization, clinical confidentiality, migration, or stored-data implications.
+      placeholder: State the expected impact, or explain why there is none.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: openspec
+    attributes:
+      label: OpenSpec status
+      description: Select the current design status for this request.
+      options:
+        - Not started
+        - OpenSpec change exists
+        - OpenSpec is not required for this change
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I described a user or project need with testable acceptance criteria.
+          required: true
+        - label: I did not include patient data, credentials, or other sensitive information.
+          required: true

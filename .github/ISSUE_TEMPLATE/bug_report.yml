@@ -1,0 +1,107 @@
+name: Bug report
+description: Report a reproducible defect in NUSynapxe
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve NUSynapxe. Search existing issues before filing a new report.
+
+        Do not include real patient information, credentials, database files, or other sensitive data. Use sanitized examples only.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Select the area most closely related to the defect.
+      options:
+        - JavaFX user interface
+        - Appointments and calendar
+        - Patient administration
+        - Consultations and prescriptions
+        - Checkout and revenue reporting
+        - Authentication and authorization
+        - Persistence and database
+        - Build, CI, or packaging
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem description
+      description: Clearly describe what went wrong and why it is a problem.
+      placeholder: Describe the defect and its impact.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Provide the smallest reliable sequence that demonstrates the problem.
+      placeholder: |
+        1. Sign in as ...
+        2. Navigate to ...
+        3. Select ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      placeholder: Describe what should happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      placeholder: Describe what happens instead, including any sanitized error message.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Provide the release version, branch, or commit SHA where you observed the problem.
+      placeholder: For example, master at abc1234
+    validations:
+      required: true
+
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Additional evidence
+      description: Add sanitized logs, screenshots, or other context that will help diagnose the defect.
+      placeholder: Drag sanitized screenshots here or paste relevant log excerpts.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I removed all patient data, credentials, and other sensitive information from this report.
+          required: true
