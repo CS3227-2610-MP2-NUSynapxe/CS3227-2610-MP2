@@ -296,7 +296,15 @@ final class CalendarTimeGrid extends BorderPane {
     time.getStyleClass().add("calendar-appointment-time");
     Label status = UiComponents.statusBadge(block.appointment().status().name());
     status.getStyleClass().add("calendar-appointment-status");
-    content.getChildren().addAll(patient, time, status);
+    if (profile == DisplayProfile.COMPACT) {
+      time.setText(
+          time.getText()
+              + " · "
+              + UiComponents.humanizeStatus(block.appointment().status().name()));
+      content.getChildren().addAll(patient, time);
+    } else {
+      content.getChildren().addAll(patient, time, status);
+    }
     AppointmentStatus appointmentStatus = block.appointment().status();
     if (profile.inlineDecisions()
         && handlers.decision() != null

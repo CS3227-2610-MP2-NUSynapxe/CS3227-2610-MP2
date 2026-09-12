@@ -11,14 +11,17 @@ import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
-import javafx.scene.control.ListView;
+import javafx.scene.control.DatePicker;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextInputControl;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import nusynapxe.domain.Account;
@@ -51,6 +54,7 @@ final class DoctorViewTest extends ApplicationTest {
   private ClinicServices services;
   private Account doctor;
   private Account receptionist;
+  private LocalDate appointmentDate;
 
   @Override
   public void start(Stage stage) throws SQLException {
@@ -77,10 +81,22 @@ final class DoctorViewTest extends ApplicationTest {
     Patient patient =
         new PatientRepository(database)
             .create(new Patient(0, "Pat", "Lee", "", "555-0100", "", ""));
-    LocalDateTime start = LocalDateTime.now().minusMinutes(10).withSecond(0).withNano(0);
-    new AppointmentRepository(database)
-        .create(
-            patient.id(), doctor.id(), start, start.plusMinutes(30), AppointmentStatus.CHECKED_IN);
+    Patient geometryPatient =
+        new PatientRepository(database)
+            .create(new Patient(0, "Alex", "Tan", "", "555-0101", "", ""));
+    LocalDateTime start =
+        LocalDateTime.now(ZoneId.of("Asia/Singapore")).minusMinutes(10).withSecond(0).withNano(0);
+    AppointmentRepository appointments = new AppointmentRepository(database);
+    appointments.create(
+        patient.id(), doctor.id(), start, start.plusMinutes(30), AppointmentStatus.CHECKED_IN);
+    LocalDateTime oneHourStart = start.getHour() < 21 ? start.plusHours(2) : start.minusHours(2);
+    appointments.create(
+        geometryPatient.id(),
+        doctor.id(),
+        oneHourStart,
+        oneHourStart.plusHours(1),
+        AppointmentStatus.ACCEPTED);
+    appointmentDate = start.toLocalDate();
     new ApplicationRouter(stage, database).showInitial();
     stage.show();
   }
@@ -104,8 +120,12 @@ final class DoctorViewTest extends ApplicationTest {
     assertTrue(lookup("#doctor-detail-scroll").tryQuery().isPresent());
     assertTrue(lookup("#doctor-no-selection").tryQuery().isPresent());
     verifyThat("#doctor-accept", isVisible());
-    verifyThat("#doctor-timeoff-submit", isVisible());
-    selectFirst("#doctor-appointment-list");
+    verifyThat("#doctor-dashboard-day-calendar", isVisible());
+    assertTrue(lookup("#doctor-appointment-list").tryQuery().isEmpty());
+    assertTrue(lookup("#doctor-timeoff-submit").tryQuery().isEmpty());
+    assertEquals(
+        appointmentDate, lookup("#doctor-dashboard-date").queryAs(DatePicker.class).getValue());
+    selectDashboardAppointment(1);
     verifyThat("#doctor-selected-appointment", isVisible());
 
     setText("#doctor-diagnosis", "Seasonal allergies");
@@ -133,11 +153,44 @@ final class DoctorViewTest extends ApplicationTest {
   void doctorCanCheckInAnAcceptedAppointmentFromTheDashboard() throws SQLException {
     new AppointmentRepository(database).updateStatus(1, AppointmentStatus.ACCEPTED);
     loginAsDoctor();
-    selectFirst("#doctor-appointment-list");
+    selectDashboardAppointment(1);
     assertFalse(lookup("#doctor-check-in").queryAs(Button.class).isDisable());
     fire("#doctor-check-in");
     verifyThat("#doctor-feedback", hasText("Patient checked in"));
     assertEquals(AppointmentStatus.CHECKED_IN, services.appointmentService().get(1).status());
+  }
+
+  @Test
+  void dashboardNavigatesDaysAndRefreshesAVisibleSelection() {
+    loginAsDoctor();
+    DatePicker date = lookup("#doctor-dashboard-date").queryAs(DatePicker.class);
+    assertEquals(appointmentDate, date.getValue());
+    selectDashboardAppointment(1);
+    fire("#doctor-dashboard-refresh");
+    verifyThat("#doctor-selected-appointment", isVisible());
+
+    fire("#doctor-dashboard-next");
+    assertEquals(appointmentDate.plusDays(1), date.getValue());
+    assertTrue(lookup("#doctor-no-selection").query().isVisible());
+    fire("#doctor-dashboard-today");
+    assertEquals(appointmentDate, date.getValue());
+  }
+
+  @Test
+  void compactDashboardKeepsProportionalAppointmentGeometryAndNoInlineActions() {
+    loginAsDoctor();
+    var thirtyMinutes =
+        lookup("#doctor-calendar-appointment-1-" + appointmentDate).query().getBoundsInParent();
+    var oneHour =
+        lookup("#doctor-calendar-appointment-2-" + appointmentDate).query().getBoundsInParent();
+    assertEquals(thirtyMinutes.getHeight() * 2 + 4, oneHour.getHeight(), 0.1);
+    assertTrue(lookup("#doctor-calendar-accept-1").tryQuery().isEmpty());
+    assertTrue(lookup("#doctor-calendar-decline-1").tryQuery().isEmpty());
+    assertTrue(
+        lookup("#doctor-dashboard-time-grid")
+            .query()
+            .getStyleClass()
+            .contains("calendar-time-grid-compact"));
   }
 
   @Test
@@ -273,8 +326,36 @@ final class DoctorViewTest extends ApplicationTest {
     verifyThat("#doctor-patient-view", isVisible());
   }
 
-  private void selectFirst(String selector) {
-    interact(() -> lookup(selector).queryAs(ListView.class).getSelectionModel().selectFirst());
+  private void selectDashboardAppointment(long id) {
+    interact(
+        () ->
+            lookup("#doctor-calendar-appointment-" + id + "-" + appointmentDate)
+                .query()
+                .getOnMouseClicked()
+                .handle(primaryClick()));
+    WaitForAsyncUtils.waitForFxEvents();
+  }
+
+  private static MouseEvent primaryClick() {
+    return new MouseEvent(
+        MouseEvent.MOUSE_CLICKED,
+        5,
+        5,
+        5,
+        5,
+        MouseButton.PRIMARY,
+        1,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        null);
   }
 
   private void setText(String selector, String value) {
