@@ -134,9 +134,7 @@ final class DoctorViewTest extends ApplicationTest {
     assertTrue(dashboardHelp.isWrapText());
     assertTrue(dashboardHelp.getText().contains("\nManage blocked time in Calendar."));
     assertEquals(
-        12.0,
-        BorderPane.getMargin(lookup("#doctor-dashboard-time-grid").query()).getTop(),
-        0.1);
+        12.0, BorderPane.getMargin(lookup("#doctor-dashboard-time-grid").query()).getTop(), 0.1);
     selectDashboardAppointment(1);
     verifyThat("#doctor-selected-appointment", isVisible());
 

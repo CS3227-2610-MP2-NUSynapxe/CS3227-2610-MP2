@@ -266,7 +266,10 @@ final class ReceptionistViewTest extends ApplicationTest {
     };
     for (String selector : selectors) {
       assertTrue(
-          lookup(selector).queryAs(DatePicker.class).getStyleClass().contains("compact-date-picker"),
+          lookup(selector)
+              .queryAs(DatePicker.class)
+              .getStyleClass()
+              .contains("compact-date-picker"),
           "Expected minimal date-picker style for " + selector);
     }
   }
