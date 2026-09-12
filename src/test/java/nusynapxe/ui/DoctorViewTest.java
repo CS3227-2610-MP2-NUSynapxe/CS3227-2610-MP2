@@ -19,6 +19,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextInputControl;
 import javafx.scene.input.MouseButton;
@@ -132,7 +133,7 @@ final class DoctorViewTest extends ApplicationTest {
         "Dashboard", lookup("#doctor-schedule-card .page-title").queryAs(Label.class).getText());
     Label dashboardHelp = lookup("#doctor-schedule-card .supporting-text").queryAs(Label.class);
     assertTrue(dashboardHelp.isWrapText());
-    assertTrue(dashboardHelp.getText().contains("\nManage blocked time in Calendar."));
+    assertEquals("Select an appointment to open its clinical context.", dashboardHelp.getText());
     assertEquals(
         12.0, BorderPane.getMargin(lookup("#doctor-dashboard-time-grid").query()).getTop(), 0.1);
     selectDashboardAppointment(1);
@@ -190,6 +191,43 @@ final class DoctorViewTest extends ApplicationTest {
     assertTrue(lookup("#doctor-calendar-empty").tryQuery().isPresent());
     fire("#doctor-dashboard-today");
     assertEquals(appointmentDate, date.getValue());
+  }
+
+  @Test
+  void dashboardAndPatientDirectoryUseTheApprovedCompactPageLayout() {
+    loginAsDoctor();
+    DatePicker dashboardDate = lookup("#doctor-dashboard-date").queryAs(DatePicker.class);
+    assertEquals(150.0, dashboardDate.getPrefWidth(), 0.1);
+    assertTrue(dashboardDate.getMaxWidth() <= 170.0);
+
+    fire("#doctor-nav-patients");
+    ScrollPane patientsPage = lookup("#doctor-patients-page").queryAs(ScrollPane.class);
+    VBox directoryCard = lookup("#doctor-patient-directory-card").queryAs(VBox.class);
+    VBox directoryPage = lookup("#doctor-patient-directory").queryAs(VBox.class);
+    interact(
+        () -> {
+          patientsPage.applyCss();
+          patientsPage.layout();
+          directoryPage.applyCss();
+          directoryPage.layout();
+        });
+
+    assertTrue(directoryCard.getStyleClass().contains("card"));
+    assertEquals(
+        "Patient Directory",
+        lookup("#doctor-patient-directory-card .page-title").queryAs(Label.class).getText());
+    assertTrue(lookup("#doctor-patient-directory .supporting-text").tryQuery().isEmpty());
+    assertTrue(lookup("#doctor-patient-directory .section-heading").tryQuery().isEmpty());
+    assertTrue(
+        lookup("#doctor-patient-search")
+                .queryAs(TextInputControl.class)
+                .getBoundsInParent()
+                .getWidth()
+            >= 400.0);
+    assertTrue(patientsPage.isFitToHeight());
+    assertTrue(
+        directoryCard.getHeight() >= patientsPage.getViewportBounds().getHeight() - 1.0,
+        "Patient Directory card should fill its page viewport");
   }
 
   @Test

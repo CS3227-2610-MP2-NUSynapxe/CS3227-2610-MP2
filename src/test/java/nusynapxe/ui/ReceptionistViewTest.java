@@ -240,12 +240,9 @@ final class ReceptionistViewTest extends ApplicationTest {
     Node appointmentDate = lookup("#reception-appointment-date").query();
     Node appointmentStart = lookup("#reception-start").query();
     Node appointmentEnd = lookup("#reception-end").query();
+    assertCompactDatePickerBounds((DatePicker) appointmentDate);
     assertEquals(
-        appointmentDate.getBoundsInParent().getWidth(),
         appointmentStart.getBoundsInParent().getWidth(),
-        2.0);
-    assertEquals(
-        appointmentDate.getBoundsInParent().getWidth(),
         appointmentEnd.getBoundsInParent().getWidth(),
         2.0);
   }
@@ -275,7 +272,29 @@ final class ReceptionistViewTest extends ApplicationTest {
   }
 
   @Test
-  void checkoutAndReceiptFiltersShowSelectedDatesAtUniformWidths() {
+  void everyReceptionDatePickerUsesTheSharedCompactWidth() {
+    loginAsReceptionist();
+    layoutWorkspace();
+    String[] selectors = {
+      "#reception-schedule-date",
+      "#reception-appointment-date",
+      "#reception-calendar-from",
+      "#reception-calendar-to",
+      "#reception-check-in-queue-date",
+      "#reception-checkout-date",
+      "#reception-receipt-date",
+      "#reception-revenue-report-from",
+      "#reception-revenue-report-to"
+    };
+    for (String selector : selectors) {
+      DatePicker picker = lookup(selector).queryAs(DatePicker.class);
+      assertEquals(150.0, picker.getPrefWidth(), 0.1, "Unexpected width for " + selector);
+      assertTrue(picker.getMaxWidth() <= 170.0, "Unexpected max width for " + selector);
+    }
+  }
+
+  @Test
+  void checkoutAndReceiptFiltersShowSelectedDatesAtCompactWidths() {
     loginAsReceptionist();
     selectWorkspaceTab(4);
     DatePicker checkoutDate = lookup("#reception-checkout-date").queryAs(DatePicker.class);
@@ -283,10 +302,7 @@ final class ReceptionistViewTest extends ApplicationTest {
     WaitForAsyncUtils.waitForFxEvents();
     layoutWorkspace();
     assertFalse(checkoutDate.getEditor().getText().isBlank());
-    assertEquals(
-        lookup("#reception-checkout-patient").query().getBoundsInParent().getWidth(),
-        checkoutDate.getBoundsInParent().getWidth(),
-        1.0);
+    assertCompactDatePickerBounds(checkoutDate);
     assertTrue(
         lookup("#reception-checkout-ready-tab").queryAs(VBox.class).getPadding().getTop() >= 20);
 
@@ -301,10 +317,7 @@ final class ReceptionistViewTest extends ApplicationTest {
     WaitForAsyncUtils.waitForFxEvents();
     layoutWorkspace();
     assertFalse(receiptDate.getEditor().getText().isBlank());
-    assertEquals(
-        lookup("#reception-receipt-patient").query().getBoundsInParent().getWidth(),
-        receiptDate.getBoundsInParent().getWidth(),
-        1.0);
+    assertCompactDatePickerBounds(receiptDate);
     assertTrue(lookup("#reception-receipts-tab").queryAs(VBox.class).getPadding().getTop() >= 20);
   }
 
@@ -903,6 +916,11 @@ final class ReceptionistViewTest extends ApplicationTest {
           workspace.applyCss();
           workspace.layout();
         });
+  }
+
+  private void assertCompactDatePickerBounds(DatePicker picker) {
+    double width = picker.getBoundsInParent().getWidth();
+    assertTrue(width >= 132.0 && width <= 172.0, "Unexpected rendered date-picker width: " + width);
   }
 
   @SuppressWarnings("unchecked")
