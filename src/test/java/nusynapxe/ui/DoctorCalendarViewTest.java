@@ -35,6 +35,7 @@ import javafx.stage.Stage;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
+import nusynapxe.domain.DoctorCalendarSettings;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
@@ -102,7 +103,16 @@ final class DoctorCalendarViewTest extends ApplicationTest {
   }
 
   @Test
-  void navigatesCalendarPickerAndSettingsWithBreaks() {
+  void navigatesCalendarPickerAndSettingsWithBreaks() throws SQLException {
+    Session doctorSession = new Session(doctorId, "doctor", Role.DOCTOR);
+    DoctorCalendarSettings initialSettings = services.calendarService().getSettings(doctorSession);
+    services
+        .calendarService()
+        .saveSettings(
+            doctorSession,
+            new DoctorCalendarSettings(
+                doctorId, DayOfWeek.MONDAY, initialSettings.workingIntervals()));
+
     loginAsDoctor();
     fire("#doctor-nav-calendar");
     waitForNode("#doctor-calendar-page");
@@ -141,7 +151,9 @@ final class DoctorCalendarViewTest extends ApplicationTest {
     waitForNode("#doctor-calendar-settings-page");
     verifyThat("#doctor-calendar-settings-timezone", isVisible());
     assertTrue(lookup("#doctor-calendar-settings-work-location").tryQuery().isEmpty());
-    selectCombo("#doctor-calendar-settings-first-day", DayOfWeek.MONDAY);
+    assertTrue(lookup("#doctor-calendar-settings-preferences").tryQuery().isEmpty());
+    assertTrue(lookup("#doctor-calendar-settings-first-day").tryQuery().isEmpty());
+    verifyThat("#doctor-calendar-settings-working-hours", isVisible());
     fire("#doctor-calendar-settings-monday-add");
     selectCombo("#doctor-calendar-settings-monday-end-0", "12:00");
     selectCombo("#doctor-calendar-settings-monday-start-1", "13:00");
@@ -152,10 +164,11 @@ final class DoctorCalendarViewTest extends ApplicationTest {
 
     fire("#doctor-calendar-settings");
     waitForNode("#doctor-calendar-settings-page");
-    assertEquals(
-        DayOfWeek.MONDAY,
-        lookup("#doctor-calendar-settings-first-day").queryAs(ComboBox.class).getValue());
+    assertTrue(lookup("#doctor-calendar-settings-preferences").tryQuery().isEmpty());
+    assertTrue(lookup("#doctor-calendar-settings-first-day").tryQuery().isEmpty());
     assertTrue(lookup("#doctor-calendar-settings-monday-start-1").tryQuery().isPresent());
+    assertEquals(
+        DayOfWeek.MONDAY, services.calendarService().getSettings(doctorSession).firstDayOfWeek());
     fire("#doctor-calendar-settings-cancel");
     waitForNode("#doctor-calendar-page");
   }
