@@ -48,6 +48,42 @@ Calendar time-grid mode SHALL display time-off intervals as labelled foreground 
 - **WHEN** a Receptionist views a selected Doctor's time grid
 - **THEN** the same non-clinical time-off presentation is shown without exposing a time-off removal action
 
+### Requirement: Calendar mode labels SHALL describe their presentations
+
+The Doctor Calendar mode selector SHALL label the date-range time grid
+`Calendar` and the chronological appointment stream `Agenda`. The labels SHALL
+not change the authorized projection, lifecycle behavior, or privacy boundary
+of either mode.
+
+#### Scenario: Doctor chooses the date-range grid
+- **WHEN** the Doctor opens the mode selector and chooses `Calendar`
+- **THEN** the configurable From/To time grid is shown
+
+#### Scenario: Doctor chooses the chronological stream
+- **WHEN** the Doctor opens the mode selector and chooses `Agenda`
+- **THEN** the chronological date-grouped appointment stream is shown
+
+### Requirement: Agenda SHALL navigate by an inclusive start date
+
+Agenda mode SHALL provide a compact date picker between previous and next
+controls for its inclusive start date. Selecting a date SHALL reload the
+stream from that date. Previous and next SHALL move the anchor exactly one
+calendar day, Today SHALL restore the current Singapore clinic date, and
+manual refresh SHALL retain the anchor. The existing lazy pagination and
+elapsed-row presentation SHALL remain unchanged.
+
+#### Scenario: Doctor selects an Agenda start date
+- **WHEN** the Doctor chooses a valid date in the Agenda date picker
+- **THEN** the stream reloads from that inclusive date
+
+#### Scenario: Doctor moves Agenda by one day
+- **WHEN** the Doctor activates previous or next in Agenda mode
+- **THEN** the inclusive start date moves exactly one day backward or forward
+
+#### Scenario: Doctor refreshes an Agenda anchor
+- **WHEN** the Doctor activates refresh after selecting an Agenda start date
+- **THEN** the stream reloads from the same date and remains in Agenda mode
+
 ### Requirement: Doctor Calendar SHALL support accessible manual refresh
 
 The Doctor Calendar SHALL provide a manual refresh control that reloads the active Calendar mode and current selected range without changing the selected mode, range, or schedule anchor. An icon-only control SHALL have an accessible name and tooltip.

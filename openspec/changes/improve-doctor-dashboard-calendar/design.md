@@ -126,6 +126,46 @@ maximum width for every application date-picker. This width is presentation
 only; date values, popup behavior, keyboard interaction, and the existing
 calendar/report layout semantics remain unchanged.
 
+### 11. Allow the Patient Directory results table to fill its page card
+
+The shared `PatientDirectoryView` will keep its existing vertically growing
+content/card structure but remove the fixed maximum height from the results
+`TableView`. The table will retain its fixed row geometry and a sensible
+minimum/preferred height, then consume all remaining card height through the
+existing `VBox.setVgrow` constraint. The table's own vertical scrollbar remains
+the overflow mechanism when results exceed the available space; no synthetic
+rows or data changes are introduced.
+
+### 12. Wrap Calendar actions as a responsive group
+
+The Doctor Calendar toolbar will separate navigation/date/view controls from
+the primary Add appointment and Block time actions. At wide widths the action
+group remains on the main toolbar row. When the available width cannot satisfy
+the measured preferred widths, the action group moves intact to a second row;
+refresh and settings remain discoverable with the navigation row. The layout
+will use JavaFX sizing/listener behavior rather than unsupported CSS media
+queries, and the group will never split the two scheduling actions across rows.
+
+### 13. Use Calendar and Agenda as the mode names
+
+The date-range time grid will be labelled `Calendar`, and the chronological
+lazy list will be labelled `Agenda`. `Week` is not accurate for the grid's
+configurable `From`/`To` range, while `Agenda` communicates the list's
+date-grouped stream without implying a separate scheduling policy. Existing
+mode state, projections, and privacy boundaries remain unchanged.
+
+### 14. Make Agenda navigation date-based
+
+Agenda mode will use the shared compact `DatePicker` as its inclusive start
+date, positioned between the previous and next controls. Selecting a date
+resets the lazy list from that date; the arrows add or subtract exactly one
+day, Today restores the current Singapore clinic date, and refresh preserves
+the selected anchor. The existing service query remains an inclusive
+`starts_at >= anchor` stream, so a past anchor may show elapsed rows with the
+existing Past cue and an empty anchor date may have no date header until the
+first appointment. The custom week/month picker and seven-day anchor movement
+are removed because they no longer describe the interaction.
+
 ## Risks / Trade-offs
 
 - **Risk: A shared grid gains too many conditional branches.** -> Encapsulate size and interaction differences in an immutable display profile and small availability renderers rather than scattering Dashboard checks.

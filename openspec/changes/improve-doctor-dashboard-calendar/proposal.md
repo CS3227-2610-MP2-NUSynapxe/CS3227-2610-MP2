@@ -35,3 +35,12 @@ The Doctor Dashboard's appointment list does not communicate the shape of a work
 - Shared date-picker factories, stylesheet rules, and cross-role UI regression tests.
 - User and developer documentation describing the revised Dashboard and Calendar time-off workflow.
 - No new external dependency or database column is expected; time-off removal uses the existing `doctor_time_off` identity and ownership data.
+
+## Follow-up UI refinements
+
+The completed change is extended with four presentation and navigation refinements:
+
+- Let the Patient Directory results table consume all remaining vertical space in its full-height page card while retaining its own scrolling for larger result sets.
+- Make the Doctor Calendar toolbar responsive so the Add appointment and Block time actions remain together and move to a second row when the available width is too small.
+- Rename the Calendar modes to `Calendar` (the date-range time grid) and `Agenda` (the chronological stream).
+- Replace the Agenda mode's week-oriented picker with a compact date picker for its inclusive start date; previous and next move that anchor by one day while Today and refresh retain their existing meanings.

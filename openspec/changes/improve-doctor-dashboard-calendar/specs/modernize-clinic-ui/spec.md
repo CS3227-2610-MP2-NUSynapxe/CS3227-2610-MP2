@@ -36,13 +36,18 @@ The shared Doctor and Receptionist Patient Directory SHALL place its dynamic pag
 title inside the same white page card that contains the patient search and
 results. The standalone directory description and `Patient results` heading
 SHALL not be rendered. The page card SHALL fit the available page height, and
-the search field SHALL expand across the available search row while its actions
-remain visible.
+the results table SHALL expand to consume the remaining card height while its
+own scrollbar handles overflow. The search field SHALL expand across the
+available search row while its actions remain visible.
 
 #### Scenario: Staff opens the Patient Directory
 
 - **WHEN** a Doctor or Receptionist navigates to the Patient Directory
 - **THEN** the title appears inside the white results card, no duplicate description or results heading is shown, the search field is wide, and the card fills the page viewport
+
+#### Scenario: Staff resizes the Patient Directory page
+- **WHEN** the directory page has more vertical space than its minimum table layout requires
+- **THEN** the results table grows into that space without changing its rows or search/action controls
 
 #### Scenario: Staff switches directory states
 
