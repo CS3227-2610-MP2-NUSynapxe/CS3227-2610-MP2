@@ -129,8 +129,9 @@ Use the **Patient directory** search controls to find patients by name,
 NRIC/FIN or another identity document, phone, or email. The older generated-ID
 lookup remains accepted for compatibility but is not needed for normal work.
 Search is case-insensitive, partial text is accepted, and **Clear search**
-restores the full directory. No matches produce an empty list rather than an
-application error.
+restores the full directory. Every returned row keeps its own **View** action
+when a new query replaces the current results, including after repeated
+searches. No matches produce an empty list rather than an application error.
 
 Select a row's **View** button to open a read-only page containing all permitted
 administrative details. From there, select **Edit**, **Deactivate patient** (or
@@ -301,12 +302,13 @@ opening a feature tab reloads information that another workflow may have changed
    time** cards show unavailable intervals at their actual start, end, and
    proportional duration; Receptionists can see these blocks but cannot remove
    them.
-6. Select the Calendar **settings** icon to configure the first day of the
-   week and each day's working intervals. The settings page displays the fixed
-   Singapore timezone and has no work-location setting. Disable a day to make
-   it entirely non-working, or use **Add interval** to split a day around a
-   break such as lunch. Save valid changes or use **Cancel** to discard them.
-   These settings affect shading only and never block or change appointments.
+6. Select the Calendar **settings** icon to configure each day's working
+   intervals. The settings page displays the fixed Singapore timezone and has
+   no week-start or work-location setting because Calendar ranges and Agenda
+   start dates are selected directly. Disable a day to make it entirely
+   non-working, or use **Add interval** to split a day around a break such as
+   lunch. Save valid changes or use **Cancel** to discard them. These settings
+   affect shading only and never block or change appointments.
 7. Select a Dashboard appointment and choose **Accept selected**, or enter new
    times and choose **Reschedule selected** for a pending or accepted visit.
 8. In Calendar, choose **Block time**, then select a date and half-hour start

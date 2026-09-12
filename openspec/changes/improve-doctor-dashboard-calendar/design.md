@@ -166,6 +166,25 @@ existing Past cue and an empty anchor date may have no date header until the
 first appointment. The custom week/month picker and seven-day anchor movement
 are removed because they no longer describe the interaction.
 
+### 15. Bind Patient Directory actions to the row value
+
+The Patient Directory Actions column will expose the `Patient` as its cell value
+instead of relying on `TableCell.getTableRow().getItem()` while the cell is being
+reused. The View button will therefore be created and identified from the value
+passed to `updateItem`, so replacing the table items after a search refreshes
+every visible action reliably. Existing row IDs, navigation, and ownership
+behavior remain unchanged.
+
+### 16. Remove the obsolete first-day preference from Calendar settings
+
+The Doctor Calendar settings page will no longer render the Calendar Preferences
+card or its “Show the first day of the week as” selector. The current Calendar
+view has an explicit From/To range and Agenda has an explicit inclusive start
+date, so this preference no longer changes either Doctor presentation. Work
+hours and the fixed `Asia/Singapore` timezone remain visible. The existing
+`DoctorCalendarSettings` field and persistence path stay intact and are carried
+through saves using the loaded value to avoid an unnecessary schema/API change.
+
 ## Risks / Trade-offs
 
 - **Risk: A shared grid gains too many conditional branches.** -> Encapsulate size and interaction differences in an immutable display profile and small availability renderers rather than scattering Dashboard checks.

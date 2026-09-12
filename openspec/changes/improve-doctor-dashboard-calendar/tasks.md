@@ -44,3 +44,9 @@
 - [x] 7.3 Rename the Calendar mode values and user-facing labels from `Week`/`Schedule` to `Calendar`/`Agenda` while preserving active-mode state and accessible descriptions; update focused UI tests and documentation identifiers.
 - [x] 7.4 Replace Agenda's custom week picker with a shared compact date picker for the inclusive start date, place it between previous/next controls, move the anchor by one day, retain Today/refresh behavior, remove obsolete week-picker code/tests, and cover date selection, one-day navigation, and refresh retention.
 - [x] 7.5 Update the User Guide and Developer Guide for the Calendar/Agenda names, date-based Agenda navigation, responsive toolbar, and full-height Patient Directory table; run focused tests, the full quality gate, strict OpenSpec validation, and `git diff --check`.
+
+## 8. Follow-up reliability and settings simplification
+
+- [x] 8.1 Make the Patient Directory Actions column use the `Patient` cell value rather than a reused row lookup, and add Doctor and/or Receptionist UI coverage proving every row returned by Search patients exposes its View action.
+- [x] 8.2 Remove the Doctor Calendar settings first-day selector and Calendar Preferences card, preserve the loaded first-day value internally when saving existing settings, retain Work hours/timezone presentation, and update settings UI tests.
+- [x] 8.3 Update the User Guide and Developer Guide for the stable search actions and simplified Calendar settings; run focused tests, the full quality gate, strict OpenSpec validation, and `git diff --check`.

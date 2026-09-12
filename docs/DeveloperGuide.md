@@ -86,7 +86,8 @@ patients              Patient ID, documented identity, basic data, active flag
 appointments          patient/Doctor interval and lifecycle status
 doctor_time_off       blocked Doctor availability intervals
 doctor_calendar_settings
-                      Doctor first-day-of-week Calendar preference
+                      Doctor-owned Calendar settings, including the retained
+                      first-day value used for compatibility
 doctor_working_intervals
                       Doctor-owned daily display intervals and breaks
 clinical_records      diagnosis and consultation/follow-up notes
@@ -245,10 +246,12 @@ Calendar settings, administrative `CalendarAppointment` values, and ranged
 `DoctorTimeOff` values with stable IDs; it does not load clinical records or
 prescriptions. Doctor-owned and Receptionist-selected reads populate the same
 non-clinical time-off projection after their role and ownership checks.
-Calendar preferences are
-owned by the authenticated Doctor and are persisted transactionally. The
-fixed clinic zone is `Asia/Singapore`; it is shown as informational text and
-is not configurable or stored as a preference. Agenda mode uses the same
+Calendar working-hours settings are owned by the authenticated Doctor and are
+persisted transactionally. The fixed clinic zone is `Asia/Singapore`; it is
+shown as informational text and is not configurable or stored as a preference.
+The persisted first-day value remains part of the settings snapshot for
+compatibility, but the settings page no longer presents it because Calendar
+ranges and Agenda anchors are selected explicitly. Agenda mode uses the same
 administrative projection through `CalendarService.getSchedulePage`: it takes
 an inclusive Singapore-local start date, a bounded page size, and an optional
 `CalendarScheduleCursor` containing `(startsAt, appointmentId)`. The repository
@@ -355,18 +358,20 @@ identifier. The responsive toolbar exposes
 `doctor-calendar-schedule-loading`, `doctor-calendar-schedule-empty`,
 `doctor-calendar-schedule-end`, `doctor-calendar-schedule-error`, and
 `doctor-calendar-schedule-retry` state markers. The settings page uses
-`doctor-calendar-settings-page`, `doctor-calendar-settings-first-day`,
-`doctor-calendar-settings-working-hours`, and
-`doctor-calendar-settings-save`. Working-interval rows are visual-only and
-support multiple intervals so a break can be represented without changing
-appointment scheduling.
+`doctor-calendar-settings-page`, `doctor-calendar-settings-timezone`,
+`doctor-calendar-settings-working-hours`, and `doctor-calendar-settings-save`;
+there is no first-day selector or Calendar Preferences card. Working-interval
+rows are visual-only and support multiple intervals so a break can be
+represented without changing appointment scheduling.
 
 `PatientDirectoryView` is the shared administrative directory embedded by the
 Receptionist and Doctor workspaces. It receives the authenticated session,
 services, an ID prefix, a feedback label, and a callback for refreshing
 dependent selectors. Receptionist IDs retain the `reception-*` prefix; Doctor
-IDs use `doctor-*`. The table's explicit View action replaces the directory with
-a read-only administrative page containing **Edit**, **Activate/Deactivate
+IDs use `doctor-*`. The table's explicit View action is backed by the row's
+`Patient` cell value, so JavaFX cell reuse cannot detach an action after a
+search refresh. It replaces the directory with a read-only administrative
+page containing **Edit**, **Activate/Deactivate
 patient**, **Delete patient**, and **Back to patients**. Edit opens a separate
 form containing **Save** and **Discard changes**. Eligible
 deletion opens an explicit confirmation window; a blocked deletion opens the

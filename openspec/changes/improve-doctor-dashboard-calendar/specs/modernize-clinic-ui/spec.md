@@ -53,3 +53,14 @@ available search row while its actions remain visible.
 
 - **WHEN** staff opens registration, patient details, or editing from the directory
 - **THEN** the same in-card title slot remains visible with the appropriate state title and the page surface retains its full-height layout
+
+### Requirement: Patient Directory row actions SHALL survive search refreshes
+
+The shared Doctor and Receptionist Patient Directory SHALL render a View action
+for every patient currently present in the results table, including after a
+search replaces the table items and JavaFX reuses table cells.
+
+#### Scenario: Staff searches patient results
+
+- **WHEN** staff enters a search and selects Search patients
+- **THEN** every returned patient row exposes its own View action with the stable row-specific control identifier

@@ -95,3 +95,16 @@ The Doctor Calendar SHALL provide a manual refresh control that reloads the acti
 #### Scenario: Doctor refreshes Schedule mode
 - **WHEN** the Doctor activates refresh while viewing Schedule mode
 - **THEN** Calendar reloads the Schedule using the same anchor and retains Schedule mode
+
+### Requirement: Calendar settings SHALL omit the obsolete first-day preference
+
+The Doctor Calendar settings page SHALL not expose a Calendar Preferences card or
+a “Show the first day of the week as” selector. Calendar date ranges and Agenda
+start dates are selected explicitly. Work-hours editing and the fixed
+`Asia/Singapore` timezone information SHALL remain available, and saving SHALL
+preserve the existing stored first-day value internally for compatibility.
+
+#### Scenario: Doctor opens Calendar settings
+
+- **WHEN** the Doctor opens Calendar settings
+- **THEN** no first-day selector or Calendar Preferences card is shown, while Work hours and the timezone information remain visible

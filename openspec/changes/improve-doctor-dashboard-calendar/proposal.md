@@ -44,3 +44,10 @@ The completed change is extended with four presentation and navigation refinemen
 - Make the Doctor Calendar toolbar responsive so the Add appointment and Block time actions remain together and move to a second row when the available width is too small.
 - Rename the Calendar modes to `Calendar` (the date-range time grid) and `Agenda` (the chronological stream).
 - Replace the Agenda mode's week-oriented picker with a compact date picker for its inclusive start date; previous and next move that anchor by one day while Today and refresh retain their existing meanings.
+
+## Follow-up reliability and settings simplification
+
+The completed change is extended with two focused follow-ups:
+
+- Keep every Patient Directory View action present after search results are refreshed, including when JavaFX reuses table cells for a new result set.
+- Remove the obsolete Doctor Calendar first-day-of-week preference presentation now that Calendar uses an explicit date range and Agenda uses an explicit start date. Preserve the stored settings field and service/API shape for compatibility while keeping Work hours and the fixed clinic timezone available.
