@@ -172,6 +172,12 @@ final class DoctorViewTest extends ApplicationTest {
     fire("#doctor-dashboard-next");
     assertEquals(appointmentDate.plusDays(1), date.getValue());
     assertTrue(lookup("#doctor-no-selection").query().isVisible());
+    interact(
+        () -> {
+          date.setValue(appointmentDate.plusDays(5));
+          date.getOnAction().handle(new javafx.event.ActionEvent());
+        });
+    assertTrue(lookup("#doctor-calendar-empty").tryQuery().isPresent());
     fire("#doctor-dashboard-today");
     assertEquals(appointmentDate, date.getValue());
   }
@@ -197,12 +203,14 @@ final class DoctorViewTest extends ApplicationTest {
   void doctorCanNavigateToPatientsAndDeleteAnUnusedPatient() throws SQLException {
     loginAsDoctor();
     Button dashboardNavigation = lookup("#doctor-nav-dashboard").queryAs(Button.class);
+    var dashboardCalendar = lookup("#doctor-dashboard-day-calendar").query();
     Button patientsNavigation = lookup("#doctor-nav-patients").queryAs(Button.class);
     double navigationWidth = lookup("#doctor-navigation").query().getBoundsInLocal().getWidth();
     assertEquals(navigationWidth, dashboardNavigation.getBoundsInParent().getWidth(), 0.1);
     assertEquals(navigationWidth, patientsNavigation.getBoundsInParent().getWidth(), 0.1);
     assertEquals(0, lookup("#doctor-navigation").queryAs(VBox.class).getSpacing(), 0.0);
     assertTrue(dashboardNavigation.getStyleClass().contains("active-navigation"));
+    assertEquals(true, dashboardCalendar.getProperties().get("tickerRunning"));
 
     fire("#doctor-nav-patients");
     verifyThat("#doctor-patients-page", isVisible());
@@ -214,6 +222,7 @@ final class DoctorViewTest extends ApplicationTest {
     assertFalse(dashboardNavigation.getStyleClass().contains("active-navigation"));
     assertFalse(lookup("#doctor-master-detail").tryQuery().isPresent());
     assertFalse(lookup("#doctor-consultation-save").tryQuery().isPresent());
+    assertEquals(false, dashboardCalendar.getProperties().get("tickerRunning"));
     assertFalse(lookup("#doctor-prescription-submit").tryQuery().isPresent());
     assertEquals(
         List.of("Name", "Date of birth", "Phone", "Email", "Status", "Actions"),
@@ -293,6 +302,7 @@ final class DoctorViewTest extends ApplicationTest {
             .isEmpty());
     fire("#doctor-nav-dashboard");
     verifyThat("#doctor-master-detail", isVisible());
+    assertEquals(true, dashboardCalendar.getProperties().get("tickerRunning"));
   }
 
   @Test

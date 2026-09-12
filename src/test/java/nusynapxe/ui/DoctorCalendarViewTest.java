@@ -241,6 +241,59 @@ final class DoctorCalendarViewTest extends ApplicationTest {
   }
 
   @Test
+  void conflictingTimeOffKeepsDialogAvailableForCorrection() {
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    fire("#doctor-calendar-block-time");
+    waitForNode("#doctor-calendar-time-off-dialog-content");
+    interact(
+        () ->
+            lookup("#doctor-calendar-time-off-dialog-date")
+                .queryAs(DatePicker.class)
+                .setValue(today()));
+    selectCombo("#doctor-calendar-time-off-dialog-start-hour", "15");
+    selectCombo("#doctor-calendar-time-off-dialog-start-minute", "00");
+    selectCombo("#doctor-calendar-time-off-dialog-end-hour", "15");
+    selectCombo("#doctor-calendar-time-off-dialog-end-minute", "30");
+
+    fire("#doctor-calendar-time-off-dialog-submit");
+
+    verifyThat("#doctor-calendar-time-off-dialog-feedback", isVisible());
+    assertTrue(lookup("#doctor-calendar-time-off-dialog-content").tryQuery().isPresent());
+    fire("#doctor-calendar-time-off-dialog-cancel");
+  }
+
+  @Test
+  void doctorCancelsThenConfirmsTimeOffRemoval() throws SQLException {
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    waitForNode("#doctor-calendar-page");
+    openSeededTimeOff();
+
+    Thread cancelledRemoval = new Thread(() -> fire("#doctor-calendar-time-off-remove"));
+    cancelledRemoval.start();
+    waitForNode("#doctor-calendar-time-off-remove-confirmation");
+    fire("#doctor-calendar-time-off-remove-cancel");
+    join(cancelledRemoval);
+    assertTrue(
+        new AppointmentRepository(database)
+            .findTimeOffByDoctor(doctorId).stream()
+                .anyMatch(interval -> interval.id() == timeOffId));
+
+    Thread confirmedRemoval = new Thread(() -> fire("#doctor-calendar-time-off-remove"));
+    confirmedRemoval.start();
+    waitForNode("#doctor-calendar-time-off-remove-confirmation");
+    fire("#doctor-calendar-time-off-remove-confirm");
+    join(confirmedRemoval);
+    assertTrue(
+        new AppointmentRepository(database)
+            .findTimeOffByDoctor(doctorId).stream()
+                .noneMatch(interval -> interval.id() == timeOffId));
+    assertTrue(
+        lookup("#doctor-calendar-time-off-" + timeOffId + "-" + today()).tryQuery().isEmpty());
+  }
+
+  @Test
   void doctorCanDeclineAndCreateAcceptedAppointmentFromCalendar() throws SQLException {
     loginAsDoctor();
     fire("#doctor-nav-calendar");
@@ -594,6 +647,43 @@ final class DoctorCalendarViewTest extends ApplicationTest {
     setText("#login-password", "doctor-pass");
     fire("#login-submit");
     waitForNode("#doctor-workspace");
+  }
+
+  @Test
+  void refreshRetainsScheduleModeAndAnchor() {
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    ComboBox<String> mode = calendarMode();
+    interact(() -> mode.setValue("Schedule"));
+    fire("#doctor-calendar-next");
+    Button range = lookup("#doctor-calendar-week-picker").queryAs(Button.class);
+    String anchorLabel = range.getText();
+
+    fire("#doctor-calendar-refresh");
+
+    assertEquals("Schedule", mode.getValue());
+    assertEquals(anchorLabel, range.getText());
+    assertTrue(lookup("#doctor-calendar-schedule-list").tryQuery().isPresent());
+  }
+
+  private void openSeededTimeOff() {
+    interact(
+        () ->
+            lookup("#doctor-calendar-time-off-" + timeOffId + "-" + today())
+                .query()
+                .getOnMouseClicked()
+                .handle(primaryClick()));
+    waitForNode("#doctor-calendar-time-off-details");
+  }
+
+  private static void join(Thread thread) {
+    try {
+      thread.join(60_000);
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      throw new AssertionError("Interrupted while waiting for time-off confirmation", exception);
+    }
+    assertFalse(thread.isAlive(), "Time-off confirmation did not finish");
   }
 
   private void setText(String selector, String value) {

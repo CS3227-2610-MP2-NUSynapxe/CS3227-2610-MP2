@@ -464,7 +464,6 @@ public final class DoctorView {
     return UiComponents.humanizeStatus(status);
   }
 
-  @SuppressWarnings("PMD.ExcessiveParameterList")
   private static void selectDashboardAppointment(
       ClinicServices services,
       Session session,
@@ -483,19 +482,21 @@ public final class DoctorView {
       TextArea followUpNotes,
       ListView<Prescription> prescriptions,
       Label feedback) {
-    Appointment appointment = null;
+    Optional<Appointment> resolvedAppointment = Optional.empty();
     try {
       if (calendarAppointment != null) {
-        appointment = services.appointmentService().get(calendarAppointment.appointmentId());
+        Appointment appointment =
+            services.appointmentService().get(calendarAppointment.appointmentId());
         if (appointment.doctorId() != session.accountId()) {
           throw new AuthorizationException("You are not allowed to view this appointment");
         }
+        resolvedAppointment = Optional.of(appointment);
       }
     } catch (SQLException | AuthorizationException | ValidationException exception) {
       UiComponents.showError(
           feedback, userMessage(exception, "Appointment is temporarily unavailable"));
-      appointment = null;
     }
+    Appointment appointment = resolvedAppointment.orElse(null);
     selection.appointmentId = appointment == null ? 0 : appointment.id();
     updateSelectionState(
         selection,

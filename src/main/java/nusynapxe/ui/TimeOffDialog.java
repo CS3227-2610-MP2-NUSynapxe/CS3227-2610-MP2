@@ -114,6 +114,15 @@ final class TimeOffDialog {
                   ButtonType.OK);
           confirmation.setTitle("Remove blocked time");
           confirmation.setHeaderText("Make this interval available again?");
+          confirmation.getDialogPane().setId("doctor-calendar-time-off-remove-confirmation");
+          confirmation
+              .getDialogPane()
+              .lookupButton(ButtonType.OK)
+              .setId("doctor-calendar-time-off-remove-confirm");
+          confirmation
+              .getDialogPane()
+              .lookupButton(ButtonType.CANCEL)
+              .setId("doctor-calendar-time-off-remove-cancel");
           if (confirmation.showAndWait().filter(ButtonType.OK::equals).isEmpty()) {
             return;
           }

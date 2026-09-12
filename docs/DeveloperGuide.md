@@ -219,10 +219,17 @@ PENDING -> ACCEPTED -> CHECKED_IN -> COMPLETED -> CHECKED_OUT
 
 Receptionists book for any Doctor, check in at or after the start time, and
 check out a completed appointment. Doctors accept assigned appointments,
-reschedule their own pending/accepted appointments, block time off, save one
+reschedule their own pending/accepted appointments, manage time off from Calendar, save one
 clinical record per consultation, add prescriptions, and complete checked-in
 appointments. Invalid transitions leave persistence unchanged. Billing
 stores integer minor units and aggregates successful payments by local date.
+
+The shared availability query treats `PENDING`, `ACCEPTED`, `CHECKED_IN`,
+`COMPLETED`, and `CHECKED_OUT` as blocking states. `DECLINED` and `CANCELLED`
+appointments remain persisted and searchable but do not block booking,
+rescheduling, or time-off creation. Time-off removal derives the owner from the
+authenticated Doctor session and deletes with both `id` and `doctor_id`; a
+missing or differently owned row produces the same safe validation result.
 
 Revenue Reports are built from persisted successful-payment receipts. The
 Receptionist-only service accepts an inclusive Singapore-local date range and
@@ -231,10 +238,14 @@ detail rows plus total and breakdown projections. The UI renders an explicit
 empty state and exports the current projection as CSV or JSON; exporting never
 creates or mutates a payment or receipt.
 
-The Doctor Calendar uses a separate authorized read path. Its weekly query
-matches appointments with `starts_at < week_end` and `ends_at > week_start`,
-then returns only Patient ID/name, appointment timing, and `AppointmentStatus`;
-it does not load clinical records or prescriptions. Calendar preferences are
+The Doctor Calendar uses a separate authorized read path. Its range query
+matches appointments and time off with `starts_at < range_end` and
+`ends_at > range_start`. The immutable `DoctorCalendarWeek` projection contains
+Calendar settings, administrative `CalendarAppointment` values, and ranged
+`DoctorTimeOff` values with stable IDs; it does not load clinical records or
+prescriptions. Doctor-owned and Receptionist-selected reads populate the same
+non-clinical time-off projection after their role and ownership checks.
+Calendar preferences are
 owned by the authenticated Doctor and are persisted transactionally. The
 fixed clinic zone is `Asia/Singapore`; it is shown as informational text and
 is not configurable or stored as a preference. Schedule mode uses the same
@@ -248,6 +259,18 @@ does not add a duplicate date header when a page boundary splits a group.
 Schedule navigation clears the cursor and list, while a failed later page
 keeps prior rows and exposes Retry. Schedule working-hour and break shading is
 intentionally confined to the weekly grid; it never blocks appointment writes.
+
+`CalendarTimeGrid` shares day clipping, working-hour shading, current-time
+presentation, appointment selection, time-off rendering, and proportional
+minute geometry. Its full profile retains 100-pixel half-hour rows and inline
+Doctor decisions. Its compact profile uses 44-pixel rows, combines time and
+written status on one line, and makes the whole appointment block selectable.
+A 60-minute event therefore occupies twice the time span of a 30-minute event,
+less the same inset at both edges. `DoctorDashboardDayView` owns the Dashboard
+date, Singapore clock, Today and previous/next navigation, date picker, refresh,
+useful initial scrolling, minute ticker, and selection reconciliation.
+`DoctorView` resolves an authorized Calendar selection through
+`AppointmentService` before loading clinical data in the detail pane.
 
 ## UI and TestFX conventions
 
@@ -356,6 +379,12 @@ field rather than placing a separate adjacent button. New layout markers include
 `reception-booking-card`, `reception-appointment-results-card`,
 `reception-checkout-payment-card`, `reception-revenue-card`,
 `doctor-master-detail`, `doctor-detail-scroll`, `doctor-no-selection`,
+`doctor-dashboard-day-calendar`, `doctor-dashboard-date`,
+`doctor-dashboard-previous`, `doctor-dashboard-next`, `doctor-dashboard-today`,
+`doctor-dashboard-refresh`, `doctor-calendar-block-time`,
+`doctor-calendar-refresh`, `doctor-calendar-time-off-dialog-content`,
+`doctor-calendar-time-off-<id>-<date>`,
+`doctor-calendar-time-off-remove-confirmation`,
 `admin-account-form-card`, and `admin-account-list-card`.
 
 Operational results use dedicated JavaFX tables. Patient rows show name,
@@ -370,11 +399,13 @@ columns. Empty results use stable `*-empty` markers and an explanatory
 message. Color is supplementary to status text, and the stylesheet provides a
 visible focus outline for keyboard navigation.
 
-The Doctor workspace uses two independently scrollable panes: the assigned
-schedule and a selected-appointment detail pane containing availability,
-consultation, prescriptions, and completion cards. Consultation actions remain
-disabled until a schedule item is selected; the existing services still own
-authorization and lifecycle validation.
+The Doctor workspace uses a compact, internally scrollable single-day Calendar
+as the master pane and a separately scrollable selected-appointment detail pane
+containing appointment actions, consultation, prescriptions, and completion
+cards. The old Dashboard appointment `ListView` and time-off form are absent;
+time off is created and removed only from the full Calendar. Consultation
+actions remain disabled until a Calendar appointment is selected; the existing
+services still own authorization and lifecycle validation.
 The Doctor shell keeps that content under the `Dashboard` destination and
 places the shared administrative directory under `Patients`;
 `doctor-nav-dashboard`, `doctor-nav-patients`, and `doctor-patients-page` are

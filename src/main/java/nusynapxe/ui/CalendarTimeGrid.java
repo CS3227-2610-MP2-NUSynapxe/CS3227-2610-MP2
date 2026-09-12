@@ -39,7 +39,6 @@ import nusynapxe.domain.CalendarWeek;
 import nusynapxe.domain.DoctorCalendarSettings;
 import nusynapxe.domain.DoctorCalendarWeek;
 import nusynapxe.domain.DoctorTimeOff;
-import nusynapxe.domain.WorkingInterval;
 import nusynapxe.service.CalendarCalculations;
 import nusynapxe.service.CalendarService;
 
@@ -440,37 +439,10 @@ final class CalendarTimeGrid extends BorderPane {
 
   /** Scrolls the timeline near the most useful visible minute. */
   void scrollToUsefulTime(LocalDateTime now) {
-    int minute;
-    if (dates.contains(now.toLocalDate())) {
-      minute = Math.max(0, CalendarCalculations.currentMinute(now.toLocalDate(), now) - 60);
-    } else {
-      minute = earliestVisibleMinute();
-    }
+    int minute = CalendarCalculations.initialScrollMinute(dates, data, now);
     int target = minute;
     Platform.runLater(
         () -> scroll.setVvalue(Math.max(0, Math.min(1, target / (double) (24 * 60)))));
-  }
-
-  private int earliestVisibleMinute() {
-    for (LocalDate date : dates) {
-      int earliest = WorkingInterval.MINUTES_PER_DAY;
-      for (CalendarAppointmentBlock block :
-          CalendarCalculations.blocksForDay(date, data.appointments())) {
-        earliest = Math.min(earliest, block.startMinute());
-      }
-      for (CalendarTimeOffBlock block :
-          CalendarCalculations.timeOffBlocksForDay(date, data.timeOff())) {
-        earliest = Math.min(earliest, block.startMinute());
-      }
-      if (earliest < WorkingInterval.MINUTES_PER_DAY) {
-        return Math.max(0, earliest - 30);
-      }
-      List<WorkingInterval> working = data.settings().intervals(date.getDayOfWeek());
-      if (!working.isEmpty()) {
-        return working.getFirst().startMinute();
-      }
-    }
-    return 0;
   }
 
   private void layoutEvents(Pane eventPane, List<EventPlacement> placements) {
@@ -572,26 +544,26 @@ final class CalendarTimeGrid extends BorderPane {
     FULL(100, true, "full"),
     COMPACT(44, false, "compact");
 
-    private final double halfHourHeight;
-    private final boolean inlineDecisions;
-    private final String styleName;
+    private final double slotHeight;
+    private final boolean showInlineDecisions;
+    private final String cssSuffix;
 
     DisplayProfile(double halfHourHeight, boolean inlineDecisions, String styleName) {
-      this.halfHourHeight = halfHourHeight;
-      this.inlineDecisions = inlineDecisions;
-      this.styleName = styleName;
+      this.slotHeight = halfHourHeight;
+      this.showInlineDecisions = inlineDecisions;
+      this.cssSuffix = styleName;
     }
 
     double halfHourHeight() {
-      return halfHourHeight;
+      return slotHeight;
     }
 
     boolean inlineDecisions() {
-      return inlineDecisions;
+      return showInlineDecisions;
     }
 
     String styleName() {
-      return styleName;
+      return cssSuffix;
     }
   }
 

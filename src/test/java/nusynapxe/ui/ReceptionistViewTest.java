@@ -319,9 +319,16 @@ final class ReceptionistViewTest extends ApplicationTest {
     Patient patient =
         new PatientRepository(database)
             .create(new Patient(0, "Pat", "Lee", "1900-01-01", "555-0100", "", ""));
+    LocalDate selectedDate = LocalDate.now(java.time.ZoneId.of("Asia/Singapore"));
+    var timeOff =
+        services
+            .appointmentService()
+            .blockTimeOff(
+                new Session(doctor.id(), doctor.username(), Role.DOCTOR),
+                selectedDate.atTime(15, 0),
+                selectedDate.atTime(16, 0));
     loginAsReceptionist();
     fire("#reception-nav-calendar");
-    LocalDate selectedDate = LocalDate.now(java.time.ZoneId.of("Asia/Singapore"));
     DatePicker from = lookup("#reception-calendar-from").queryAs(DatePicker.class);
     DatePicker to = lookup("#reception-calendar-to").queryAs(DatePicker.class);
     TextField calendarDoctor = textField("#reception-calendar-doctor");
@@ -371,6 +378,11 @@ final class ReceptionistViewTest extends ApplicationTest {
         lookup("#doctor-calendar-day-column-" + selectedDate.plusDays(2)).tryQuery().isPresent());
     assertTrue(
         lookup("#doctor-calendar-day-column-" + selectedDate.plusDays(3)).tryQuery().isEmpty());
+    var timeOffNode =
+        lookup("#doctor-calendar-time-off-" + timeOff.id() + "-" + selectedDate).query();
+    assertFalse(timeOffNode.isFocusTraversable());
+    interact(() -> timeOffNode.getOnMouseClicked().handle(primaryClick()));
+    assertTrue(lookup("#doctor-calendar-time-off-details").tryQuery().isEmpty());
 
     interact(
         () ->
@@ -945,6 +957,28 @@ final class ReceptionistViewTest extends ApplicationTest {
     } catch (TimeoutException exception) {
       throw new AssertionError("Timed out waiting for " + selector, exception);
     }
+  }
+
+  private static MouseEvent primaryClick() {
+    return new MouseEvent(
+        MouseEvent.MOUSE_CLICKED,
+        5,
+        5,
+        5,
+        5,
+        MouseButton.PRIMARY,
+        1,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        null);
   }
 
   private void join(Thread thread) {

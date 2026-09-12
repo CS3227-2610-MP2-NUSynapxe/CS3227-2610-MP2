@@ -12,6 +12,7 @@ import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.CalendarAppointment;
 import nusynapxe.domain.CalendarTimeSegment.SegmentKind;
 import nusynapxe.domain.DoctorCalendarSettings;
+import nusynapxe.domain.DoctorCalendarWeek;
 import nusynapxe.domain.DoctorTimeOff;
 import nusynapxe.domain.WorkingInterval;
 import org.junit.jupiter.api.Test;
@@ -83,6 +84,40 @@ final class CalendarCalculationsTest {
     assertEquals(0, blocks.get(0).startMinute());
     assertEquals(30, blocks.get(0).endMinute());
     assertEquals(60, blocks.get(1).endMinute() - blocks.get(1).startMinute());
+  }
+
+  @Test
+  void choosesCurrentEventWorkingAndEmptyInitialScrollTargets() {
+    LocalDate monday = LocalDate.of(2026, 9, 7);
+    DoctorCalendarWeek emptyMonday =
+        new DoctorCalendarWeek(1, monday, settings(), List.of(), List.of());
+    assertEquals(
+        9 * 60,
+        CalendarCalculations.initialScrollMinute(
+            List.of(monday), emptyMonday, monday.atTime(10, 0)));
+
+    CalendarAppointment appointment = appointment(1, 9, 0, 9, 30, AppointmentStatus.ACCEPTED);
+    DoctorTimeOff earlierTimeOff =
+        new DoctorTimeOff(2, 1, monday.atTime(8, 0), monday.atTime(8, 30));
+    DoctorCalendarWeek eventDay =
+        new DoctorCalendarWeek(
+            1, monday, settings(), List.of(appointment), List.of(earlierTimeOff));
+    assertEquals(
+        7 * 60 + 30,
+        CalendarCalculations.initialScrollMinute(
+            List.of(monday), eventDay, monday.plusDays(1).atTime(10, 0)));
+
+    assertEquals(
+        8 * 60,
+        CalendarCalculations.initialScrollMinute(
+            List.of(monday), emptyMonday, monday.plusDays(1).atTime(10, 0)));
+    LocalDate sunday = monday.plusDays(6);
+    DoctorCalendarWeek emptySunday =
+        new DoctorCalendarWeek(1, sunday, settings(), List.of(), List.of());
+    assertEquals(
+        0,
+        CalendarCalculations.initialScrollMinute(
+            List.of(sunday), emptySunday, monday.atTime(10, 0)));
   }
 
   private DoctorCalendarSettings settings() {

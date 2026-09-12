@@ -13,12 +13,14 @@ import nusynapxe.domain.CalendarTimeOffBlock;
 import nusynapxe.domain.CalendarTimeSegment;
 import nusynapxe.domain.CalendarTimeSegment.SegmentKind;
 import nusynapxe.domain.DoctorCalendarSettings;
+import nusynapxe.domain.DoctorCalendarWeek;
 import nusynapxe.domain.DoctorTimeOff;
 import nusynapxe.domain.WorkingInterval;
 
 /** Pure calculations shared by the Doctor Calendar renderer and its tests. */
 public final class CalendarCalculations {
   private static final String DAY_ARGUMENT = "day";
+  private static final String NOW_ARGUMENT = "now";
 
   private CalendarCalculations() {
     throw new AssertionError("Utility class");
@@ -37,7 +39,7 @@ public final class CalendarCalculations {
       LocalDate day, DoctorCalendarSettings settings, LocalDateTime now) {
     Objects.requireNonNull(day, DAY_ARGUMENT);
     Objects.requireNonNull(settings, "settings");
-    Objects.requireNonNull(now, "now");
+    Objects.requireNonNull(now, NOW_ARGUMENT);
     List<CalendarTimeSegment> segments = new ArrayList<>();
     for (int start = 0; start < WorkingInterval.MINUTES_PER_DAY; start += 30) {
       int end = Math.min(start + 30, WorkingInterval.MINUTES_PER_DAY);
@@ -66,7 +68,7 @@ public final class CalendarCalculations {
       LocalDate day, int minute, DoctorCalendarSettings settings, LocalDateTime now) {
     Objects.requireNonNull(day, DAY_ARGUMENT);
     Objects.requireNonNull(settings, "settings");
-    Objects.requireNonNull(now, "now");
+    Objects.requireNonNull(now, NOW_ARGUMENT);
     if (day.isBefore(now.toLocalDate())
         || (day.isEqual(now.toLocalDate()) && minute < minuteOf(now.toLocalTime()))) {
       return SegmentKind.ELAPSED;
@@ -89,7 +91,7 @@ public final class CalendarCalculations {
    */
   public static int currentMinute(LocalDate day, LocalDateTime now) {
     Objects.requireNonNull(day, DAY_ARGUMENT);
-    Objects.requireNonNull(now, "now");
+    Objects.requireNonNull(now, NOW_ARGUMENT);
     if (!day.isEqual(now.toLocalDate())) {
       return -1;
     }
@@ -178,6 +180,44 @@ public final class CalendarCalculations {
             Comparator.comparingInt(CalendarTimeOffBlock::startMinute)
                 .thenComparingLong(block -> block.timeOff().id()))
         .toList();
+  }
+
+  /**
+   * Chooses a useful initial scroll minute for a displayed range.
+   *
+   * @param dates non-empty displayed dates
+   * @param data authorized Calendar projection
+   * @param now current clinic-local timestamp
+   * @return minute near current time, the first event, working time, or start of day
+   */
+  public static int initialScrollMinute(
+      List<LocalDate> dates, DoctorCalendarWeek data, LocalDateTime now) {
+    Objects.requireNonNull(dates, "dates");
+    Objects.requireNonNull(data, "data");
+    Objects.requireNonNull(now, NOW_ARGUMENT);
+    if (dates.isEmpty()) {
+      throw new IllegalArgumentException("Calendar dates must not be empty");
+    }
+    if (dates.contains(now.toLocalDate())) {
+      return Math.max(0, currentMinute(now.toLocalDate(), now) - 60);
+    }
+    for (LocalDate date : dates) {
+      int earliest = WorkingInterval.MINUTES_PER_DAY;
+      for (CalendarAppointmentBlock block : blocksForDay(date, data.appointments())) {
+        earliest = Math.min(earliest, block.startMinute());
+      }
+      for (CalendarTimeOffBlock block : timeOffBlocksForDay(date, data.timeOff())) {
+        earliest = Math.min(earliest, block.startMinute());
+      }
+      if (earliest < WorkingInterval.MINUTES_PER_DAY) {
+        return Math.max(0, earliest - 30);
+      }
+      List<WorkingInterval> working = data.settings().intervals(date.getDayOfWeek());
+      if (!working.isEmpty()) {
+        return working.getFirst().startMinute();
+      }
+    }
+    return 0;
   }
 
   private static int firstAvailableLane(List<List<BlockSeed>> lanes, BlockSeed seed) {

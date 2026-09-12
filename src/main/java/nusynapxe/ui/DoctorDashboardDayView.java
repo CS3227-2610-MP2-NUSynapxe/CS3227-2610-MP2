@@ -28,6 +28,7 @@ import nusynapxe.service.ValidationException;
 
 /** Compact single-day Calendar used as the Doctor Dashboard master pane. */
 final class DoctorDashboardDayView {
+  private static final String TICKER_RUNNING_PROPERTY = "tickerRunning";
   private final ClinicServices services;
   private final Session session;
   private final Label feedback;
@@ -66,6 +67,7 @@ final class DoctorDashboardDayView {
     date.setAccessibleText("Dashboard date");
     root.setId("doctor-dashboard-day-calendar");
     root.getStyleClass().add("doctor-dashboard-day-calendar");
+    root.getProperties().put(TICKER_RUNNING_PROPERTY, false);
     root.setTop(toolbar());
     ticker = new Timeline(new KeyFrame(Duration.minutes(1), event -> updateCurrentTime()));
     ticker.setCycleCount(Timeline.INDEFINITE);
@@ -84,16 +86,19 @@ final class DoctorDashboardDayView {
     shown = true;
     refresh();
     ticker.play();
+    root.getProperties().put(TICKER_RUNNING_PROPERTY, true);
   }
 
   void hide() {
     shown = false;
     ticker.pause();
+    root.getProperties().put(TICKER_RUNNING_PROPERTY, false);
   }
 
   void dispose() {
     shown = false;
     ticker.stop();
+    root.getProperties().put(TICKER_RUNNING_PROPERTY, false);
   }
 
   void refresh() {
