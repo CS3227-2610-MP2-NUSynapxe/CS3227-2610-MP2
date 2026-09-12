@@ -27,9 +27,9 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextInputControl;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import nusynapxe.domain.Account;
@@ -681,8 +681,7 @@ final class DoctorCalendarViewTest extends ApplicationTest {
     waitForNode("#doctor-calendar-page");
     interact(
         () -> {
-          Stage stage =
-              (Stage) lookup("#doctor-calendar-toolbar").query().getScene().getWindow();
+          Stage stage = (Stage) lookup("#doctor-calendar-toolbar").query().getScene().getWindow();
           stage.setWidth(980);
           lookup("#doctor-calendar-toolbar").query().applyCss();
           lookup("#doctor-calendar-toolbar").queryAs(VBox.class).layout();
@@ -691,8 +690,7 @@ final class DoctorCalendarViewTest extends ApplicationTest {
     assertEquals("doctor-calendar-toolbar-actions", actionGroup.getParent().getId());
     interact(
         () -> {
-          Stage stage =
-              (Stage) lookup("#doctor-calendar-toolbar").query().getScene().getWindow();
+          Stage stage = (Stage) lookup("#doctor-calendar-toolbar").query().getScene().getWindow();
           stage.setWidth(1400);
           lookup("#doctor-calendar-toolbar").query().applyCss();
           lookup("#doctor-calendar-toolbar").queryAs(VBox.class).layout();

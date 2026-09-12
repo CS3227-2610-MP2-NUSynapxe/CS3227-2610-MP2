@@ -219,7 +219,8 @@ public final class DoctorCalendarView {
           hide();
           onSettings.run();
         });
-    toolbarNavigationGroup = new HBox(8, today, previous, scheduleDate, next, fromField, toField, viewMode);
+    toolbarNavigationGroup =
+        new HBox(8, today, previous, scheduleDate, next, fromField, toField, viewMode);
     toolbarNavigationGroup.setAlignment(Pos.BOTTOM_LEFT);
     toolbarNavigationGroup.getStyleClass().add("calendar-toolbar-group");
     toolbarActionGroup = new HBox(8, addAppointment, blockTime);
@@ -231,7 +232,8 @@ public final class DoctorCalendarView {
     toolbarTrailingGroup.getStyleClass().add("calendar-toolbar-group");
     Region spacer = new Region();
     HBox.setHgrow(spacer, Priority.ALWAYS);
-    toolbarMainRow = new HBox(8, toolbarNavigationGroup, toolbarActionGroup, spacer, toolbarTrailingGroup);
+    toolbarMainRow =
+        new HBox(8, toolbarNavigationGroup, toolbarActionGroup, spacer, toolbarTrailingGroup);
     toolbarMainRow.setId("doctor-calendar-toolbar-main");
     toolbarMainRow.setAlignment(Pos.BOTTOM_LEFT);
     toolbarActionsRow = new HBox(8);
