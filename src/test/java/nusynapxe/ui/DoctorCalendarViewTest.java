@@ -9,6 +9,7 @@ import static org.testfx.matcher.base.NodeMatchers.isVisible;
 
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -16,6 +17,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javafx.geometry.Bounds;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
@@ -36,12 +38,14 @@ import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.DoctorCalendarSettings;
+import nusynapxe.domain.DoctorCalendarWeek;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
 import nusynapxe.persistence.AppointmentRepository;
 import nusynapxe.persistence.PatientRepository;
 import nusynapxe.persistence.SqliteDatabase;
+import nusynapxe.service.CalendarService;
 import nusynapxe.service.ClinicServices;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -415,6 +419,35 @@ final class DoctorCalendarViewTest extends ApplicationTest {
                         .getScene()
                         .getWindow())
                 .close());
+  }
+
+  @Test
+  void blockedTimeConsumesClicksWhenNoTimeOffHandlerExists() throws SQLException {
+    LocalDate selectedDate = today();
+    Session doctorSession = new Session(doctorId, "doctor", Role.DOCTOR);
+    DoctorCalendarWeek data =
+        services.calendarService().getRange(doctorSession, selectedDate, selectedDate);
+    AtomicBoolean emptySlotOpened = new AtomicBoolean();
+    CalendarTimeGrid grid =
+        new CalendarTimeGrid(
+            List.of(selectedDate),
+            data,
+            Clock.system(CalendarService.CLINIC_ZONE),
+            new CalendarTimeGrid.InteractionHandlers(
+                null, null, start -> emptySlotOpened.set(true), null));
+
+    interact(
+        () -> {
+          Stage stage = (Stage) lookup("#login-view").query().getScene().getWindow();
+          stage.getScene().setRoot(grid);
+          grid.applyCss();
+          grid.layout();
+          Node blockedTime =
+              grid.lookup("#doctor-calendar-time-off-" + timeOffId + "-" + selectedDate);
+          blockedTime.fireEvent(primaryClick());
+        });
+
+    assertFalse(emptySlotOpened.get());
   }
 
   @Test

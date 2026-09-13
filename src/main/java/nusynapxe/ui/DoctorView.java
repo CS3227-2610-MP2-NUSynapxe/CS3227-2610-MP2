@@ -649,6 +649,7 @@ public final class DoctorView {
       clearClinical(diagnosis, consultationNotes, followUpNotes, prescriptions);
       return;
     }
+    clearClinical(diagnosis, consultationNotes, followUpNotes, prescriptions);
     try {
       Optional<ClinicalRecord> record =
           services.clinicalService().findForDoctor(session, appointment.id());

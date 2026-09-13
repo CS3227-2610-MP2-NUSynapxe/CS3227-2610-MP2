@@ -402,16 +402,19 @@ final class CalendarTimeGrid extends BorderPane {
     node.setFocusTraversable(handlers.timeOffSelected() != null);
     node.setOnMouseClicked(
         event -> {
-          if (event.getButton() == MouseButton.PRIMARY && handlers.timeOffSelected() != null) {
-            handlers.timeOffSelected().accept(block.timeOff());
+          if (event.getButton() == MouseButton.PRIMARY) {
+            if (handlers.timeOffSelected() != null) {
+              handlers.timeOffSelected().accept(block.timeOff());
+            }
             event.consume();
           }
         });
     node.setOnKeyPressed(
         event -> {
-          if ((event.getCode() == KeyCode.ENTER || event.getCode() == KeyCode.SPACE)
-              && handlers.timeOffSelected() != null) {
-            handlers.timeOffSelected().accept(block.timeOff());
+          if (event.getCode() == KeyCode.ENTER || event.getCode() == KeyCode.SPACE) {
+            if (handlers.timeOffSelected() != null) {
+              handlers.timeOffSelected().accept(block.timeOff());
+            }
             event.consume();
           }
         });

@@ -25,7 +25,7 @@ public final class AppointmentService {
   private final Clock clock;
 
   /**
-   * Creates an appointment service using the system clock.
+   * Creates an appointment service using the clinic timezone clock.
    *
    * @param appointments repository used for appointment persistence
    * @param accounts repository used to validate doctors
@@ -34,7 +34,7 @@ public final class AppointmentService {
    */
   public AppointmentService(
       AppointmentRepository appointments, AccountRepository accounts, PatientRepository patients) {
-    this(appointments, accounts, patients, Clock.systemDefaultZone());
+    this(appointments, accounts, patients, Clock.system(CalendarService.CLINIC_ZONE));
   }
 
   AppointmentService(

@@ -9,6 +9,7 @@ import static org.testfx.matcher.base.NodeMatchers.isVisible;
 import static org.testfx.matcher.control.LabeledMatchers.hasText;
 
 import java.nio.file.Path;
+import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -171,6 +172,34 @@ final class DoctorViewTest extends ApplicationTest {
     fire("#doctor-check-in");
     verifyThat("#doctor-feedback", hasText("Patient checked in"));
     assertEquals(AppointmentStatus.CHECKED_IN, services.appointmentService().get(1).status());
+  }
+
+  @Test
+  void failedClinicalLoadClearsPreviousPatientDetails() throws SQLException {
+    loginAsDoctor();
+    selectDashboardAppointment(1);
+    setText("#doctor-diagnosis", "Previous diagnosis");
+    setText("#doctor-consultation-notes", "Previous consultation");
+    setText("#doctor-follow-up", "Previous follow-up");
+    fire("#doctor-consultation-save");
+    verifyThat("#doctor-feedback", hasText("Consultation saved"));
+
+    try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database.path());
+        var statement = connection.createStatement()) {
+      statement.executeUpdate("DROP TABLE prescriptions");
+      statement.executeUpdate("DROP TABLE clinical_records");
+    }
+
+    fire("#doctor-dashboard-refresh");
+    assertTrue(lookup("#doctor-diagnosis").queryAs(TextInputControl.class).getText().isEmpty());
+    assertTrue(
+        lookup("#doctor-consultation-notes").queryAs(TextInputControl.class).getText().isEmpty());
+    assertTrue(lookup("#doctor-follow-up").queryAs(TextInputControl.class).getText().isEmpty());
+    assertTrue(
+        lookup("#doctor-prescription-list")
+            .queryAs(javafx.scene.control.ListView.class)
+            .getItems()
+            .isEmpty());
   }
 
   @Test

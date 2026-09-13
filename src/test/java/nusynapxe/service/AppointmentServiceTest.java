@@ -12,6 +12,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.TimeZone;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
@@ -340,6 +341,40 @@ final class AppointmentServiceTest {
           ValidationException.class,
           () -> service.checkIn(fixture.doctorSession(), appointment.id()));
       assertEquals(AppointmentStatus.ACCEPTED, service.get(appointment.id()).status());
+    }
+  }
+
+  @Test
+  void defaultClockUsesClinicTimezoneForCheckIn() throws SQLException {
+    TimeZone originalTimeZone = TimeZone.getDefault();
+    try {
+      TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+      try (SqliteDatabase database = openDatabase()) {
+        Accounts fixture = accounts(database);
+        AppointmentService service =
+            new AppointmentService(
+                new AppointmentRepository(database),
+                new AccountRepository(database),
+                new PatientRepository(database));
+        LocalDateTime startsAt =
+            LocalDateTime.now(CalendarService.CLINIC_ZONE)
+                .minusMinutes(1)
+                .withSecond(0)
+                .withNano(0);
+        Appointment appointment =
+            service.book(
+                fixture.doctorSession(),
+                fixture.patient().id(),
+                fixture.doctor().id(),
+                startsAt,
+                startsAt.plusMinutes(30));
+
+        assertEquals(
+            AppointmentStatus.CHECKED_IN,
+            service.checkIn(fixture.doctorSession(), appointment.id()).status());
+      }
+    } finally {
+      TimeZone.setDefault(originalTimeZone);
     }
   }
 
