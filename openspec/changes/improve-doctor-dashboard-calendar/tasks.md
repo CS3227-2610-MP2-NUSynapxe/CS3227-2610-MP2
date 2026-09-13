@@ -62,3 +62,8 @@
 - [x] 10.1 Add failing Doctor Dashboard UI coverage for the status banner text/classes, authorized read-only patient details, pending/accepted action sets, checked-in consultation workflow, terminal read-only handling, and reschedule-dialog entry point.
 - [x] 10.2 Replace the Dashboard detail pane's static content with a status-driven selected-appointment surface, add the Doctor Decline action, resolve and render the selected patient through the authorized administrative service, and reuse the Calendar appointment editor for rescheduling without changing service-layer rules.
 - [x] 10.3 Add status-banner/read-only presentation styles and update the User Guide, Developer Guide, and delta artifacts for the selected patient detail workflow; run focused tests, the full quality gate, strict OpenSpec validation, and `git diff --check`.
+
+## 11. Follow-up architecture checks
+
+- [x] 11.1 Add the pinned ArchUnit test dependency and executable package-boundary and cycle rules for production classes, preserving the documented `ApplicationRouter` and demo-data composition-root exceptions; verify the focused architecture test passes.
+- [ ] 11.2 Update the README, Developer Guide, proposal, design, and delta specs with the ArchUnit dependency and enforced rules; run the full quality gate, strict OpenSpec validation, and `git diff --check` before marking the follow-up complete.

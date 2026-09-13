@@ -35,7 +35,7 @@ The Doctor Dashboard's appointment list does not communicate the shape of a work
 - Doctor Dashboard, Calendar, service, persistence, and accessibility-focused tests.
 - Shared date-picker factories, stylesheet rules, and cross-role UI regression tests.
 - User and developer documentation describing the revised Dashboard and Calendar time-off workflow.
-- No new external dependency or database column is expected; time-off removal uses the existing `doctor_time_off` identity and ownership data.
+- ArchUnit 1.5.0 is added as a test-only dependency; no database column or runtime dependency is added. Time-off removal uses the existing `doctor_time_off` identity and ownership data.
 
 ## Follow-up UI refinements
 
@@ -82,3 +82,15 @@ workflow context:
   selections show a short status explanation.
 - Reuse the Calendar-style appointment editor for rescheduling so date/time
   validation and feedback remain consistent across Doctor entry points.
+
+## Follow-up architecture checks
+
+The project will add a pinned ArchUnit test dependency and executable package
+boundary checks:
+
+- Keep `domain` independent from UI, services, persistence, and tools.
+- Keep `persistence` independent from UI, services, and tools.
+- Keep `service` independent from UI and tools.
+- Keep UI independent from tools and direct persistence access, except for the
+  `ApplicationRouter` composition root.
+- Keep the core package slices free of dependency cycles.

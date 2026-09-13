@@ -241,6 +241,19 @@ This keeps the right pane focused on the selected patient's context, avoids
 duplicating appointment validation, and prevents controls for an inapplicable
 lifecycle state from appearing as disabled clutter.
 
+### 19. Enforce package boundaries with ArchUnit
+
+The project will add `com.tngtech.archunit:archunit:1.5.0` as a test-only,
+pinned dependency and run named rules from
+`nusynapxe.architecture.ArchitectureTest` through the normal JUnit and Gradle
+`check` lifecycle. The rules import production classes only and require domain
+independence from outer packages, persistence independence from UI/services/
+tools, service independence from UI/tools, and UI independence from tools and
+direct persistence access except for `ApplicationRouter`. Slices for domain,
+persistence, service, UI, and tools must remain free of cycles. The demo-data
+package remains an explicit bootstrap composition utility and is not treated as
+a production request layer.
+
 ## Risks / Trade-offs
 
 - **Risk: A shared grid gains too many conditional branches.** -> Encapsulate size and interaction differences in an immutable display profile and small availability renderers rather than scattering Dashboard checks.

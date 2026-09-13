@@ -119,6 +119,7 @@ Versions are pinned for reproducible builds as of 31 August 2026.
 | JavaFX | 25.0.4 |
 | SQLite JDBC | 3.53.2.1 |
 | JUnit Jupiter | 6.1.3 |
+| ArchUnit | 1.5.0 |
 | TestFX | 4.0.18 |
 | Mockito | 5.23.0 |
 | Spotless | 8.10.1 |
@@ -138,7 +139,8 @@ Versions are pinned for reproducible builds as of 31 August 2026.
 .\gradlew.bat check javadoc --no-daemon --console=plain
 ```
 
-`check` runs JUnit (including TestFX), Checkstyle, PMD, SpotBugs with
+`check` runs JUnit (including TestFX and
+`nusynapxe.architecture.ArchitectureTest`), Checkstyle, PMD, SpotBugs with
 FindSecBugs, and JaCoCo. Reports are written below `build/reports/`, including
 the HTML coverage report at `build/reports/jacoco/test/html/index.html`.
 

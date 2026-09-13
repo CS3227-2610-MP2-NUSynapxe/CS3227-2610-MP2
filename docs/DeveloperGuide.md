@@ -81,6 +81,23 @@ Repositories contain explicit projections and transaction boundaries. This
 keeps the confidentiality boundary testable even if a future UI accidentally
 renders an unauthorized control.
 
+### Architecture tests
+
+`nusynapxe.architecture.ArchitectureTest` uses ArchUnit 1.5.0 to import only
+production classes and enforce the package direction documented above. Domain
+classes remain independent from outer layers; persistence cannot reach UI,
+services, or tools; services cannot reach UI or tools; and UI classes cannot
+reach tools or persistence except for `ApplicationRouter`, the database-opening
+composition root. The `domain`, `persistence`, `service`, `ui`, and `tools`
+slices must also remain free of cycles.
+
+The architecture rules run as part of `.\gradlew.bat check`; run the focused
+test with:
+
+```powershell
+.\gradlew.bat test --tests nusynapxe.architecture.ArchitectureTest --no-daemon --console=plain
+```
+
 ## Persistence and schema
 
 `SqliteDatabase.open()` creates the parent directory, enables SQLite foreign
