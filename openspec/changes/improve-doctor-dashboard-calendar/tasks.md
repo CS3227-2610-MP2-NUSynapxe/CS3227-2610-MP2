@@ -61,4 +61,4 @@
 
 - [x] 10.1 Add failing Doctor Dashboard UI coverage for the status banner text/classes, authorized read-only patient details, pending/accepted action sets, checked-in consultation workflow, terminal read-only handling, and reschedule-dialog entry point.
 - [x] 10.2 Replace the Dashboard detail pane's static content with a status-driven selected-appointment surface, add the Doctor Decline action, resolve and render the selected patient through the authorized administrative service, and reuse the Calendar appointment editor for rescheduling without changing service-layer rules.
-- [ ] 10.3 Add status-banner/read-only presentation styles and update the User Guide, Developer Guide, and delta artifacts for the selected patient detail workflow; run focused tests, the full quality gate, strict OpenSpec validation, and `git diff --check`.
+- [x] 10.3 Add status-banner/read-only presentation styles and update the User Guide, Developer Guide, and delta artifacts for the selected patient detail workflow; run focused tests, the full quality gate, strict OpenSpec validation, and `git diff --check`.

@@ -738,6 +738,7 @@ public final class DoctorView {
       TextArea consultationNotes,
       TextArea followUpNotes,
       ListView<Prescription> prescriptions) {
+    // Record components define the complete selected-pane node bundle.
   }
 
   private static final class SelectionState {
