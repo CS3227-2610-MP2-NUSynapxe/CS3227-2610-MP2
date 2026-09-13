@@ -289,11 +289,9 @@ final class CalendarTimeGrid extends BorderPane {
     patient.setMinWidth(0);
     patient.setMaxWidth(Double.MAX_VALUE);
     patient.setEllipsisString("…");
-    Label time =
-        new Label(
-            formatTime(block.appointment().startsAt())
-                + " – "
-                + formatTime(block.appointment().endsAt()));
+    String start = formatMinute(block.startMinute());
+    String end = formatMinute(block.endMinute());
+    Label time = new Label(start + " – " + end);
     time.getStyleClass().add("calendar-appointment-time");
     Label status = UiComponents.statusBadge(block.appointment().status().name());
     status.getStyleClass().add("calendar-appointment-status");
@@ -360,9 +358,9 @@ final class CalendarTimeGrid extends BorderPane {
     blockNode.setAccessibleText(
         block.appointment().patientDisplayName()
             + ", "
-            + formatTime(block.appointment().startsAt())
+            + start
             + " to "
-            + formatTime(block.appointment().endsAt())
+            + end
             + ", "
             + UiComponents.humanizeStatus(block.appointment().status().name()));
     blockNode.setFocusTraversable(handlers.selected() != null);
@@ -501,10 +499,6 @@ final class CalendarTimeGrid extends BorderPane {
   private int clickedMinute(double y) {
     int halfHour = (int) Math.floor(Math.max(0, y) / profile.halfHourHeight());
     return Math.min((HALF_HOURS_PER_DAY - 2) * 30, halfHour * 30);
-  }
-
-  private static String formatTime(java.time.LocalDateTime timestamp) {
-    return TIME_FORMAT.format(timestamp.toLocalTime());
   }
 
   private static String periodDescription(

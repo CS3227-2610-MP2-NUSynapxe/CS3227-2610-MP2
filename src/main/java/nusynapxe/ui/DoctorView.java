@@ -112,6 +112,7 @@ public final class DoctorView {
             "doctor-no-selection",
             "Select an appointment from the schedule to edit its consultation.");
     DoctorDashboardDayView[] dashboardHolder = new DoctorDashboardDayView[1];
+    SelectionNodes[] nodesHolder = new SelectionNodes[1];
 
     accept.setOnAction(
         event ->
@@ -171,15 +172,19 @@ public final class DoctorView {
                           consultationNotes.getText(),
                           followUpNotes.getText());
                   feedback.setText("Consultation saved");
-                  loadClinical(
-                      services,
-                      session,
-                      services.appointmentService().get(selection.appointmentId),
-                      diagnosis,
-                      consultationNotes,
-                      followUpNotes,
-                      prescriptions,
-                      feedback);
+                  boolean clinicalLoaded =
+                      loadClinical(
+                          services,
+                          session,
+                          services.appointmentService().get(selection.appointmentId),
+                          diagnosis,
+                          consultationNotes,
+                          followUpNotes,
+                          prescriptions,
+                          feedback);
+                  if (!clinicalLoaded) {
+                    setClinicalEditable(nodesHolder[0], false);
+                  }
                 }));
 
     addPrescription.setOnAction(
@@ -199,15 +204,19 @@ public final class DoctorView {
                           duration.getText(),
                           instructions.getText());
                   feedback.setText("Prescription added");
-                  loadClinical(
-                      services,
-                      session,
-                      services.appointmentService().get(selection.appointmentId),
-                      diagnosis,
-                      consultationNotes,
-                      followUpNotes,
-                      prescriptions,
-                      feedback);
+                  boolean clinicalLoaded =
+                      loadClinical(
+                          services,
+                          session,
+                          services.appointmentService().get(selection.appointmentId),
+                          diagnosis,
+                          consultationNotes,
+                          followUpNotes,
+                          prescriptions,
+                          feedback);
+                  if (!clinicalLoaded) {
+                    setClinicalEditable(nodesHolder[0], false);
+                  }
                   clear(medication, dosage, frequency, duration, instructions);
                 }));
 
@@ -314,6 +323,7 @@ public final class DoctorView {
             consultationNotes,
             followUpNotes,
             prescriptions);
+    nodesHolder[0] = nodes;
     updateSelectionState(selection, nodes, null, null);
 
     dashboardHolder[0] =
@@ -625,18 +635,24 @@ public final class DoctorView {
     Patient patient = resolvedPatient.orElse(null);
     selection.appointmentId = appointment == null || patient == null ? 0 : appointment.id();
     updateSelectionState(selection, nodes, appointment, patient);
-    loadClinical(
-        services,
-        session,
-        appointment,
-        nodes.diagnosis(),
-        nodes.consultationNotes(),
-        nodes.followUpNotes(),
-        nodes.prescriptions(),
-        feedback);
+    boolean clinicalLoaded =
+        loadClinical(
+            services,
+            session,
+            appointment,
+            nodes.diagnosis(),
+            nodes.consultationNotes(),
+            nodes.followUpNotes(),
+            nodes.prescriptions(),
+            feedback);
+    if (!clinicalLoaded
+        && appointment != null
+        && appointment.status() == AppointmentStatus.CHECKED_IN) {
+      setClinicalEditable(nodes, false);
+    }
   }
 
-  private static void loadClinical(
+  private static boolean loadClinical(
       ClinicServices services,
       Session session,
       Appointment appointment,
@@ -647,7 +663,7 @@ public final class DoctorView {
       Label feedback) {
     if (appointment == null) {
       clearClinical(diagnosis, consultationNotes, followUpNotes, prescriptions);
-      return;
+      return true;
     }
     clearClinical(diagnosis, consultationNotes, followUpNotes, prescriptions);
     try {
@@ -655,7 +671,7 @@ public final class DoctorView {
           services.clinicalService().findForDoctor(session, appointment.id());
       if (record.isEmpty()) {
         clearClinical(diagnosis, consultationNotes, followUpNotes, prescriptions);
-        return;
+        return true;
       }
       ClinicalRecord value = record.orElseThrow();
       diagnosis.setText(value.diagnosis());
@@ -664,9 +680,11 @@ public final class DoctorView {
       prescriptions.setItems(
           FXCollections.observableArrayList(
               services.clinicalService().prescriptionsForDoctor(session, appointment.id())));
+      return true;
     } catch (SQLException | AuthorizationException | ValidationException exception) {
       UiComponents.showError(
           feedback, userMessage(exception, "Clinical information is temporarily unavailable"));
+      return false;
     }
   }
 

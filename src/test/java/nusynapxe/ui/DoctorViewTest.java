@@ -200,6 +200,9 @@ final class DoctorViewTest extends ApplicationTest {
             .queryAs(javafx.scene.control.ListView.class)
             .getItems()
             .isEmpty());
+    assertFalse(lookup("#doctor-consultation-save").queryAs(Button.class).isVisible());
+    assertFalse(lookup("#doctor-prescription-submit").queryAs(Button.class).isVisible());
+    assertFalse(lookup("#doctor-complete").queryAs(Button.class).isVisible());
   }
 
   @Test

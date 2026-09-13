@@ -546,6 +546,33 @@ final class DoctorCalendarViewTest extends ApplicationTest {
   }
 
   @Test
+  void crossMidnightAppointmentUsesClippedTimesInItsLabels() throws SQLException {
+    LocalDate startDate = today();
+    LocalDate nextDate = startDate.plusDays(1);
+    Patient patient =
+        new PatientRepository(database)
+            .create(new Patient(0, "Overnight", "Patient", "1900-01-01", "555-0199", "", ""));
+    var crossMidnight =
+        new AppointmentRepository(database)
+            .create(
+                patient.id(),
+                doctorId,
+                startDate.atTime(23, 30),
+                nextDate.atTime(0, 30),
+                AppointmentStatus.PENDING);
+
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    waitForNode("#doctor-calendar-page");
+    Node clippedBlock =
+        lookup("#doctor-calendar-appointment-" + crossMidnight.id() + "-" + nextDate).query();
+    Label clippedTime = (Label) clippedBlock.lookup(".calendar-appointment-time");
+
+    assertEquals("00:00 – 00:30", clippedTime.getText());
+    assertTrue(clippedBlock.getAccessibleText().contains("00:00 to 00:30"));
+  }
+
+  @Test
   void invalidCalendarRangeShowsFeedbackInsteadOfOpeningTimeOffDialog() {
     loginAsDoctor();
     fire("#doctor-nav-calendar");
