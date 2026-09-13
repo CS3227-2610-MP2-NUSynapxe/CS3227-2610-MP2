@@ -1,6 +1,6 @@
 # Architecture checks
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Enforce package dependency direction
 

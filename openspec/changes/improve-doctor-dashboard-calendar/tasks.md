@@ -66,4 +66,4 @@
 ## 11. Follow-up architecture checks
 
 - [x] 11.1 Add the pinned ArchUnit test dependency and executable package-boundary and cycle rules for production classes, preserving the documented `ApplicationRouter` and demo-data composition-root exceptions; verify the focused architecture test passes.
-- [ ] 11.2 Update the README, Developer Guide, proposal, design, and delta specs with the ArchUnit dependency and enforced rules; run the full quality gate, strict OpenSpec validation, and `git diff --check` before marking the follow-up complete.
+- [x] 11.2 Update the README, Developer Guide, proposal, design, and delta specs with the ArchUnit dependency and enforced rules; run the full quality gate, strict OpenSpec validation, and `git diff --check` before marking the follow-up complete.
