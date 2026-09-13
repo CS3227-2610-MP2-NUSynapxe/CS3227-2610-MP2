@@ -737,7 +737,8 @@ public final class DoctorView {
       TextField diagnosis,
       TextArea consultationNotes,
       TextArea followUpNotes,
-      ListView<Prescription> prescriptions) {}
+      ListView<Prescription> prescriptions) {
+  }
 
   private static final class SelectionState {
     private long appointmentId;
