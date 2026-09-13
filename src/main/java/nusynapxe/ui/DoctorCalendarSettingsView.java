@@ -43,7 +43,9 @@ public final class DoctorCalendarSettingsView {
   private final Label feedback;
   private final Map<DayOfWeek, DayEditor> dayEditors = new EnumMap<>(DayOfWeek.class);
   private final BorderPane root;
+  private Button saveButton;
   private DayOfWeek firstDayOfWeek = DayOfWeek.SUNDAY;
+  private boolean settingsLoaded;
 
   /**
    * Creates a Calendar settings page for one authenticated Doctor.
@@ -79,7 +81,15 @@ public final class DoctorCalendarSettingsView {
   public void reload() {
     try {
       populate(services.calendarService().getSettings(session));
+      settingsLoaded = true;
+      if (saveButton != null) {
+        saveButton.setDisable(false);
+      }
     } catch (SQLException | AuthorizationException | ValidationException exception) {
+      settingsLoaded = false;
+      if (saveButton != null) {
+        saveButton.setDisable(true);
+      }
       feedback.setText(userMessage(exception, "Calendar settings are temporarily unavailable"));
     }
   }
@@ -109,13 +119,14 @@ public final class DoctorCalendarSettingsView {
             timezoneRow(),
             days);
 
-    Button save = UiComponents.primaryButton("Save settings", "doctor-calendar-settings-save");
-    save.setAccessibleText("Save Calendar settings");
-    save.setOnAction(event -> save());
+    saveButton = UiComponents.primaryButton("Save settings", "doctor-calendar-settings-save");
+    saveButton.setAccessibleText("Save Calendar settings");
+    saveButton.setDisable(true);
+    saveButton.setOnAction(event -> save());
     Button cancel = UiComponents.secondaryButton("Cancel", "doctor-calendar-settings-cancel");
     cancel.setAccessibleText("Cancel Calendar setting edits");
     cancel.setOnAction(event -> onBack.run());
-    HBox actions = UiComponents.actionBar(save, cancel);
+    HBox actions = UiComponents.actionBar(saveButton, cancel);
 
     VBox content = new VBox(16, workingHours, actions);
     content.setPadding(new Insets(0, 4, 24, 4));
@@ -147,6 +158,10 @@ public final class DoctorCalendarSettingsView {
   }
 
   private void save() {
+    if (!settingsLoaded) {
+      feedback.setText("Calendar settings are not loaded");
+      return;
+    }
     try {
       Map<DayOfWeek, List<WorkingInterval>> intervals = new EnumMap<>(DayOfWeek.class);
       for (DayOfWeek day : DayOfWeek.values()) {

@@ -33,6 +33,7 @@ import nusynapxe.service.ValidationException;
 /** Read-only Doctor schedule calendar used by Receptionists to choose booking slots. */
 final class ReceptionistCalendarView {
   private static final long MAX_RANGE_DAYS = 31;
+  private static final int SCHEDULE_PAGE_DAYS = 7;
   private static final String WEEK_MODE = "Week";
   private static final String SCHEDULE_MODE = "Schedule";
 
@@ -217,12 +218,12 @@ final class ReceptionistCalendarView {
   }
 
   private void goToPrevious() {
-    scheduleAnchor = CalendarScheduleCalculations.moveAnchor(scheduleAnchor, -1);
+    scheduleAnchor = CalendarScheduleCalculations.moveAnchor(scheduleAnchor, -SCHEDULE_PAGE_DAYS);
     refresh();
   }
 
   private void goToNext() {
-    scheduleAnchor = CalendarScheduleCalculations.moveAnchor(scheduleAnchor, 1);
+    scheduleAnchor = CalendarScheduleCalculations.moveAnchor(scheduleAnchor, SCHEDULE_PAGE_DAYS);
     refresh();
   }
 

@@ -389,17 +389,22 @@ public final class DoctorCalendarView {
   }
 
   private void openCreateTimeOff() {
-    LocalDate today = LocalDate.now(clock);
-    List<LocalDate> visibleDates = selectedDates();
-    LocalDate date = visibleDates.contains(today) ? today : visibleDates.getFirst();
-    LocalDateTime now = LocalDateTime.now(clock);
-    int minute = date.equals(today) ? (now.getMinute() < 30 ? 0 : 30) : 0;
-    int hour = date.equals(today) ? now.getHour() : 9;
-    if (hour == 23 && minute == 30) {
-      hour = 23;
-      minute = 0;
+    try {
+      LocalDate today = LocalDate.now(clock);
+      List<LocalDate> visibleDates = selectedDates();
+      LocalDate date = visibleDates.contains(today) ? today : visibleDates.getFirst();
+      LocalDateTime now = LocalDateTime.now(clock);
+      int minute = date.equals(today) ? (now.getMinute() < 30 ? 0 : 30) : 0;
+      int hour = date.equals(today) ? now.getHour() : 9;
+      if (hour == 23 && minute == 30) {
+        hour = 23;
+        minute = 0;
+      }
+      TimeOffDialog.showCreate(
+          services, session, date.atTime(hour, minute), feedback, this::refresh);
+    } catch (ValidationException | IllegalArgumentException exception) {
+      UiComponents.showError(feedback, userMessage(exception, "Select a valid calendar range"));
     }
-    TimeOffDialog.showCreate(services, session, date.atTime(hour, minute), feedback, this::refresh);
   }
 
   private void openTimeOff(nusynapxe.domain.DoctorTimeOff timeOff) {

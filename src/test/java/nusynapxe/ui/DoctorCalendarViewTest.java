@@ -451,6 +451,90 @@ final class DoctorCalendarViewTest extends ApplicationTest {
   }
 
   @Test
+  void lateUsefulTimeUsesTheScrollableContentHeight() throws SQLException {
+    LocalDate selectedDate = today().plusDays(20);
+    new AppointmentRepository(database)
+        .createTimeOff(
+            doctorId, selectedDate.atTime(23, 30), selectedDate.plusDays(1).atTime(0, 30));
+    Session doctorSession = new Session(doctorId, "doctor", Role.DOCTOR);
+    DoctorCalendarWeek data =
+        services.calendarService().getRange(doctorSession, selectedDate, selectedDate);
+    CalendarTimeGrid timeline =
+        new CalendarTimeGrid(
+            List.of(selectedDate),
+            data,
+            Clock.system(CalendarService.CLINIC_ZONE),
+            CalendarTimeGrid.InteractionHandlers.none(),
+            CalendarTimeGrid.DisplayProfile.COMPACT);
+
+    interact(
+        () -> {
+          Stage stage = (Stage) lookup("#login-view").query().getScene().getWindow();
+          stage.getScene().setRoot(timeline);
+          timeline.applyCss();
+          timeline.layout();
+        });
+    ScrollPane scroll = (ScrollPane) timeline.lookup("#doctor-calendar-scroll");
+    timeline.scrollToUsefulTime(selectedDate.atTime(23, 59));
+    WaitForAsyncUtils.waitForFxEvents();
+
+    assertTrue(scroll.getVvalue() > 0.99, "Late-day content should scroll to the bottom");
+  }
+
+  @Test
+  void crossMidnightTimeOffUsesClippedTimesInItsLabels() throws SQLException {
+    LocalDate startDate = today();
+    LocalDate nextDate = startDate.plusDays(1);
+    var crossMidnight =
+        new AppointmentRepository(database)
+            .createTimeOff(doctorId, startDate.atTime(23, 0), nextDate.atTime(1, 0));
+
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    waitForNode("#doctor-calendar-page");
+    Node clippedBlock =
+        lookup("#doctor-calendar-time-off-" + crossMidnight.id() + "-" + nextDate).query();
+    Label clippedTime = (Label) clippedBlock.lookup(".calendar-time-off-time");
+
+    assertEquals("00:00 – 01:00", clippedTime.getText());
+    assertEquals("Blocked time, 00:00 to 01:00", clippedBlock.getAccessibleText());
+  }
+
+  @Test
+  void invalidCalendarRangeShowsFeedbackInsteadOfOpeningTimeOffDialog() {
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    interact(() -> lookup("#doctor-calendar-from").queryAs(DatePicker.class).setValue(null));
+
+    fire("#doctor-calendar-block-time");
+
+    verifyThat("#doctor-feedback", isVisible());
+    assertTrue(lookup("#doctor-feedback").queryAs(Label.class).getText().contains("Select both"));
+    assertTrue(lookup("#doctor-calendar-time-off-dialog-content").tryQuery().isEmpty());
+  }
+
+  @Test
+  void settingsSaveStaysDisabledWhenInitialLoadFails() {
+    Session invalidSession = new Session(doctorId, "doctor", Role.RECEPTIONIST);
+    Runnable noOp =
+        () -> {
+          // No callback is needed for this load-failure test.
+        };
+    DoctorCalendarSettingsView settings =
+        new DoctorCalendarSettingsView(services, invalidSession, noOp, noOp, new Label());
+
+    interact(
+        () -> {
+          Stage stage = (Stage) lookup("#login-view").query().getScene().getWindow();
+          stage.getScene().setRoot(settings.view());
+        });
+
+    assertTrue(
+        lookup("#doctor-calendar-settings-save").queryAs(Button.class).isDisabled(),
+        "Settings must not be saved when the initial snapshot was unavailable");
+  }
+
+  @Test
   void selectingAnAppointmentOpensDetailsWithoutTreatingItAsAnInlineDecision() {
     loginAsDoctor();
     fire("#doctor-nav-calendar");

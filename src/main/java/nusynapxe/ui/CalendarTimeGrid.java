@@ -15,6 +15,7 @@ import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import javafx.application.Platform;
+import javafx.geometry.Bounds;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
@@ -39,6 +40,7 @@ import nusynapxe.domain.CalendarWeek;
 import nusynapxe.domain.DoctorCalendarSettings;
 import nusynapxe.domain.DoctorCalendarWeek;
 import nusynapxe.domain.DoctorTimeOff;
+import nusynapxe.domain.WorkingInterval;
 import nusynapxe.service.CalendarCalculations;
 import nusynapxe.service.CalendarService;
 
@@ -385,20 +387,16 @@ final class CalendarTimeGrid extends BorderPane {
   private Node timeOffNode(CalendarTimeOffBlock block) {
     Label title = new Label("Blocked time");
     title.getStyleClass().add("calendar-time-off-title");
-    Label time =
-        new Label(
-            formatTime(block.timeOff().startsAt()) + " – " + formatTime(block.timeOff().endsAt()));
+    String start = formatMinute(block.startMinute());
+    String end = formatMinute(block.endMinute());
+    Label time = new Label(start + " – " + end);
     time.getStyleClass().add("calendar-time-off-time");
     VBox content = new VBox(2, title, time);
     StackPane node = new StackPane(content);
     node.setManaged(false);
     node.setId("doctor-calendar-time-off-" + block.timeOff().id() + "-" + block.day());
     node.getStyleClass().add("calendar-time-off-block");
-    node.setAccessibleText(
-        "Blocked time, "
-            + formatTime(block.timeOff().startsAt())
-            + " to "
-            + formatTime(block.timeOff().endsAt()));
+    node.setAccessibleText("Blocked time, " + start + " to " + end);
     node.setFocusTraversable(handlers.timeOffSelected() != null);
     node.setOnMouseClicked(
         event -> {
@@ -443,9 +441,39 @@ final class CalendarTimeGrid extends BorderPane {
   /** Scrolls the timeline near the most useful visible minute. */
   void scrollToUsefulTime(LocalDateTime now) {
     int minute = CalendarCalculations.initialScrollMinute(dates, data, now);
-    int target = minute;
     Platform.runLater(
-        () -> scroll.setVvalue(Math.max(0, Math.min(1, target / (double) (24 * 60)))));
+        () -> {
+          scroll.applyCss();
+          scroll.layout();
+          scroll.setVvalue(scrollValueForMinute(minute));
+        });
+  }
+
+  private double scrollValueForMinute(int minute) {
+    Bounds viewport = scroll.getViewportBounds();
+    Node content = scroll.getContent();
+    if (content == null || viewport.getHeight() <= 0) {
+      return 0;
+    }
+    double contentHeight = content.getLayoutBounds().getHeight();
+    double maxScroll = contentHeight - viewport.getHeight();
+    if (maxScroll <= 0) {
+      return 0;
+    }
+
+    double bodyTop = 0;
+    double bodyHeight = contentHeight;
+    if (content instanceof VBox grid && grid.getChildren().size() > 1) {
+      Node body = grid.getChildren().get(1);
+      bodyTop = body.getLayoutY();
+      bodyHeight = body.getLayoutBounds().getHeight();
+    }
+    if (bodyHeight <= 0) {
+      return 0;
+    }
+    double clampedMinute = Math.max(0, Math.min(WorkingInterval.MINUTES_PER_DAY, minute));
+    double targetOffset = bodyTop + clampedMinute * bodyHeight / WorkingInterval.MINUTES_PER_DAY;
+    return Math.max(0, Math.min(1, targetOffset / maxScroll));
   }
 
   private void layoutEvents(Pane eventPane, List<EventPlacement> placements) {

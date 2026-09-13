@@ -44,6 +44,7 @@ import nusynapxe.domain.Session;
 import nusynapxe.domain.Sex;
 import nusynapxe.persistence.PatientRepository;
 import nusynapxe.persistence.SqliteDatabase;
+import nusynapxe.service.CalendarService;
 import nusynapxe.service.ClinicServices;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -469,6 +470,35 @@ final class ReceptionistViewTest extends ApplicationTest {
         lookup("#doctor-calendar-appointment-" + created.id() + "-" + selectedDate)
             .tryQuery()
             .isPresent());
+  }
+
+  @Test
+  void receptionistScheduleArrowsMoveByWholeWeeks() throws SQLException {
+    Patient patient =
+        new PatientRepository(database)
+            .create(new Patient(0, "Pat", "Lee", "1900-01-01", "555-0100", "", ""));
+    LocalDate targetDate = LocalDate.now(CalendarService.CLINIC_ZONE).plusDays(5);
+    services
+        .appointmentService()
+        .book(
+            receptionistSession(),
+            patient.id(),
+            doctor.id(),
+            targetDate.atTime(9, 0),
+            targetDate.atTime(9, 30));
+
+    loginAsReceptionist();
+    fire("#reception-nav-calendar");
+    selectCombo("#reception-calendar-view-mode", "Schedule");
+    waitForNode("#reception-calendar-schedule-list");
+    waitForNode("#doctor-calendar-schedule-date-" + targetDate);
+
+    fire("#reception-calendar-next");
+    WaitForAsyncUtils.waitForFxEvents();
+
+    assertTrue(
+        lookup("#doctor-calendar-schedule-date-" + targetDate).tryQuery().isEmpty(),
+        "Receptionist Schedule should advance by seven days");
   }
 
   @Test
