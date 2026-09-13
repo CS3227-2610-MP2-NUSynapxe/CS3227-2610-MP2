@@ -210,6 +210,37 @@ password policy: `ada` / `ada1234!`, `grace` / `grace123!`, and `reception` /
 wrapper and developer/user documentation will print and describe the same
 values.
 
+### 18. Make selected Dashboard details status-driven
+
+The selected side of the Dashboard master-detail view will be rendered from
+the freshly resolved appointment and its authorized administrative patient.
+The existing appointment projection remains patient-identifier-free; after a
+Doctor selects a block, `DoctorView` will call
+`PatientService.getAdministrative(...)` using the appointment's patient ID and
+will render the returned fields through the shared read-only details grid.
+
+The existing selection summary label will become a status banner. Its text
+will contain only the patient's full name, scheduled interval, and humanized
+status, while a normalized status class will reuse the Calendar palette for
+the banner background and border. Text and the status wording remain present
+so colour is not the only state cue.
+
+The pane will use one status-driven content surface. Pending and accepted
+appointments receive only the lifecycle actions valid for that state. The
+reschedule action opens `AppointmentDialog.showDoctorEdit(...)`, the same
+validated editor used by Calendar. Checked-in appointments receive the
+existing consultation, prescription, and completion cards. Completed and
+checked-out appointments reuse those cards in a read-only mode for history;
+declined and cancelled appointments receive patient details plus a clear
+non-actionable status message. The service layer remains the final authority
+for every action, and successful actions refresh the Dashboard so status
+changes re-render the appropriate branch or clear a declined/cancelled
+selection that is no longer projected.
+
+This keeps the right pane focused on the selected patient's context, avoids
+duplicating appointment validation, and prevents controls for an inapplicable
+lifecycle state from appearing as disabled clutter.
+
 ## Risks / Trade-offs
 
 - **Risk: A shared grid gains too many conditional branches.** -> Encapsulate size and interaction differences in an immutable display profile and small availability renderers rather than scattering Dashboard checks.

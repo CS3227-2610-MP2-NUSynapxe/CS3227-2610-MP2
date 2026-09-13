@@ -91,3 +91,39 @@ The Dashboard timeline SHALL use a compact presentation that keeps block content
 #### Scenario: Doctor uses an icon-only refresh control
 - **WHEN** the refresh control is presented as an icon
 - **THEN** it has an accessible name and tooltip that communicate its refresh action
+
+### Requirement: The selected Dashboard appointment SHALL show authorized, status-specific detail
+
+When a Doctor selects an appointment block, the Dashboard detail pane SHALL
+show a status-coloured header containing the patient's name, scheduled time,
+and readable lifecycle status, without the generated Patient ID or the text
+"Selected appointment". The pane SHALL show the selected patient's
+administrative details as read-only content. It SHALL render only the
+workflow content applicable to the appointment status: pending appointments
+have Accept, Decline, and Reschedule actions; accepted appointments have
+Decline, Reschedule, and an eligible Check in action; checked-in appointments
+have the existing consultation, prescription, and completion workflow.
+
+#### Scenario: Doctor selects a pending appointment
+- **WHEN** a pending appointment is selected
+- **THEN** the header uses the pending status presentation, the patient's name and read-only details are visible, and Accept, Decline, and Reschedule are available
+
+#### Scenario: Doctor selects an accepted appointment
+- **WHEN** an accepted appointment is selected
+- **THEN** the header uses the accepted status presentation, the patient's name and read-only details are visible, and Decline, Reschedule, and Check in are shown with Check in following the existing start-time eligibility rule
+
+#### Scenario: Doctor selects a checked-in appointment
+- **WHEN** a checked-in appointment is selected
+- **THEN** the header uses the checked-in status presentation, the patient's name and read-only details are visible, and the existing consultation, prescription, and completion controls are available
+
+#### Scenario: Doctor selects a terminal appointment
+- **WHEN** a declined, cancelled, completed, or checked-out appointment is selected or retained after refresh
+- **THEN** no lifecycle-mutating action is presented; completed and checked-out records remain readable without editing controls, while declined and cancelled appointments show a non-actionable status explanation
+
+#### Scenario: Doctor reschedules from Dashboard details
+- **WHEN** the Doctor activates Reschedule for a pending or accepted selection
+- **THEN** the Calendar-style appointment editor opens for that appointment and a successful update refreshes the Dashboard selection
+
+#### Scenario: Appointment status changes after an action
+- **WHEN** an action changes the selected appointment's lifecycle status
+- **THEN** the Dashboard refreshes the same selection when it remains projected and renders the new status branch, or clears the pane when the appointment is no longer projected

@@ -61,3 +61,24 @@ The completed change is extended with richer local-development seed data:
 - Seed appointments for every date from seven days before today through fourteen days after today, with both Doctors represented each day and varied lifecycle statuses.
 - Link eligible historical `CHECKED_IN`, `COMPLETED`, and `CHECKED_OUT` appointments to deterministic clinical records, and link prescriptions to completed or checked-out consultations.
 - Replace the long showcase Doctor and Receptionist usernames and passwords with shorter, clearly documented credentials that still satisfy the application's password policy.
+
+## Follow-up selected appointment details
+
+The Dashboard's selected-appointment pane will provide a clearer patient and
+workflow context:
+
+- Replace the patient identifier and "Selected appointment" label with a
+  status-coloured banner containing the patient's name, appointment time, and
+  readable lifecycle status.
+- Add an authorized, read-only administrative patient-details view to the
+  selected pane.
+- Show lifecycle-specific Doctor actions: Accept, Decline, and Reschedule for
+  pending appointments; Decline, Reschedule, and Check in for accepted
+  appointments; and the existing consultation, prescription, and completion
+  workflow for checked-in appointments.
+- Keep declined, cancelled, completed, and checked-out selections
+  non-mutating. Terminal selections retain patient context and expose saved
+  clinical information read-only when available, while declined/cancelled
+  selections show a short status explanation.
+- Reuse the Calendar-style appointment editor for rescheduling so date/time
+  validation and feedback remain consistent across Doctor entry points.

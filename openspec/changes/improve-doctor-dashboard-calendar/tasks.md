@@ -56,3 +56,9 @@
 - [x] 9.1 Expand `DemoDataSeeder` and its PowerShell wrapper to create 18 patients, a non-overlapping per-Doctor appointment matrix covering the previous 7 days through the next 14 days with varied statuses, and linked historical clinical records and prescriptions; shorten the seeded Doctor and Receptionist credentials while keeping passwords policy-compliant.
 - [x] 9.2 Extend `DemoDataSeederTest` to verify patient and appointment counts, the complete rolling date window, per-day coverage and lifecycle status distribution, historical clinical links and prescriptions, and successful login with each short credential pair.
 - [x] 9.3 Update the README, User Guide, and Developer Guide plus the OpenSpec delta artifacts with the expanded seed contents and exact showcase credentials; run focused tests, the full quality gate, strict OpenSpec validation, and `git diff --check`.
+
+## 10. Follow-up selected appointment details
+
+- [ ] 10.1 Add failing Doctor Dashboard UI coverage for the status banner text/classes, authorized read-only patient details, pending/accepted action sets, checked-in consultation workflow, terminal read-only handling, and reschedule-dialog entry point.
+- [ ] 10.2 Replace the Dashboard detail pane's static content with a status-driven selected-appointment surface, add the Doctor Decline action, resolve and render the selected patient through the authorized administrative service, and reuse the Calendar appointment editor for rescheduling without changing service-layer rules.
+- [ ] 10.3 Add status-banner/read-only presentation styles and update the User Guide, Developer Guide, and delta artifacts for the selected patient detail workflow; run focused tests, the full quality gate, strict OpenSpec validation, and `git diff --check`.
