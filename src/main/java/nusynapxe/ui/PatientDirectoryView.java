@@ -518,7 +518,8 @@ final class PatientDirectoryView {
     showEditing();
   }
 
-  private static GridPane patientDetailsGrid(Patient patient) {
+  /** Creates a read-only administrative details grid for a patient. */
+  static GridPane patientDetailsGrid(Patient patient) {
     GridPane grid = new GridPane();
     grid.getStyleClass().add("patient-details-grid");
     grid.setHgap(18);

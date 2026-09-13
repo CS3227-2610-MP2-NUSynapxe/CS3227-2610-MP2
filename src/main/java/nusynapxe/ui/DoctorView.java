@@ -3,7 +3,6 @@ package nusynapxe.ui;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.Locale;
 import java.util.Optional;
 import javafx.collections.FXCollections;
@@ -17,7 +16,9 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.control.TextInputControl;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -25,6 +26,7 @@ import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.CalendarAppointment;
 import nusynapxe.domain.ClinicalRecord;
+import nusynapxe.domain.Patient;
 import nusynapxe.domain.Prescription;
 import nusynapxe.domain.Session;
 import nusynapxe.service.AuthorizationException;
@@ -57,11 +59,10 @@ public final class DoctorView {
   public static Parent create(ClinicServices services, Session session, Runnable onLogout) {
     SelectionState selection = new SelectionState();
 
-    TextField rescheduleStart = field("doctor-reschedule-start", DATE_TIME_PATTERN);
-    TextField rescheduleEnd = field("doctor-reschedule-end", DATE_TIME_PATTERN);
-    Button accept = UiComponents.primaryButton("Accept selected", "doctor-accept");
-    Button checkIn = UiComponents.primaryButton("Check in selected", "doctor-check-in");
-    Button reschedule = UiComponents.secondaryButton("Reschedule selected", "doctor-reschedule");
+    Button accept = UiComponents.primaryButton("Accept", "doctor-accept");
+    Button decline = UiComponents.dangerButton("Decline", "doctor-decline");
+    Button checkIn = UiComponents.primaryButton("Check in", "doctor-check-in");
+    Button reschedule = UiComponents.secondaryButton("Reschedule", "doctor-reschedule");
 
     TextField diagnosis = field("doctor-diagnosis", "Diagnosis");
     TextArea consultationNotes = textArea("doctor-consultation-notes", "Consultation notes");
@@ -112,18 +113,6 @@ public final class DoctorView {
             "Select an appointment from the schedule to edit its consultation.");
     DoctorDashboardDayView[] dashboardHolder = new DoctorDashboardDayView[1];
 
-    updateSelectionState(
-        selection,
-        selectionSummary,
-        noSelection,
-        null,
-        checkIn,
-        accept,
-        reschedule,
-        saveConsultation,
-        addPrescription,
-        complete);
-
     accept.setOnAction(
         event ->
             run(
@@ -132,6 +121,17 @@ public final class DoctorView {
                   requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
                   services.appointmentService().accept(session, selection.appointmentId);
                   feedback.setText("Appointment accepted");
+                  dashboardHolder[0].refresh();
+                }));
+
+    decline.setOnAction(
+        event ->
+            run(
+                feedback,
+                () -> {
+                  requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
+                  services.appointmentService().decline(session, selection.appointmentId);
+                  feedback.setText("Appointment declined");
                   dashboardHolder[0].refresh();
                 }));
 
@@ -147,21 +147,14 @@ public final class DoctorView {
                 }));
 
     reschedule.setOnAction(
-        event ->
-            run(
-                feedback,
-                () -> {
-                  requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
-                  services
-                      .appointmentService()
-                      .reschedule(
-                          session,
-                          selection.appointmentId,
-                          parseDateTime(rescheduleStart.getText(), "Start time"),
-                          parseDateTime(rescheduleEnd.getText(), "End time"));
-                  feedback.setText("Appointment rescheduled");
-                  dashboardHolder[0].refresh();
-                }));
+        event -> {
+          if (selection.appointmentId == 0) {
+            UiComponents.showError(feedback, APPOINTMENT_REQUIRED);
+            return;
+          }
+          AppointmentDialog.showDoctorEdit(
+              services, session, selection.appointmentId, feedback, dashboardHolder[0]::refresh);
+        });
 
     saveConsultation.setOnAction(
         event ->
@@ -244,14 +237,6 @@ public final class DoctorView {
         });
     HBox header = UiComponents.workspaceHeader("DOCTOR workspace", session.username(), logout);
 
-    VBox scheduleActions =
-        new VBox(
-            10,
-            UiComponents.actionBar(checkIn, accept),
-            UiComponents.fieldGroup("Reschedule start", rescheduleStart),
-            UiComponents.fieldGroup("Reschedule end", rescheduleEnd),
-            UiComponents.actionBar(reschedule));
-
     VBox prescriptionForm =
         new VBox(
             10,
@@ -261,36 +246,7 @@ public final class DoctorView {
             UiComponents.fieldGroup("Duration", duration),
             UiComponents.fieldGroup("Instructions", instructions));
 
-    dashboardHolder[0] =
-        new DoctorDashboardDayView(
-            services,
-            session,
-            feedback,
-            calendarAppointment ->
-                selectDashboardAppointment(
-                    services,
-                    session,
-                    calendarAppointment,
-                    selection,
-                    selectionSummary,
-                    noSelection,
-                    checkIn,
-                    accept,
-                    reschedule,
-                    saveConsultation,
-                    addPrescription,
-                    complete,
-                    diagnosis,
-                    consultationNotes,
-                    followUpNotes,
-                    prescriptions,
-                    feedback));
-    VBox scheduleCard =
-        UiComponents.card(
-            "doctor-schedule-card",
-            UiComponents.pageTitle("Dashboard"),
-            UiComponents.supportingText("Select an appointment to open its clinical context."),
-            dashboardHolder[0].view());
+    HBox consultationActions = UiComponents.actionBar(saveConsultation);
     VBox consultationCard =
         UiComponents.card(
             "doctor-consultation-card",
@@ -298,33 +254,83 @@ public final class DoctorView {
             UiComponents.fieldGroup("Diagnosis", diagnosis),
             UiComponents.fieldGroup("Consultation notes", consultationNotes),
             UiComponents.fieldGroup("Follow-up notes", followUpNotes),
-            UiComponents.actionBar(saveConsultation));
+            consultationActions);
+    HBox prescriptionActions = UiComponents.actionBar(addPrescription);
     VBox prescriptionCard =
         UiComponents.card(
             "doctor-prescription-card",
             UiComponents.sectionHeading("Prescriptions"),
             prescriptionForm,
-            UiComponents.actionBar(addPrescription),
+            prescriptionActions,
             prescriptions);
+    HBox completionActions = UiComponents.actionBar(complete);
     VBox completionCard =
         UiComponents.card(
             "doctor-completion-card",
             UiComponents.sectionHeading("Complete visit"),
             UiComponents.supportingText(
                 "Complete the consultation when the clinical record is ready."),
-            UiComponents.actionBar(complete));
-    VBox detailContent =
-        new VBox(
-            16,
-            noSelection,
+            completionActions);
+    VBox patientDetailsCard = UiComponents.card("doctor-patient-details-card");
+    VBox appointmentActionsCard = UiComponents.card("doctor-appointment-actions-card");
+    Label terminalStatusMessage = UiComponents.supportingText("");
+    terminalStatusMessage.setId("doctor-status-message");
+    VBox terminalStatusCard =
+        UiComponents.card(
+            "doctor-terminal-status-card",
+            UiComponents.sectionHeading("Appointment status"),
+            terminalStatusMessage);
+    Label clinicalReadOnly =
+        UiComponents.supportingText(
+            "This consultation is complete and can only be viewed from the Dashboard.");
+    clinicalReadOnly.setId("doctor-clinical-read-only");
+    VBox selectedContent = new VBox(16);
+    selectedContent.setId("doctor-selected-content");
+    SelectionNodes nodes =
+        new SelectionNodes(
             selectionSummary,
-            UiComponents.card(
-                "doctor-appointment-actions-card",
-                UiComponents.sectionHeading("Appointment actions"),
-                scheduleActions),
+            noSelection,
+            selectedContent,
+            patientDetailsCard,
+            appointmentActionsCard,
+            terminalStatusCard,
+            terminalStatusMessage,
+            clinicalReadOnly,
             consultationCard,
             prescriptionCard,
-            completionCard);
+            completionCard,
+            consultationActions,
+            prescriptionForm,
+            prescriptionActions,
+            completionActions,
+            accept,
+            decline,
+            checkIn,
+            reschedule,
+            saveConsultation,
+            addPrescription,
+            complete,
+            diagnosis,
+            consultationNotes,
+            followUpNotes,
+            prescriptions);
+    updateSelectionState(selection, nodes, null, null);
+
+    dashboardHolder[0] =
+        new DoctorDashboardDayView(
+            services,
+            session,
+            feedback,
+            calendarAppointment ->
+                selectDashboardAppointment(
+                    services, session, calendarAppointment, selection, nodes, feedback));
+    VBox scheduleCard =
+        UiComponents.card(
+            "doctor-schedule-card",
+            UiComponents.pageTitle("Dashboard"),
+            UiComponents.supportingText("Select an appointment to open its clinical context."),
+            dashboardHolder[0].view());
+    VBox detailContent = new VBox(16, noSelection, selectionSummary, selectedContent);
     detailContent.setId("doctor-detail-pane");
     ScrollPane detailScroll = new ScrollPane(detailContent);
     detailScroll.setId("doctor-detail-scroll");
@@ -430,33 +436,111 @@ public final class DoctorView {
   }
 
   private static void updateSelectionState(
-      SelectionState selection,
-      Label selectionSummary,
-      Label noSelection,
-      Appointment appointment,
-      Button checkIn,
-      Button... actions) {
-    boolean selected = appointment != null && selection.appointmentId != 0;
-    boolean checkInEligible =
-        selected
-            && appointment.status() == AppointmentStatus.ACCEPTED
-            && !LocalDateTime.now(CalendarService.CLINIC_ZONE).isBefore(appointment.startsAt());
-    checkIn.setDisable(!checkInEligible);
-    for (Button action : actions) {
-      action.setDisable(!selected);
+      SelectionState selection, SelectionNodes nodes, Appointment appointment, Patient patient) {
+    boolean selected = appointment != null && patient != null && selection.appointmentId != 0;
+    nodes.summary().setVisible(selected);
+    nodes.summary().setManaged(selected);
+    nodes.noSelection().setVisible(!selected);
+    nodes.noSelection().setManaged(!selected);
+    nodes.selectedContent().getChildren().clear();
+    setVisibleManaged(nodes.patientDetailsCard(), selected);
+    setVisibleManaged(nodes.appointmentActionsCard(), false);
+    setVisibleManaged(nodes.terminalStatusCard(), false);
+    setActionVisibility(nodes, false);
+
+    if (!selected) {
+      nodes.patientDetailsCard().getChildren().clear();
+      clearClinical(
+          nodes.diagnosis(),
+          nodes.consultationNotes(),
+          nodes.followUpNotes(),
+          nodes.prescriptions());
+      setClinicalEditable(nodes, false);
+      nodes.summary().getStyleClass().removeIf(style -> style.startsWith("status-"));
+      return;
     }
-    selectionSummary.setVisible(selected);
-    selectionSummary.setManaged(selected);
-    noSelection.setVisible(!selected);
-    noSelection.setManaged(!selected);
-    if (selected) {
-      selectionSummary.setText(
-          "Selected appointment  •  Patient P"
-              + String.format(Locale.ROOT, "%06d", appointment.patientId())
-              + "  •  "
-              + appointment.startsAt().format(DATE_TIME_FORMAT)
-              + "  •  Status: "
-              + displayStatus(appointment.status().name()));
+
+    String readableStatus = displayStatus(appointment.status().name());
+    nodes
+        .summary()
+        .setText(
+            patientDisplayName(patient)
+                + "  •  "
+                + appointment.startsAt().format(DATE_TIME_FORMAT)
+                + "  •  "
+                + readableStatus);
+    nodes
+        .summary()
+        .setAccessibleText(
+            "Appointment for " + patientDisplayName(patient) + ", " + readableStatus);
+    updateSummaryStatus(nodes.summary(), appointment.status());
+
+    setClinicalEditable(nodes, false);
+    GridPane patientDetails = PatientDirectoryView.patientDetailsGrid(patient);
+    patientDetails.setId("doctor-patient-details");
+    nodes
+        .patientDetailsCard()
+        .getChildren()
+        .setAll(UiComponents.sectionHeading("Patient details"), patientDetails);
+    nodes.selectedContent().getChildren().add(nodes.patientDetailsCard());
+
+    switch (appointment.status()) {
+      case PENDING -> {
+        setActionVisibility(nodes, true);
+        nodes.checkIn().setVisible(false);
+        nodes.checkIn().setManaged(false);
+        nodes.accept().setDisable(false);
+        nodes.decline().setDisable(false);
+        nodes.reschedule().setDisable(false);
+        nodes
+            .appointmentActionsCard()
+            .getChildren()
+            .setAll(
+                UiComponents.sectionHeading("Appointment actions"),
+                UiComponents.actionBar(nodes.accept(), nodes.decline(), nodes.reschedule()));
+        setVisibleManaged(nodes.appointmentActionsCard(), true);
+        nodes.selectedContent().getChildren().add(nodes.appointmentActionsCard());
+      }
+      case ACCEPTED -> {
+        setActionVisibility(nodes, true);
+        nodes.accept().setVisible(false);
+        nodes.accept().setManaged(false);
+        nodes.decline().setDisable(false);
+        nodes.reschedule().setDisable(false);
+        boolean checkInEligible =
+            !LocalDateTime.now(CalendarService.CLINIC_ZONE).isBefore(appointment.startsAt());
+        nodes.checkIn().setDisable(!checkInEligible);
+        nodes
+            .appointmentActionsCard()
+            .getChildren()
+            .setAll(
+                UiComponents.sectionHeading("Appointment actions"),
+                UiComponents.actionBar(nodes.decline(), nodes.reschedule(), nodes.checkIn()));
+        setVisibleManaged(nodes.appointmentActionsCard(), true);
+        nodes.selectedContent().getChildren().add(nodes.appointmentActionsCard());
+      }
+      case CHECKED_IN -> {
+        setClinicalEditable(nodes, true);
+        nodes
+            .selectedContent()
+            .getChildren()
+            .addAll(nodes.consultationCard(), nodes.prescriptionCard(), nodes.completionCard());
+      }
+      case COMPLETED, CHECKED_OUT -> {
+        setClinicalEditable(nodes, false);
+        nodes
+            .selectedContent()
+            .getChildren()
+            .addAll(nodes.clinicalReadOnly(), nodes.consultationCard(), nodes.prescriptionCard());
+      }
+      case DECLINED, CANCELLED -> {
+        nodes
+            .terminalStatusMessage()
+            .setText(
+                "No Doctor actions are available for this " + readableStatus + " appointment.");
+        setVisibleManaged(nodes.terminalStatusCard(), true);
+        nodes.selectedContent().getChildren().add(nodes.terminalStatusCard());
+      }
     }
   }
 
@@ -464,25 +548,63 @@ public final class DoctorView {
     return UiComponents.humanizeStatus(status);
   }
 
+  private static String patientDisplayName(Patient patient) {
+    String firstName = patient.firstName() == null ? "" : patient.firstName().trim();
+    String lastName = patient.lastName() == null ? "" : patient.lastName().trim();
+    String name = (firstName + " " + lastName).trim();
+    return name.isBlank() ? "Patient" : name;
+  }
+
+  private static void updateSummaryStatus(Label summary, AppointmentStatus status) {
+    summary.getStyleClass().removeIf(style -> style.startsWith("status-"));
+    summary
+        .getStyleClass()
+        .add("status-" + status.name().toLowerCase(Locale.ROOT).replace('_', '-'));
+  }
+
+  private static void setActionVisibility(SelectionNodes nodes, boolean visible) {
+    setVisibleManaged(nodes.accept(), visible);
+    setVisibleManaged(nodes.decline(), visible);
+    setVisibleManaged(nodes.checkIn(), visible);
+    setVisibleManaged(nodes.reschedule(), visible);
+  }
+
+  private static void setClinicalEditable(SelectionNodes nodes, boolean editable) {
+    setEditable(nodes.diagnosis(), editable);
+    setEditable(nodes.consultationNotes(), editable);
+    setEditable(nodes.followUpNotes(), editable);
+    setVisibleManaged(nodes.consultationActions(), editable);
+    setVisibleManaged(nodes.prescriptionForm(), editable);
+    setVisibleManaged(nodes.prescriptionActions(), editable);
+    setVisibleManaged(nodes.completionActions(), editable);
+    setVisibleManaged(nodes.saveConsultation(), editable);
+    setVisibleManaged(nodes.addPrescription(), editable);
+    setVisibleManaged(nodes.complete(), editable);
+  }
+
+  private static void setEditable(TextInputControl control, boolean editable) {
+    control.setEditable(editable);
+    if (editable) {
+      control.getStyleClass().remove("read-only-field");
+    } else if (!control.getStyleClass().contains("read-only-field")) {
+      control.getStyleClass().add("read-only-field");
+    }
+  }
+
+  private static void setVisibleManaged(javafx.scene.Node node, boolean visible) {
+    node.setVisible(visible);
+    node.setManaged(visible);
+  }
+
   private static void selectDashboardAppointment(
       ClinicServices services,
       Session session,
       CalendarAppointment calendarAppointment,
       SelectionState selection,
-      Label selectionSummary,
-      Label noSelection,
-      Button checkIn,
-      Button accept,
-      Button reschedule,
-      Button saveConsultation,
-      Button addPrescription,
-      Button complete,
-      TextField diagnosis,
-      TextArea consultationNotes,
-      TextArea followUpNotes,
-      ListView<Prescription> prescriptions,
+      SelectionNodes nodes,
       Label feedback) {
     Optional<Appointment> resolvedAppointment = Optional.empty();
+    Optional<Patient> resolvedPatient = Optional.empty();
     try {
       if (calendarAppointment != null) {
         Appointment appointment =
@@ -491,32 +613,26 @@ public final class DoctorView {
           throw new AuthorizationException("You are not allowed to view this appointment");
         }
         resolvedAppointment = Optional.of(appointment);
+        resolvedPatient =
+            Optional.of(
+                services.patientService().getAdministrative(session, appointment.patientId()));
       }
     } catch (SQLException | AuthorizationException | ValidationException exception) {
       UiComponents.showError(
           feedback, userMessage(exception, "Appointment is temporarily unavailable"));
     }
     Appointment appointment = resolvedAppointment.orElse(null);
-    selection.appointmentId = appointment == null ? 0 : appointment.id();
-    updateSelectionState(
-        selection,
-        selectionSummary,
-        noSelection,
-        appointment,
-        checkIn,
-        accept,
-        reschedule,
-        saveConsultation,
-        addPrescription,
-        complete);
+    Patient patient = resolvedPatient.orElse(null);
+    selection.appointmentId = appointment == null || patient == null ? 0 : appointment.id();
+    updateSelectionState(selection, nodes, appointment, patient);
     loadClinical(
         services,
         session,
         appointment,
-        diagnosis,
-        consultationNotes,
-        followUpNotes,
-        prescriptions,
+        nodes.diagnosis(),
+        nodes.consultationNotes(),
+        nodes.followUpNotes(),
+        nodes.prescriptions(),
         feedback);
   }
 
@@ -564,17 +680,6 @@ public final class DoctorView {
     prescriptions.setItems(FXCollections.observableArrayList());
   }
 
-  private static LocalDateTime parseDateTime(String value, String fieldName) {
-    if (value == null) {
-      throw new ValidationException(fieldName + " must use " + DATE_TIME_PATTERN);
-    }
-    try {
-      return LocalDateTime.parse(value.trim(), DATE_TIME_FORMAT);
-    } catch (DateTimeParseException exception) {
-      throw new ValidationException(fieldName + " must use " + DATE_TIME_PATTERN, exception);
-    }
-  }
-
   private static void requireSelection(long id, String message) {
     if (id == 0) {
       throw new ValidationException(message);
@@ -605,6 +710,34 @@ public final class DoctorView {
   private interface UiOperation {
     void run() throws SQLException;
   }
+
+  private record SelectionNodes(
+      Label summary,
+      Label noSelection,
+      VBox selectedContent,
+      VBox patientDetailsCard,
+      VBox appointmentActionsCard,
+      VBox terminalStatusCard,
+      Label terminalStatusMessage,
+      Label clinicalReadOnly,
+      VBox consultationCard,
+      VBox prescriptionCard,
+      VBox completionCard,
+      HBox consultationActions,
+      VBox prescriptionForm,
+      HBox prescriptionActions,
+      HBox completionActions,
+      Button accept,
+      Button decline,
+      Button checkIn,
+      Button reschedule,
+      Button saveConsultation,
+      Button addPrescription,
+      Button complete,
+      TextField diagnosis,
+      TextArea consultationNotes,
+      TextArea followUpNotes,
+      ListView<Prescription> prescriptions) {}
 
   private static final class SelectionState {
     private long appointmentId;

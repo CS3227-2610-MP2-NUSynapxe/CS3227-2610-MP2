@@ -745,6 +745,49 @@
     -fx-font-weight: bold;
 }
 
+.selection-summary.status-pending {
+    -fx-background-color: #fff3d6;
+    -fx-border-color: #d4ae4d;
+    -fx-text-fill: #805b00;
+}
+
+.selection-summary.status-accepted,
+.selection-summary.status-checked-in {
+    -fx-background-color: #d9efed;
+    -fx-border-color: #66b8ae;
+    -fx-text-fill: #175c58;
+}
+
+.selection-summary.status-completed,
+.selection-summary.status-checked-out {
+    -fx-background-color: #e2eaf8;
+    -fx-border-color: #83a3d5;
+    -fx-text-fill: #294d7d;
+}
+
+.selection-summary.status-declined {
+    -fx-background-color: #fbe3d0;
+    -fx-border-color: #d99456;
+    -fx-text-fill: #9a4a12;
+}
+
+.selection-summary.status-cancelled {
+    -fx-background-color: #f5e5e5;
+    -fx-border-color: #c88a8a;
+    -fx-text-fill: #9f2f3d;
+}
+
+.selection-summary.status-unknown {
+    -fx-background-color: #e8eef4;
+    -fx-border-color: #b9c8d6;
+    -fx-text-fill: #52677b;
+}
+
+.read-only-field {
+    -fx-background-color: #f7fafc;
+    -fx-text-fill: #52677b;
+}
+
 .calendar-page,
 .calendar-settings-page {
     -fx-background-color: #ffffff;

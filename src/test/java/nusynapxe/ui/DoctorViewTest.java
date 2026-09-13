@@ -29,6 +29,7 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import nusynapxe.domain.Account;
+import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.ClinicalRecord;
 import nusynapxe.domain.IdentityType;
@@ -123,7 +124,7 @@ final class DoctorViewTest extends ApplicationTest {
     verifyThat("#doctor-master-detail", isVisible());
     assertTrue(lookup("#doctor-detail-scroll").tryQuery().isPresent());
     assertTrue(lookup("#doctor-no-selection").tryQuery().isPresent());
-    verifyThat("#doctor-accept", isVisible());
+    assertTrue(lookup("#doctor-accept").tryQuery().isEmpty());
     verifyThat("#doctor-dashboard-day-calendar", isVisible());
     assertTrue(lookup("#doctor-appointment-list").tryQuery().isEmpty());
     assertTrue(lookup("#doctor-timeoff-submit").tryQuery().isEmpty());
@@ -324,6 +325,123 @@ final class DoctorViewTest extends ApplicationTest {
   }
 
   @Test
+  void pendingSelectionShowsPatientNameDetailsAndPendingActions() throws SQLException {
+    Appointment pending = createAvailableAppointment("Pending", "Patient");
+
+    loginAsDoctor();
+    selectDashboardAppointment(pending.id());
+
+    Label header = lookup("#doctor-selected-appointment").queryAs(Label.class);
+    assertTrue(header.getText().contains("Pending Patient"));
+    assertTrue(header.getText().contains("Pending"));
+    assertFalse(header.getText().contains("P%06d".formatted(pending.patientId())));
+    assertFalse(header.getText().contains("Selected appointment"));
+    assertTrue(header.getStyleClass().contains("status-pending"));
+    assertTrue(lookup("#doctor-patient-details-card").query().isVisible());
+    assertTrue(lookup("#doctor-patient-details").tryQuery().isPresent());
+    assertTrue(lookup("#doctor-patient-details .text-field").tryQuery().isEmpty());
+    assertTrue(lookup("#doctor-patient-details .text-area").tryQuery().isEmpty());
+    assertTrue(lookup("#doctor-accept").queryAs(Button.class).isVisible());
+    assertTrue(lookup("#doctor-decline").queryAs(Button.class).isVisible());
+    assertTrue(lookup("#doctor-reschedule").queryAs(Button.class).isVisible());
+    assertTrue(lookup("#doctor-check-in").tryQuery().isEmpty());
+    assertTrue(lookup("#doctor-consultation-card").tryQuery().isEmpty());
+  }
+
+  @Test
+  void acceptedSelectionShowsAcceptedActionsWithoutAccept() {
+    loginAsDoctor();
+    selectDashboardAppointment(2);
+
+    Label header = lookup("#doctor-selected-appointment").queryAs(Label.class);
+    assertTrue(header.getText().contains("Alex Tan"));
+    assertTrue(header.getText().contains("Accepted"));
+    assertTrue(header.getStyleClass().contains("status-accepted"));
+    assertTrue(lookup("#doctor-decline").queryAs(Button.class).isVisible());
+    assertTrue(lookup("#doctor-reschedule").queryAs(Button.class).isVisible());
+    assertTrue(lookup("#doctor-check-in").queryAs(Button.class).isVisible());
+    assertTrue(lookup("#doctor-accept").tryQuery().isEmpty());
+    assertTrue(lookup("#doctor-consultation-card").tryQuery().isEmpty());
+  }
+
+  @Test
+  void checkedInSelectionShowsClinicalWorkflowWithoutLifecycleActions() {
+    loginAsDoctor();
+    selectDashboardAppointment(1);
+
+    Label header = lookup("#doctor-selected-appointment").queryAs(Label.class);
+    assertTrue(header.getText().contains("Pat Lee"));
+    assertTrue(header.getText().contains("Checked In"));
+    assertTrue(header.getStyleClass().contains("status-checked-in"));
+    assertTrue(lookup("#doctor-patient-details-card").query().isVisible());
+    assertTrue(lookup("#doctor-consultation-card").query().isVisible());
+    assertTrue(lookup("#doctor-prescription-card").query().isVisible());
+    assertTrue(lookup("#doctor-completion-card").query().isVisible());
+    assertTrue(lookup("#doctor-consultation-save").queryAs(Button.class).isVisible());
+    assertTrue(lookup("#doctor-prescription-submit").queryAs(Button.class).isVisible());
+    assertTrue(lookup("#doctor-complete").queryAs(Button.class).isVisible());
+    assertTrue(lookup("#doctor-accept").tryQuery().isEmpty());
+    assertTrue(lookup("#doctor-decline").tryQuery().isEmpty());
+    assertTrue(lookup("#doctor-reschedule").tryQuery().isEmpty());
+    assertTrue(lookup("#doctor-check-in").tryQuery().isEmpty());
+  }
+
+  @Test
+  void completedSelectionKeepsClinicalHistoryReadOnly() throws SQLException {
+    addPatientHistory();
+
+    loginAsDoctor();
+    selectDashboardAppointment(1);
+
+    Label header = lookup("#doctor-selected-appointment").queryAs(Label.class);
+    assertTrue(header.getText().contains("Checked Out"), header.getText());
+    assertTrue(header.getStyleClass().contains("status-checked-out"));
+    assertTrue(lookup("#doctor-clinical-read-only").tryQuery().isPresent());
+    assertTrue(lookup("#doctor-consultation-card").query().isVisible());
+    assertTrue(lookup("#doctor-prescription-card").query().isVisible());
+    assertFalse(lookup("#doctor-diagnosis").queryAs(TextInputControl.class).isEditable());
+    assertFalse(lookup("#doctor-consultation-notes").queryAs(TextInputControl.class).isEditable());
+    assertFalse(lookup("#doctor-follow-up").queryAs(TextInputControl.class).isEditable());
+    assertFalse(lookup("#doctor-consultation-save").queryAs(Button.class).isVisible());
+    assertFalse(lookup("#doctor-prescription-submit").queryAs(Button.class).isVisible());
+    assertTrue(lookup("#doctor-complete").tryQuery().isEmpty());
+  }
+
+  @Test
+  void pendingRescheduleOpensTheCalendarAppointmentEditor() throws SQLException {
+    Appointment pending = createAvailableAppointment("Reschedule", "Patient");
+
+    loginAsDoctor();
+    selectDashboardAppointment(pending.id());
+    fire("#doctor-reschedule");
+    waitForNode("#doctor-calendar-appointment-dialog-content");
+    interact(
+        () ->
+            lookup("#doctor-calendar-appointment-dialog-content")
+                .query()
+                .getScene()
+                .getWindow()
+                .hide());
+    assertEquals(
+        AppointmentStatus.PENDING, services.appointmentService().get(pending.id()).status());
+  }
+
+  @Test
+  void decliningPendingSelectionClearsDashboardDetails() throws SQLException {
+    Appointment pending = createAvailableAppointment("Decline", "Patient");
+
+    loginAsDoctor();
+    selectDashboardAppointment(pending.id());
+    fire("#doctor-decline");
+
+    verifyThat("#doctor-feedback", hasText("Appointment declined"));
+    assertTrue(lookup("#doctor-no-selection").query().isVisible());
+    assertFalse(lookup("#doctor-selected-appointment").queryAs(Label.class).isManaged());
+    assertEquals(
+        AppointmentStatus.DECLINED, services.appointmentService().get(pending.id()).status());
+  }
+
+  @Test
   void doctorCanNavigateToPatientsAndDeleteAnUnusedPatient() throws SQLException {
     loginAsDoctor();
     Button dashboardNavigation = lookup("#doctor-nav-dashboard").queryAs(Button.class);
@@ -468,6 +586,28 @@ final class DoctorViewTest extends ApplicationTest {
                 .getOnMouseClicked()
                 .handle(primaryClick()));
     WaitForAsyncUtils.waitForFxEvents();
+  }
+
+  private Appointment createAvailableAppointment(String firstName, String lastName)
+      throws SQLException {
+    Patient patient =
+        new PatientRepository(database)
+            .create(new Patient(0, firstName, lastName, "", "555-0200", "", ""));
+    AppointmentRepository repository = new AppointmentRepository(database);
+    List<Appointment> existing = repository.findByDoctor(doctor.id());
+    for (int hour = 0; hour < 24; hour++) {
+      LocalDateTime start = appointmentDate.atTime(hour, 0);
+      LocalDateTime end = start.plusMinutes(30);
+      boolean overlaps =
+          existing.stream()
+              .anyMatch(
+                  appointment ->
+                      appointment.startsAt().isBefore(end) && appointment.endsAt().isAfter(start));
+      if (!overlaps) {
+        return repository.create(patient.id(), doctor.id(), start, end, AppointmentStatus.PENDING);
+      }
+    }
+    throw new AssertionError("No available appointment slot in the test date");
   }
 
   private static MouseEvent primaryClick() {

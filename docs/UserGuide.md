@@ -265,9 +265,12 @@ opening a feature tab reloads information that another workflow may have changed
    the left side of a schedule/detail layout. Use **Today**, the previous/next
    arrows, the date picker, or the refresh icon to navigate and reload the same
    day. Select an appointment block to reveal its consultation context and
-   appointment actions on the right; until a visit is selected, the detail area
-   explains what to do. Changing to a day without that appointment clears the
-   selection, while refreshing retains a selection that is still visible.
+   status-specific appointment actions on the right. The detail header names
+   the patient, scheduled time, and lifecycle status; its colour follows the
+   status while the written status remains visible. The patient card is
+   read-only. Until a visit is selected, the detail area explains what to do.
+   Changing to a day without that appointment clears the selection, while
+   refreshing retains a selection that is still visible.
    Date fields throughout the workspace use the same compact, minimal control
    treatment.
 2. Select **Patients** to open the administrative directory. Doctors can
@@ -309,8 +312,14 @@ opening a feature tab reloads information that another workflow may have changed
    non-working, or use **Add interval** to split a day around a break such as
    lunch. Save valid changes or use **Cancel** to discard them. These settings
    affect shading only and never block or change appointments.
-7. Select a Dashboard appointment and choose **Accept selected**, or enter new
-   times and choose **Reschedule selected** for a pending or accepted visit.
+7. Select a Dashboard appointment to see actions for its current state. A
+   pending visit offers **Accept**, **Decline**, and **Reschedule**; an accepted
+   visit offers **Decline**, **Reschedule**, and **Check in** when its start time
+   has arrived. **Reschedule** opens the same Calendar-style appointment editor
+   used elsewhere in the Doctor workspace. Checked-in visits show the existing
+   consultation, prescription, and completion workflow. Completed or checked-
+   out visits keep saved clinical history readable but do not show editing
+   controls, while declined or cancelled visits are non-actionable.
 8. In Calendar, choose **Block time**, then select a date and half-hour start
    and end times. Invalid or conflicting input remains in the dialog for
    correction. Select one of your **Blocked time** cards to view it; choose

@@ -406,6 +406,9 @@ field rather than placing a separate adjacent button. New layout markers include
 `doctor-calendar-refresh`, `doctor-calendar-time-off-dialog-content`,
 `doctor-calendar-time-off-<id>-<date>`,
 `doctor-calendar-time-off-remove-confirmation`,
+`doctor-selected-appointment`, `doctor-selected-content`,
+`doctor-patient-details-card`, `doctor-patient-details`, `doctor-decline`,
+`doctor-status-message`, and `doctor-clinical-read-only`,
 `admin-account-form-card`, and `admin-account-list-card`.
 
 Operational results use dedicated JavaFX tables. Patient rows show name,
@@ -421,12 +424,21 @@ message. Color is supplementary to status text, and the stylesheet provides a
 visible focus outline for keyboard navigation.
 
 The Doctor workspace uses a compact, internally scrollable single-day Calendar
-as the master pane and a separately scrollable selected-appointment detail pane
-containing appointment actions, consultation, prescriptions, and completion
-cards. The old Dashboard appointment `ListView` and time-off form are absent;
-time off is created and removed only from the full Calendar. Consultation
-actions remain disabled until a Calendar appointment is selected; the existing
-services still own authorization and lifecycle validation.
+as the master pane and a separately scrollable, status-driven selected-
+appointment detail pane. Its header contains the patient name, appointment
+time, and written status with a matching semantic colour class; it deliberately
+does not expose the generated Patient ID. The selected pane renders the shared
+administrative patient details grid read-only. Pending and accepted visits get
+only their permitted lifecycle actions, while checked-in visits get the
+consultation, prescription, and completion cards. Completed and checked-out
+clinical cards remain readable but have no editing actions; declined and
+cancelled visits show a non-actionable status message. Rescheduling reuses
+`AppointmentDialog.showDoctorEdit`, so date/time validation is shared with
+Calendar. The old Dashboard appointment `ListView` and time-off form are
+absent; time off is created and removed only from the full Calendar. The
+existing services still own authorization and lifecycle validation, and a
+successful action refreshes the Dashboard so the selected branch follows the
+current status.
 The Doctor shell keeps that content under the `Dashboard` destination and
 places the shared administrative directory under `Patients`;
 `doctor-nav-dashboard`, `doctor-nav-patients`, and `doctor-patients-page` are
