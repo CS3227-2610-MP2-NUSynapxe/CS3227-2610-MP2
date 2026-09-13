@@ -9,15 +9,15 @@ import static org.testfx.matcher.base.NodeMatchers.isVisible;
 
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javafx.geometry.Bounds;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
@@ -29,18 +29,23 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextInputControl;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
+import nusynapxe.domain.DoctorCalendarSettings;
+import nusynapxe.domain.DoctorCalendarWeek;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
 import nusynapxe.persistence.AppointmentRepository;
 import nusynapxe.persistence.PatientRepository;
 import nusynapxe.persistence.SqliteDatabase;
+import nusynapxe.service.CalendarService;
 import nusynapxe.service.ClinicServices;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -53,6 +58,7 @@ final class DoctorCalendarViewTest extends ApplicationTest {
   private SqliteDatabase database;
   private ClinicServices services;
   private long doctorId;
+  private long timeOffId;
   private List<Appointment> appointmentsBeforeSchedule;
 
   @Override
@@ -85,6 +91,8 @@ final class DoctorCalendarViewTest extends ApplicationTest {
       appointments.create(
           patient.id(), doctor.id(), start, start.plusMinutes(30), AppointmentStatus.PENDING);
     }
+    timeOffId =
+        appointments.createTimeOff(doctor.id(), today.atTime(15, 0), today.atTime(16, 0)).id();
     doctorId = doctor.id();
     appointmentsBeforeSchedule = new AppointmentRepository(database).findByDoctor(doctorId);
     new ApplicationRouter(stage, database).showInitial();
@@ -99,22 +107,35 @@ final class DoctorCalendarViewTest extends ApplicationTest {
   }
 
   @Test
-  void navigatesCalendarPickerAndSettingsWithBreaks() {
+  void navigatesCalendarPickerAndSettingsWithBreaks() throws SQLException {
+    Session doctorSession = new Session(doctorId, "doctor", Role.DOCTOR);
+    DoctorCalendarSettings initialSettings = services.calendarService().getSettings(doctorSession);
+    services
+        .calendarService()
+        .saveSettings(
+            doctorSession,
+            new DoctorCalendarSettings(
+                doctorId, DayOfWeek.MONDAY, initialSettings.workingIntervals()));
+
     loginAsDoctor();
     fire("#doctor-nav-calendar");
     waitForNode("#doctor-calendar-page");
     verifyThat("#doctor-calendar-page", isVisible());
     assertEquals(7, lookup(".calendar-day-header").queryAll().size());
     assertTrue(lookup("#doctor-calendar-appointment-1-" + today()).tryQuery().isPresent());
+    assertTrue(
+        lookup("#doctor-calendar-time-off-" + timeOffId + "-" + today()).tryQuery().isPresent());
     assertEquals(5, lookup(".calendar-appointment-status").queryAll().size());
     assertTrue(
         lookup("#doctor-calendar-current-time-line-" + today()).queryAs(Region.class).isVisible());
 
-    assertFalse(lookup("#doctor-calendar-week-picker").queryAs(Button.class).isVisible());
+    assertFalse(lookup("#doctor-calendar-schedule-date").queryAs(DatePicker.class).isVisible());
     assertFalse(lookup("#doctor-calendar-previous").queryAs(Button.class).isVisible());
     assertFalse(lookup("#doctor-calendar-next").queryAs(Button.class).isVisible());
     DatePicker from = lookup("#doctor-calendar-from").queryAs(DatePicker.class);
     DatePicker to = lookup("#doctor-calendar-to").queryAs(DatePicker.class);
+    assertTrue(from.getStyleClass().contains("compact-date-picker"));
+    assertTrue(to.getStyleClass().contains("compact-date-picker"));
     assertEquals(today(), from.getValue());
     assertEquals(today().plusDays(6), to.getValue());
     interact(
@@ -134,7 +155,9 @@ final class DoctorCalendarViewTest extends ApplicationTest {
     waitForNode("#doctor-calendar-settings-page");
     verifyThat("#doctor-calendar-settings-timezone", isVisible());
     assertTrue(lookup("#doctor-calendar-settings-work-location").tryQuery().isEmpty());
-    selectCombo("#doctor-calendar-settings-first-day", DayOfWeek.MONDAY);
+    assertTrue(lookup("#doctor-calendar-settings-preferences").tryQuery().isEmpty());
+    assertTrue(lookup("#doctor-calendar-settings-first-day").tryQuery().isEmpty());
+    verifyThat("#doctor-calendar-settings-working-hours", isVisible());
     fire("#doctor-calendar-settings-monday-add");
     selectCombo("#doctor-calendar-settings-monday-end-0", "12:00");
     selectCombo("#doctor-calendar-settings-monday-start-1", "13:00");
@@ -145,12 +168,198 @@ final class DoctorCalendarViewTest extends ApplicationTest {
 
     fire("#doctor-calendar-settings");
     waitForNode("#doctor-calendar-settings-page");
-    assertEquals(
-        DayOfWeek.MONDAY,
-        lookup("#doctor-calendar-settings-first-day").queryAs(ComboBox.class).getValue());
+    assertTrue(lookup("#doctor-calendar-settings-preferences").tryQuery().isEmpty());
+    assertTrue(lookup("#doctor-calendar-settings-first-day").tryQuery().isEmpty());
     assertTrue(lookup("#doctor-calendar-settings-monday-start-1").tryQuery().isPresent());
+    assertEquals(
+        DayOfWeek.MONDAY, services.calendarService().getSettings(doctorSession).firstDayOfWeek());
     fire("#doctor-calendar-settings-cancel");
     waitForNode("#doctor-calendar-page");
+  }
+
+  @Test
+  void doctorBlocksTimeFromCalendarAndRefreshKeepsTheSelectedRange() throws SQLException {
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    waitForNode("#doctor-calendar-page");
+    LocalDate selectedDate = today().plusDays(2);
+    interact(
+        () -> {
+          lookup("#doctor-calendar-from").queryAs(DatePicker.class).setValue(selectedDate);
+          lookup("#doctor-calendar-to").queryAs(DatePicker.class).setValue(selectedDate);
+        });
+    fire("#doctor-calendar-refresh");
+    assertEquals(
+        selectedDate, lookup("#doctor-calendar-from").queryAs(DatePicker.class).getValue());
+
+    fire("#doctor-calendar-block-time");
+    waitForNode("#doctor-calendar-time-off-dialog-content");
+    assertEquals(
+        selectedDate,
+        lookup("#doctor-calendar-time-off-dialog-date").queryAs(DatePicker.class).getValue());
+    assertTrue(
+        lookup("#doctor-calendar-time-off-dialog-date")
+            .queryAs(DatePicker.class)
+            .getStyleClass()
+            .contains("compact-date-picker"));
+    selectCombo("#doctor-calendar-time-off-dialog-start-hour", "10");
+    selectCombo("#doctor-calendar-time-off-dialog-start-minute", "00");
+    selectCombo("#doctor-calendar-time-off-dialog-end-hour", "11");
+    selectCombo("#doctor-calendar-time-off-dialog-end-minute", "00");
+    fire("#doctor-calendar-time-off-dialog-submit");
+
+    var created =
+        new AppointmentRepository(database)
+            .findTimeOffByDoctor(doctorId).stream()
+                .filter(interval -> interval.startsAt().equals(selectedDate.atTime(10, 0)))
+                .findFirst()
+                .orElseThrow();
+    assertTrue(
+        lookup("#doctor-calendar-time-off-" + created.id() + "-" + selectedDate)
+            .tryQuery()
+            .isPresent());
+  }
+
+  @Test
+  void doctorCanOpenTimeOffDetailsForRemoval() {
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    waitForNode("#doctor-calendar-page");
+
+    interact(
+        () ->
+            lookup("#doctor-calendar-time-off-" + timeOffId + "-" + today())
+                .query()
+                .getOnMouseClicked()
+                .handle(primaryClick()));
+
+    waitForNode("#doctor-calendar-time-off-details");
+    verifyThat("#doctor-calendar-time-off-remove", isVisible());
+    fire("#doctor-calendar-time-off-close");
+  }
+
+  @Test
+  void crossMidnightTimeOffDetailsShowBothDates() throws SQLException {
+    LocalDate startDate = today();
+    LocalDate endDate = startDate.plusDays(1);
+    var crossMidnight =
+        new AppointmentRepository(database)
+            .createTimeOff(doctorId, startDate.atTime(23, 30), endDate.atTime(0, 30));
+
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    waitForNode("#doctor-calendar-page");
+    interact(
+        () ->
+            lookup("#doctor-calendar-time-off-" + crossMidnight.id() + "-" + startDate)
+                .query()
+                .getOnMouseClicked()
+                .handle(primaryClick()));
+
+    waitForNode("#doctor-calendar-time-off-details");
+    String interval =
+        lookup("#doctor-calendar-time-off-details-interval").queryAs(Label.class).getText();
+    assertTrue(interval.contains(startDate.toString()));
+    assertTrue(interval.contains(endDate.toString()));
+    assertTrue(interval.contains("23:30"));
+    assertTrue(interval.contains("00:30"));
+    fire("#doctor-calendar-time-off-close");
+  }
+
+  @Test
+  void agendaBlockTimeUsesTheVisibleAnchorDate() {
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    selectCombo("#doctor-calendar-view-mode", "Agenda");
+    fire("#doctor-calendar-next");
+    LocalDate anchor =
+        lookup("#doctor-calendar-schedule-date").queryAs(DatePicker.class).getValue();
+
+    fire("#doctor-calendar-block-time");
+    waitForNode("#doctor-calendar-time-off-dialog-content");
+    assertEquals(
+        anchor,
+        lookup("#doctor-calendar-time-off-dialog-date").queryAs(DatePicker.class).getValue());
+    fire("#doctor-calendar-time-off-dialog-cancel");
+  }
+
+  @Test
+  void invalidTimeOffKeepsDialogInputForCorrection() {
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    waitForNode("#doctor-calendar-page");
+    fire("#doctor-calendar-block-time");
+    waitForNode("#doctor-calendar-time-off-dialog-content");
+    LocalDate chosen = today().plusDays(3);
+    interact(
+        () ->
+            lookup("#doctor-calendar-time-off-dialog-date")
+                .queryAs(DatePicker.class)
+                .setValue(chosen));
+    selectCombo("#doctor-calendar-time-off-dialog-start-hour", "11");
+    selectCombo("#doctor-calendar-time-off-dialog-end-hour", "10");
+
+    fire("#doctor-calendar-time-off-dialog-submit");
+
+    assertTrue(lookup("#doctor-calendar-time-off-dialog-content").tryQuery().isPresent());
+    assertEquals(
+        chosen,
+        lookup("#doctor-calendar-time-off-dialog-date").queryAs(DatePicker.class).getValue());
+    verifyThat("#doctor-calendar-time-off-dialog-feedback", isVisible());
+    fire("#doctor-calendar-time-off-dialog-cancel");
+  }
+
+  @Test
+  void conflictingTimeOffKeepsDialogAvailableForCorrection() {
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    fire("#doctor-calendar-block-time");
+    waitForNode("#doctor-calendar-time-off-dialog-content");
+    interact(
+        () ->
+            lookup("#doctor-calendar-time-off-dialog-date")
+                .queryAs(DatePicker.class)
+                .setValue(today()));
+    selectCombo("#doctor-calendar-time-off-dialog-start-hour", "15");
+    selectCombo("#doctor-calendar-time-off-dialog-start-minute", "00");
+    selectCombo("#doctor-calendar-time-off-dialog-end-hour", "15");
+    selectCombo("#doctor-calendar-time-off-dialog-end-minute", "30");
+
+    fire("#doctor-calendar-time-off-dialog-submit");
+
+    verifyThat("#doctor-calendar-time-off-dialog-feedback", isVisible());
+    assertTrue(lookup("#doctor-calendar-time-off-dialog-content").tryQuery().isPresent());
+    fire("#doctor-calendar-time-off-dialog-cancel");
+  }
+
+  @Test
+  void doctorCancelsThenConfirmsTimeOffRemoval() throws SQLException {
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    waitForNode("#doctor-calendar-page");
+    openSeededTimeOff();
+
+    Thread cancelledRemoval = new Thread(() -> fire("#doctor-calendar-time-off-remove"));
+    cancelledRemoval.start();
+    waitForNode("#doctor-calendar-time-off-remove-confirmation");
+    fire("#doctor-calendar-time-off-remove-cancel");
+    join(cancelledRemoval);
+    assertTrue(
+        new AppointmentRepository(database)
+            .findTimeOffByDoctor(doctorId).stream()
+                .anyMatch(interval -> interval.id() == timeOffId));
+
+    Thread confirmedRemoval = new Thread(() -> fire("#doctor-calendar-time-off-remove"));
+    confirmedRemoval.start();
+    waitForNode("#doctor-calendar-time-off-remove-confirmation");
+    fire("#doctor-calendar-time-off-remove-confirm");
+    join(confirmedRemoval);
+    assertTrue(
+        new AppointmentRepository(database)
+            .findTimeOffByDoctor(doctorId).stream()
+                .noneMatch(interval -> interval.id() == timeOffId));
+    assertTrue(
+        lookup("#doctor-calendar-time-off-" + timeOffId + "-" + today()).tryQuery().isEmpty());
   }
 
   @Test
@@ -235,6 +444,11 @@ final class DoctorCalendarViewTest extends ApplicationTest {
     assertEquals(
         emptyDate,
         lookup("#doctor-calendar-appointment-dialog-date").queryAs(DatePicker.class).getValue());
+    assertTrue(
+        lookup("#doctor-calendar-appointment-dialog-date")
+            .queryAs(DatePicker.class)
+            .getStyleClass()
+            .contains("compact-date-picker"));
     assertEquals(
         "07:30",
         lookup("#doctor-calendar-appointment-dialog-start-hour").queryAs(ComboBox.class).getValue()
@@ -250,6 +464,146 @@ final class DoctorCalendarViewTest extends ApplicationTest {
                         .getScene()
                         .getWindow())
                 .close());
+  }
+
+  @Test
+  void blockedTimeConsumesClicksWhenNoTimeOffHandlerExists() throws SQLException {
+    LocalDate selectedDate = today();
+    Session doctorSession = new Session(doctorId, "doctor", Role.DOCTOR);
+    DoctorCalendarWeek data =
+        services.calendarService().getRange(doctorSession, selectedDate, selectedDate);
+    AtomicBoolean emptySlotOpened = new AtomicBoolean();
+    CalendarTimeGrid grid =
+        new CalendarTimeGrid(
+            List.of(selectedDate),
+            data,
+            Clock.system(CalendarService.CLINIC_ZONE),
+            new CalendarTimeGrid.InteractionHandlers(
+                null, null, start -> emptySlotOpened.set(true), null));
+
+    interact(
+        () -> {
+          Stage stage = (Stage) lookup("#login-view").query().getScene().getWindow();
+          stage.getScene().setRoot(grid);
+          grid.applyCss();
+          grid.layout();
+          Node blockedTime =
+              grid.lookup("#doctor-calendar-time-off-" + timeOffId + "-" + selectedDate);
+          blockedTime.fireEvent(primaryClick());
+        });
+
+    assertFalse(emptySlotOpened.get());
+  }
+
+  @Test
+  void lateUsefulTimeUsesTheScrollableContentHeight() throws SQLException {
+    LocalDate selectedDate = today().plusDays(20);
+    new AppointmentRepository(database)
+        .createTimeOff(
+            doctorId, selectedDate.atTime(23, 30), selectedDate.plusDays(1).atTime(0, 30));
+    Session doctorSession = new Session(doctorId, "doctor", Role.DOCTOR);
+    DoctorCalendarWeek data =
+        services.calendarService().getRange(doctorSession, selectedDate, selectedDate);
+    CalendarTimeGrid timeline =
+        new CalendarTimeGrid(
+            List.of(selectedDate),
+            data,
+            Clock.system(CalendarService.CLINIC_ZONE),
+            CalendarTimeGrid.InteractionHandlers.none(),
+            CalendarTimeGrid.DisplayProfile.COMPACT);
+
+    interact(
+        () -> {
+          Stage stage = (Stage) lookup("#login-view").query().getScene().getWindow();
+          stage.getScene().setRoot(timeline);
+          timeline.applyCss();
+          timeline.layout();
+        });
+    ScrollPane scroll = (ScrollPane) timeline.lookup("#doctor-calendar-scroll");
+    timeline.scrollToUsefulTime(selectedDate.atTime(23, 59));
+    WaitForAsyncUtils.waitForFxEvents();
+
+    assertTrue(scroll.getVvalue() > 0.99, "Late-day content should scroll to the bottom");
+  }
+
+  @Test
+  void crossMidnightTimeOffUsesClippedTimesInItsLabels() throws SQLException {
+    LocalDate startDate = today();
+    LocalDate nextDate = startDate.plusDays(1);
+    var crossMidnight =
+        new AppointmentRepository(database)
+            .createTimeOff(doctorId, startDate.atTime(23, 0), nextDate.atTime(1, 0));
+
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    waitForNode("#doctor-calendar-page");
+    Node clippedBlock =
+        lookup("#doctor-calendar-time-off-" + crossMidnight.id() + "-" + nextDate).query();
+    Label clippedTime = (Label) clippedBlock.lookup(".calendar-time-off-time");
+
+    assertEquals("00:00 – 01:00", clippedTime.getText());
+    assertEquals("Blocked time, 00:00 to 01:00", clippedBlock.getAccessibleText());
+  }
+
+  @Test
+  void crossMidnightAppointmentUsesClippedTimesInItsLabels() throws SQLException {
+    LocalDate startDate = today();
+    LocalDate nextDate = startDate.plusDays(1);
+    Patient patient =
+        new PatientRepository(database)
+            .create(new Patient(0, "Overnight", "Patient", "1900-01-01", "555-0199", "", ""));
+    var crossMidnight =
+        new AppointmentRepository(database)
+            .create(
+                patient.id(),
+                doctorId,
+                startDate.atTime(23, 30),
+                nextDate.atTime(0, 30),
+                AppointmentStatus.PENDING);
+
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    waitForNode("#doctor-calendar-page");
+    Node clippedBlock =
+        lookup("#doctor-calendar-appointment-" + crossMidnight.id() + "-" + nextDate).query();
+    Label clippedTime = (Label) clippedBlock.lookup(".calendar-appointment-time");
+
+    assertEquals("00:00 – 00:30", clippedTime.getText());
+    assertTrue(clippedBlock.getAccessibleText().contains("00:00 to 00:30"));
+  }
+
+  @Test
+  void invalidCalendarRangeShowsFeedbackInsteadOfOpeningTimeOffDialog() {
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    interact(() -> lookup("#doctor-calendar-from").queryAs(DatePicker.class).setValue(null));
+
+    fire("#doctor-calendar-block-time");
+
+    verifyThat("#doctor-feedback", isVisible());
+    assertTrue(lookup("#doctor-feedback").queryAs(Label.class).getText().contains("Select both"));
+    assertTrue(lookup("#doctor-calendar-time-off-dialog-content").tryQuery().isEmpty());
+  }
+
+  @Test
+  void settingsSaveStaysDisabledWhenInitialLoadFails() {
+    Session invalidSession = new Session(doctorId, "doctor", Role.RECEPTIONIST);
+    Runnable noOp =
+        () -> {
+          // No callback is needed for this load-failure test.
+        };
+    DoctorCalendarSettingsView settings =
+        new DoctorCalendarSettingsView(services, invalidSession, noOp, noOp, new Label());
+
+    interact(
+        () -> {
+          Stage stage = (Stage) lookup("#login-view").query().getScene().getWindow();
+          stage.getScene().setRoot(settings.view());
+        });
+
+    assertTrue(
+        lookup("#doctor-calendar-settings-save").queryAs(Button.class).isDisabled(),
+        "Settings must not be saved when the initial snapshot was unavailable");
   }
 
   @Test
@@ -322,12 +676,14 @@ final class DoctorCalendarViewTest extends ApplicationTest {
 
     Node appointment = lookup("#doctor-calendar-appointment-1-" + today()).query();
     Node oneHourAppointment = lookup("#doctor-calendar-appointment-2-" + today()).query();
+    Node oneHourTimeOff = lookup("#doctor-calendar-time-off-" + timeOffId + "-" + today()).query();
     Node dayColumn = lookup("#doctor-calendar-day-column-" + today()).query();
     Node eventSurface = lookup("#doctor-calendar-events-" + today()).query();
     assertContained(appointment, dayColumn);
     Bounds appointmentBounds = appointment.localToScene(appointment.getBoundsInLocal());
     Bounds oneHourAppointmentBounds =
         oneHourAppointment.localToScene(oneHourAppointment.getBoundsInLocal());
+    Bounds oneHourTimeOffBounds = oneHourTimeOff.localToScene(oneHourTimeOff.getBoundsInLocal());
     Bounds eventSurfaceBounds = eventSurface.localToScene(eventSurface.getBoundsInLocal());
     assertEquals(eventSurfaceBounds.getMinX(), appointmentBounds.getMinX(), 0.1);
     assertEquals(eventSurfaceBounds.getMaxX(), appointmentBounds.getMaxX(), 0.1);
@@ -340,6 +696,9 @@ final class DoctorCalendarViewTest extends ApplicationTest {
         sceneBounds(lookup("#doctor-calendar-period-" + today() + "-19").query());
     assertEquals(thirtyMinuteSlot.getHeight() - 4, appointmentBounds.getHeight(), 0.1);
     assertEquals(thirtyMinuteSlot.getHeight() * 2 - 4, oneHourAppointmentBounds.getHeight(), 0.1);
+    assertEquals(thirtyMinuteSlot.getHeight() * 2 - 4, oneHourTimeOffBounds.getHeight(), 0.1);
+    assertTrue(oneHourTimeOff.getStyleClass().contains("calendar-time-off-block"));
+    assertTrue(oneHourTimeOff.getAccessibleText().startsWith("Blocked time"));
     assertEquals(oneHourStartSlot.getMinY() + 2, oneHourAppointmentBounds.getMinY(), 0.1);
     assertEquals(oneHourEndSlot.getMaxY() - 2, oneHourAppointmentBounds.getMaxY(), 0.1);
     assertFullyContained(lookup("#doctor-calendar-accept-1").query(), appointment);
@@ -379,21 +738,21 @@ final class DoctorCalendarViewTest extends ApplicationTest {
   }
 
   @Test
-  void switchesToChronologicalLazyScheduleAndReanchors() throws SQLException {
+  void switchesToAgendaAndNavigatesByOneDayAnchor() throws SQLException {
     loginAsDoctor();
     fire("#doctor-nav-calendar");
     waitForNode("#doctor-calendar-page");
 
     ComboBox<String> mode = calendarMode();
-    assertEquals("Week", mode.getValue());
+    assertEquals("Calendar", mode.getValue());
     assertEquals("Choose Calendar view", mode.getAccessibleText());
-    interact(() -> mode.setValue("Schedule"));
+    interact(() -> mode.setValue("Agenda"));
     WaitForAsyncUtils.waitForFxEvents();
 
     waitForNode("#doctor-calendar-schedule-list");
-    assertEquals(
-        today().format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy")),
-        lookup("#doctor-calendar-week-picker").queryAs(Button.class).getText());
+    DatePicker anchor = lookup("#doctor-calendar-schedule-date").queryAs(DatePicker.class);
+    assertEquals(today(), anchor.getValue());
+    assertEquals("Choose Agenda start date", anchor.getAccessibleText());
     ListView<?> schedule = scheduleList();
     assertEquals(46, schedule.getItems().size());
     assertTrue(lookup("#doctor-calendar-schedule-date-" + today()).tryQuery().isPresent());
@@ -444,32 +803,28 @@ final class DoctorCalendarViewTest extends ApplicationTest {
 
     int loadedScheduleEntryCount = scheduleList().getItems().size();
     fire("#doctor-calendar-next");
+    assertEquals(today().plusDays(1), anchor.getValue());
     assertEquals(50, scheduleList().getItems().size());
     assertNotEquals(loadedScheduleEntryCount, scheduleList().getItems().size());
     fire("#doctor-calendar-previous");
+    assertEquals(today(), anchor.getValue());
     assertEquals(46, scheduleList().getItems().size());
     fire("#doctor-calendar-today");
+    assertEquals(today(), anchor.getValue());
     assertEquals(46, scheduleList().getItems().size());
 
-    fire("#doctor-calendar-week-picker");
-    waitForNode("#doctor-calendar-week-picker-popup");
-    verifyThat("#doctor-calendar-picker-month-grid", isVisible());
     LocalDate targetDate = today().plusDays(8);
-    String targetMonth =
-        targetDate.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH));
-    for (int index = 0;
-        index < 12
-            && !targetMonth.equals(
-                lookup("#doctor-calendar-picker-month-label").queryAs(Label.class).getText());
-        index++) {
-      fire("#doctor-calendar-picker-next-month");
-    }
-    fire("#doctor-calendar-picker-date-" + targetDate);
+    interact(
+        () -> {
+          anchor.setValue(targetDate);
+          anchor.getOnAction().handle(new javafx.event.ActionEvent());
+        });
+    WaitForAsyncUtils.waitForFxEvents();
     assertEquals(50, scheduleList().getItems().size());
     assertTrue(lookup("#doctor-calendar-schedule-date-" + targetDate).tryQuery().isPresent());
     fire("#doctor-calendar-today");
 
-    interact(() -> mode.setValue("Week"));
+    interact(() -> mode.setValue("Calendar"));
     WaitForAsyncUtils.waitForFxEvents();
     assertEquals(7, lookup(".calendar-day-header").queryAll().size());
     assertTrue(lookup("#doctor-calendar-schedule-list").tryQuery().isEmpty());
@@ -504,6 +859,67 @@ final class DoctorCalendarViewTest extends ApplicationTest {
     waitForNode("#doctor-workspace");
   }
 
+  @Test
+  void refreshRetainsScheduleModeAndAnchor() {
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    ComboBox<String> mode = calendarMode();
+    interact(() -> mode.setValue("Agenda"));
+    fire("#doctor-calendar-next");
+    DatePicker anchor = lookup("#doctor-calendar-schedule-date").queryAs(DatePicker.class);
+    LocalDate anchorDate = anchor.getValue();
+
+    fire("#doctor-calendar-refresh");
+
+    assertEquals("Agenda", mode.getValue());
+    assertEquals(anchorDate, anchor.getValue());
+    assertTrue(lookup("#doctor-calendar-schedule-list").tryQuery().isPresent());
+  }
+
+  @Test
+  void calendarToolbarWrapsSchedulingActionsAtNarrowWidths() {
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    waitForNode("#doctor-calendar-page");
+    interact(
+        () -> {
+          Stage stage = (Stage) lookup("#doctor-calendar-toolbar").query().getScene().getWindow();
+          stage.setWidth(980);
+          lookup("#doctor-calendar-toolbar").query().applyCss();
+          lookup("#doctor-calendar-toolbar").queryAs(VBox.class).layout();
+        });
+    HBox actionGroup = lookup("#doctor-calendar-action-group").queryAs(HBox.class);
+    assertEquals("doctor-calendar-toolbar-actions", actionGroup.getParent().getId());
+    interact(
+        () -> {
+          Stage stage = (Stage) lookup("#doctor-calendar-toolbar").query().getScene().getWindow();
+          stage.setWidth(1400);
+          lookup("#doctor-calendar-toolbar").query().applyCss();
+          lookup("#doctor-calendar-toolbar").queryAs(VBox.class).layout();
+        });
+    assertEquals("doctor-calendar-toolbar-main", actionGroup.getParent().getId());
+  }
+
+  private void openSeededTimeOff() {
+    interact(
+        () ->
+            lookup("#doctor-calendar-time-off-" + timeOffId + "-" + today())
+                .query()
+                .getOnMouseClicked()
+                .handle(primaryClick()));
+    waitForNode("#doctor-calendar-time-off-details");
+  }
+
+  private static void join(Thread thread) {
+    try {
+      thread.join(60_000);
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      throw new AssertionError("Interrupted while waiting for time-off confirmation", exception);
+    }
+    assertFalse(thread.isAlive(), "Time-off confirmation did not finish");
+  }
+
   private void setText(String selector, String value) {
     interact(() -> lookup(selector).queryAs(TextInputControl.class).setText(value));
   }
@@ -520,6 +936,28 @@ final class DoctorCalendarViewTest extends ApplicationTest {
     } catch (TimeoutException exception) {
       throw new AssertionError("Timed out waiting for " + selector, exception);
     }
+  }
+
+  private static MouseEvent primaryClick() {
+    return new MouseEvent(
+        MouseEvent.MOUSE_CLICKED,
+        5,
+        5,
+        5,
+        5,
+        MouseButton.PRIMARY,
+        1,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        null);
   }
 
   private void waitForScheduleSize(int minimumSize) {

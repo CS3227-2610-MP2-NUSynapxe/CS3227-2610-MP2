@@ -105,7 +105,8 @@ public final class CalendarService {
         doctor.id(),
         from,
         calendarSettings,
-        appointments.findCalendarByDoctor(doctor.id(), rangeStart, rangeEnd));
+        appointments.findCalendarByDoctor(doctor.id(), rangeStart, rangeEnd),
+        appointments.findTimeOffByDoctor(doctor.id(), rangeStart, rangeEnd));
   }
 
   /**
@@ -126,7 +127,12 @@ public final class CalendarService {
     LocalDateTime rangeEnd = weekStart.plusDays(7).atStartOfDay();
     java.util.List<CalendarAppointment> calendarAppointments =
         appointments.findCalendarByDoctor(doctor.id(), rangeStart, rangeEnd);
-    return new DoctorCalendarWeek(doctor.id(), weekStart, calendarSettings, calendarAppointments);
+    return new DoctorCalendarWeek(
+        doctor.id(),
+        weekStart,
+        calendarSettings,
+        calendarAppointments,
+        appointments.findTimeOffByDoctor(doctor.id(), rangeStart, rangeEnd));
   }
 
   /**
@@ -180,7 +186,8 @@ public final class CalendarService {
         doctor.id(),
         from,
         calendarSettings,
-        appointments.findCalendarByDoctor(doctor.id(), rangeStart, rangeEnd));
+        appointments.findCalendarByDoctor(doctor.id(), rangeStart, rangeEnd),
+        appointments.findTimeOffByDoctor(doctor.id(), rangeStart, rangeEnd));
   }
 
   /**

@@ -33,6 +33,7 @@ import nusynapxe.service.ValidationException;
 /** Read-only Doctor schedule calendar used by Receptionists to choose booking slots. */
 final class ReceptionistCalendarView {
   private static final long MAX_RANGE_DAYS = 31;
+  private static final int SCHEDULE_PAGE_DAYS = 7;
   private static final String WEEK_MODE = "Week";
   private static final String SCHEDULE_MODE = "Schedule";
 
@@ -75,10 +76,10 @@ final class ReceptionistCalendarView {
             account -> account.displayName() + " " + account.username());
     LocalDate today = LocalDate.now(clock);
     scheduleAnchor = CalendarScheduleCalculations.today(clock);
-    from = new DatePicker(today);
+    from = UiComponents.compactDatePicker(today);
     from.setId("reception-calendar-from");
     from.setShowWeekNumbers(false);
-    to = new DatePicker(today.plusDays(6));
+    to = UiComponents.compactDatePicker(today.plusDays(6));
     to.setId("reception-calendar-to");
     to.setShowWeekNumbers(false);
     fromField = UiComponents.fieldGroup("From", from);
@@ -157,7 +158,10 @@ final class ReceptionistCalendarView {
                 data,
                 clock,
                 new CalendarTimeGrid.InteractionHandlers(
-                    onAppointmentSelected, null, start -> onSlotSelected.accept(selected, start)));
+                    onAppointmentSelected,
+                    null,
+                    start -> onSlotSelected.accept(selected, start),
+                    null));
         grid.setId("reception-calendar-time-grid");
         root.setCenter(grid);
       }
@@ -214,12 +218,12 @@ final class ReceptionistCalendarView {
   }
 
   private void goToPrevious() {
-    scheduleAnchor = CalendarScheduleCalculations.moveAnchor(scheduleAnchor, -1);
+    scheduleAnchor = CalendarScheduleCalculations.moveAnchor(scheduleAnchor, -SCHEDULE_PAGE_DAYS);
     refresh();
   }
 
   private void goToNext() {
-    scheduleAnchor = CalendarScheduleCalculations.moveAnchor(scheduleAnchor, 1);
+    scheduleAnchor = CalendarScheduleCalculations.moveAnchor(scheduleAnchor, SCHEDULE_PAGE_DAYS);
     refresh();
   }
 

@@ -129,8 +129,9 @@ Use the **Patient directory** search controls to find patients by name,
 NRIC/FIN or another identity document, phone, or email. The older generated-ID
 lookup remains accepted for compatibility but is not needed for normal work.
 Search is case-insensitive, partial text is accepted, and **Clear search**
-restores the full directory. No matches produce an empty list rather than an
-application error.
+restores the full directory. Every returned row keeps its own **View** action
+when a new query replaces the current results, including after repeated
+searches. No matches produce an empty list rather than an application error.
 
 Select a row's **View** button to open a read-only page containing all permitted
 administrative details. From there, select **Edit**, **Deactivate patient** (or
@@ -260,49 +261,70 @@ opening a feature tab reloads information that another workflow may have changed
 ## Doctor workflow
 
 1. Log in with a Doctor account. **Dashboard** is the default destination and
-   shows only that Doctor's
-   appointment schedule in the left side of a schedule/detail layout. Select a
-   visit to reveal its consultation context on the right; until a visit is
-   selected, the detail area explains what to do.
+   shows a compact, scrollable calendar for the current Singapore-local day in
+   the left side of a schedule/detail layout. Use **Today**, the previous/next
+   arrows, the date picker, or the refresh icon to navigate and reload the same
+   day. Select an appointment block to reveal its consultation context and
+   status-specific appointment actions on the right. The detail header names
+   the patient, scheduled time, and lifecycle status; its colour follows the
+   status while the written status remains visible. The patient card is
+   read-only. Until a visit is selected, the detail area explains what to do.
+   Changing to a day without that appointment clears the selection, while
+   refreshing retains a selection that is still visible.
+   Date fields throughout the workspace use the same compact, minimal control
+   treatment.
 2. Select **Patients** to open the administrative directory. Doctors can
    register, search, edit, activate, deactivate, and safely delete patients
    there using the same administrative fields as Receptionists. The directory
    includes inactive patients and contains no diagnosis, consultation,
    follow-up, prescription, or other clinical controls. Return to **Dashboard**
-   to resume appointment and clinical work.
-3. Select **Calendar** to open a separate weekly view of your assigned
-   appointments. Use **Today**, the previous/next arrows, or the date-range
-   button to move between weeks. The date-range button opens a custom picker
-   with week numbers, a selected-week highlight, month navigation, a year and
-   month grid, and a **Today** action. The week is ordered using the saved
-   first day of the week.
-4. Use the compact **Week** / **Schedule** selector to switch views. **Week**
-   keeps the seven-day time grid. **Schedule** starts at today's Singapore
-   clinic date and loads all later appointments in chronological pages as you
-   scroll, without stopping at the selected week. It groups rows by date and
-   shows the time range, Patient ID/name, and a written appointment status.
+   to resume appointment and clinical work. The results card fills the page and
+   its table expands to use the available vertical space.
+3. Select **Calendar** to open the full time-grid view of your assigned
+   appointments and explicitly blocked time. Use **Today** or the inclusive
+   **From** and **To** date pickers to change the displayed range. The refresh
+   icon reloads the current range without changing it.
+4. Use the compact **Calendar** / **Agenda** selector to switch views.
+   **Calendar** keeps the configurable date-range time grid. **Agenda** starts
+   at its selected inclusive Singapore clinic date and loads all later
+   appointments in chronological pages as you scroll. It groups rows by date
+   and shows the time range, Patient ID/name, and a written appointment status.
    Cancelled rows remain visible but are muted, while a **Past** cue identifies
-   elapsed appointments. Today, previous/next, and the custom picker re-anchor
-   the Schedule stream; its range button shows the selected anchor month and
-   year. Empty schedules, the end of the stream, and retryable loading failures
-   have their own messages. Schedule rows are read-only and never show
-   diagnoses, consultation notes, follow-up notes, prescriptions, locations,
-   or invented all-day events.
+   elapsed appointments. In Agenda, the compact date picker sits between the
+   previous/next arrows; those arrows move one day at a time, while **Today**
+   and the refresh icon return to or reload the same anchor date. Empty
+   schedules, the end of the stream, and retryable loading failures have their
+   own messages. Agenda rows are read-only and never show diagnoses,
+   consultation notes, follow-up notes, prescriptions, locations, or invented
+   all-day events. At narrow window widths, **Add appointment** and **Block
+   time** move together onto a second toolbar row.
 5. Calendar greys dates and periods that have elapsed, disabled days, and time
    outside the configured working intervals. A red current-time line appears
-   on the current date when that date is in the displayed week. Appointments
-   remain visible even when they fall outside working hours.
-6. Select the Calendar **settings** icon to configure the first day of the
-   week and each day's working intervals. The settings page displays the fixed
-   Singapore timezone and has no work-location setting. Disable a day to make
-   it entirely non-working, or use **Add interval** to split a day around a
-   break such as lunch. Save valid changes or use **Cancel** to discard them.
-   These settings affect shading only and never block or change appointments.
-7. Select a pending appointment and choose **Accept selected**, or enter new
-   times and choose **Reschedule selected** for a pending or accepted visit.
-8. Enter a non-overlapping `yyyy-MM-dd HH:mm` interval and select **Block time
-   off** to make that period unavailable for future bookings.
-9. After Reception has checked in the patient, select **Refresh schedule** and
+   on the current date when that date is in the displayed Calendar range. Appointments
+   remain visible even when they fall outside working hours. Purple **Blocked
+   time** cards show unavailable intervals at their actual start, end, and
+   proportional duration; Receptionists can see these blocks but cannot remove
+   them.
+6. Select the Calendar **settings** icon to configure each day's working
+   intervals. The settings page displays the fixed Singapore timezone and has
+   no week-start or work-location setting because Calendar ranges and Agenda
+   start dates are selected directly. Disable a day to make it entirely
+   non-working, or use **Add interval** to split a day around a break such as
+   lunch. Save valid changes or use **Cancel** to discard them. These settings
+   affect shading only and never block or change appointments.
+7. Select a Dashboard appointment to see actions for its current state. A
+   pending visit offers **Accept**, **Decline**, and **Reschedule**; an accepted
+   visit offers **Decline**, **Reschedule**, and **Check in** when its start time
+   has arrived. **Reschedule** opens the same Calendar-style appointment editor
+   used elsewhere in the Doctor workspace. Checked-in visits show the existing
+   consultation, prescription, and completion workflow. Completed or checked-
+   out visits keep saved clinical history readable but do not show editing
+   controls, while declined or cancelled visits are non-actionable.
+8. In Calendar, choose **Block time**, then select a date and half-hour start
+   and end times. Invalid or conflicting input remains in the dialog for
+   correction. Select one of your **Blocked time** cards to view it; choose
+   **Remove blocked time** and confirm to make the interval available again.
+9. After Reception has checked in the patient, refresh the Dashboard and
    select the appointment. Enter the diagnosis, consultation notes, and
    follow-up notes, then choose **Save consultation**.
 10. Complete all prescription fields—medication, dosage, frequency, duration,
@@ -324,6 +346,10 @@ PENDING -> ACCEPTED -> CHECKED_IN -> COMPLETED -> CHECKED_OUT
 
 Cancellation is available before completion from `PENDING` or `ACCEPTED`.
 Invalid transitions are rejected without changing the stored appointment.
+`DECLINED` and `CANCELLED` records remain available as history but do not reserve
+their former intervals. Booking, rescheduling, and blocking time may reuse those
+intervals unless another active appointment or explicit blocked-time interval
+occupies them.
 
 ## Local data and privacy cautions
 
@@ -353,8 +379,21 @@ From the repository root, run:
 ```
 
 This replaces the default `%USERPROFILE%\.nusynapxe\nusynapxe.db` with demo
-staff, patients, calendar settings, a lunch break, and future appointments. The
-script prints the login credentials when it finishes. Start the application
+staff, 18 patients (including inactive directory examples), calendar settings,
+a lunch break, and two appointments per Doctor for each date from the previous
+seven days through the next fourteen days. Statuses span the appointment
+lifecycle. Historical checked-in, completed, and checked-out appointments are
+linked to clinical records, with prescriptions on completed and checked-out
+visits. The script prints these showcase login credentials when it finishes:
+
+```text
+Doctor       ada / ada1234!
+Doctor       grace / grace123!
+Receptionist reception / recept123!
+```
+
+The System Admin credential remains `admin.demo / DemoAdmin123!`. These
+accounts and passwords are for local demonstrations only. Start the application
 normally with:
 
 ```powershell

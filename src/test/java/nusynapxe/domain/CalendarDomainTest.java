@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -41,5 +43,35 @@ final class CalendarDomainTest {
     assertEquals(LocalDate.of(2026, 8, 30), sundayWeek.start());
     assertEquals(LocalDate.of(2026, 9, 7), mondayWeek.next().start());
     assertEquals(7, mondayWeek.dates().size());
+  }
+
+  @Test
+  void doctorCalendarWeekFreezesTimeOffProjection() {
+    DoctorTimeOff interval =
+        new DoctorTimeOff(
+            11, 7, LocalDateTime.of(2026, 9, 7, 9, 0), LocalDateTime.of(2026, 9, 7, 10, 0));
+    List<DoctorTimeOff> timeOff = new ArrayList<>(List.of(interval));
+
+    DoctorCalendarWeek week =
+        new DoctorCalendarWeek(
+            7, LocalDate.of(2026, 9, 7), DoctorCalendarSettings.defaults(7), List.of(), timeOff);
+    timeOff.clear();
+
+    assertEquals(List.of(interval), week.timeOff());
+    assertThrows(UnsupportedOperationException.class, () -> week.timeOff().clear());
+    assertThrows(
+        NullPointerException.class,
+        () ->
+            new DoctorCalendarWeek(
+                7, LocalDate.of(2026, 9, 7), DoctorCalendarSettings.defaults(7), List.of(), null));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            new DoctorCalendarWeek(
+                7,
+                LocalDate.of(2026, 9, 7),
+                DoctorCalendarSettings.defaults(8),
+                List.of(),
+                List.of()));
   }
 }

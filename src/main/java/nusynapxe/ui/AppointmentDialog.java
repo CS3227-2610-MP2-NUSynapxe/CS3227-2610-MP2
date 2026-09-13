@@ -237,7 +237,7 @@ final class AppointmentDialog {
       }
       patients.setDisable(appointment != null);
 
-      DatePicker date = new DatePicker(initialStart.toLocalDate());
+      DatePicker date = UiComponents.compactDatePicker(initialStart.toLocalDate());
       date.setId(prefix + "-date");
       TimeFields start = timeSelector(prefix + "-start");
       TimeFields end = timeSelector(prefix + "-end");

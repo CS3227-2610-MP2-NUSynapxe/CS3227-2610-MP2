@@ -44,6 +44,7 @@ import nusynapxe.domain.Session;
 import nusynapxe.domain.Sex;
 import nusynapxe.persistence.PatientRepository;
 import nusynapxe.persistence.SqliteDatabase;
+import nusynapxe.service.CalendarService;
 import nusynapxe.service.ClinicServices;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -240,18 +241,63 @@ final class ReceptionistViewTest extends ApplicationTest {
     Node appointmentDate = lookup("#reception-appointment-date").query();
     Node appointmentStart = lookup("#reception-start").query();
     Node appointmentEnd = lookup("#reception-end").query();
+    assertCompactDatePickerBounds((DatePicker) appointmentDate);
     assertEquals(
-        appointmentDate.getBoundsInParent().getWidth(),
         appointmentStart.getBoundsInParent().getWidth(),
-        2.0);
-    assertEquals(
-        appointmentDate.getBoundsInParent().getWidth(),
         appointmentEnd.getBoundsInParent().getWidth(),
         2.0);
   }
 
   @Test
-  void checkoutAndReceiptFiltersShowSelectedDatesAtUniformWidths() {
+  void everyReceptionDatePickerUsesTheSharedMinimalStyle() {
+    loginAsReceptionist();
+    String[] selectors = {
+      "#reception-schedule-date",
+      "#reception-appointment-date",
+      "#reception-calendar-from",
+      "#reception-calendar-to",
+      "#reception-check-in-queue-date",
+      "#reception-checkout-date",
+      "#reception-receipt-date",
+      "#reception-revenue-report-from",
+      "#reception-revenue-report-to"
+    };
+    for (String selector : selectors) {
+      assertTrue(
+          lookup(selector)
+              .queryAs(DatePicker.class)
+              .getStyleClass()
+              .contains("compact-date-picker"),
+          "Expected minimal date-picker style for " + selector);
+    }
+  }
+
+  @Test
+  void everyReceptionDatePickerUsesTheSharedCompactWidth() {
+    loginAsReceptionist();
+    layoutWorkspace();
+    String[] selectors = {
+      "#reception-schedule-date",
+      "#reception-appointment-date",
+      "#reception-calendar-from",
+      "#reception-calendar-to",
+      "#reception-check-in-queue-date",
+      "#reception-checkout-date",
+      "#reception-receipt-date",
+      "#reception-revenue-report-from",
+      "#reception-revenue-report-to"
+    };
+    for (String selector : selectors) {
+      DatePicker picker = lookup(selector).queryAs(DatePicker.class);
+      picker.applyCss();
+      picker.layout();
+      assertEquals(150.0, picker.getPrefWidth(), 0.1, "Unexpected width for " + selector);
+      assertTrue(picker.getMaxWidth() <= 170.0, "Unexpected max width for " + selector);
+    }
+  }
+
+  @Test
+  void checkoutAndReceiptFiltersShowSelectedDatesAtCompactWidths() {
     loginAsReceptionist();
     selectWorkspaceTab(4);
     DatePicker checkoutDate = lookup("#reception-checkout-date").queryAs(DatePicker.class);
@@ -259,10 +305,7 @@ final class ReceptionistViewTest extends ApplicationTest {
     WaitForAsyncUtils.waitForFxEvents();
     layoutWorkspace();
     assertFalse(checkoutDate.getEditor().getText().isBlank());
-    assertEquals(
-        lookup("#reception-checkout-patient").query().getBoundsInParent().getWidth(),
-        checkoutDate.getBoundsInParent().getWidth(),
-        1.0);
+    assertCompactDatePickerBounds(checkoutDate);
     assertTrue(
         lookup("#reception-checkout-ready-tab").queryAs(VBox.class).getPadding().getTop() >= 20);
 
@@ -277,10 +320,7 @@ final class ReceptionistViewTest extends ApplicationTest {
     WaitForAsyncUtils.waitForFxEvents();
     layoutWorkspace();
     assertFalse(receiptDate.getEditor().getText().isBlank());
-    assertEquals(
-        lookup("#reception-receipt-patient").query().getBoundsInParent().getWidth(),
-        receiptDate.getBoundsInParent().getWidth(),
-        1.0);
+    assertCompactDatePickerBounds(receiptDate);
     assertTrue(lookup("#reception-receipts-tab").queryAs(VBox.class).getPadding().getTop() >= 20);
   }
 
@@ -319,9 +359,16 @@ final class ReceptionistViewTest extends ApplicationTest {
     Patient patient =
         new PatientRepository(database)
             .create(new Patient(0, "Pat", "Lee", "1900-01-01", "555-0100", "", ""));
+    LocalDate selectedDate = LocalDate.now(java.time.ZoneId.of("Asia/Singapore"));
+    var timeOff =
+        services
+            .appointmentService()
+            .blockTimeOff(
+                new Session(doctor.id(), doctor.username(), Role.DOCTOR),
+                selectedDate.atTime(15, 0),
+                selectedDate.atTime(16, 0));
     loginAsReceptionist();
     fire("#reception-nav-calendar");
-    LocalDate selectedDate = LocalDate.now(java.time.ZoneId.of("Asia/Singapore"));
     DatePicker from = lookup("#reception-calendar-from").queryAs(DatePicker.class);
     DatePicker to = lookup("#reception-calendar-to").queryAs(DatePicker.class);
     TextField calendarDoctor = textField("#reception-calendar-doctor");
@@ -371,6 +418,11 @@ final class ReceptionistViewTest extends ApplicationTest {
         lookup("#doctor-calendar-day-column-" + selectedDate.plusDays(2)).tryQuery().isPresent());
     assertTrue(
         lookup("#doctor-calendar-day-column-" + selectedDate.plusDays(3)).tryQuery().isEmpty());
+    var timeOffNode =
+        lookup("#doctor-calendar-time-off-" + timeOff.id() + "-" + selectedDate).query();
+    assertFalse(timeOffNode.isFocusTraversable());
+    interact(() -> timeOffNode.getOnMouseClicked().handle(primaryClick()));
+    assertTrue(lookup("#doctor-calendar-time-off-details").tryQuery().isEmpty());
 
     interact(
         () ->
@@ -418,6 +470,35 @@ final class ReceptionistViewTest extends ApplicationTest {
         lookup("#doctor-calendar-appointment-" + created.id() + "-" + selectedDate)
             .tryQuery()
             .isPresent());
+  }
+
+  @Test
+  void receptionistScheduleArrowsMoveByWholeWeeks() throws SQLException {
+    Patient patient =
+        new PatientRepository(database)
+            .create(new Patient(0, "Pat", "Lee", "1900-01-01", "555-0100", "", ""));
+    LocalDate targetDate = LocalDate.now(CalendarService.CLINIC_ZONE).plusDays(5);
+    services
+        .appointmentService()
+        .book(
+            receptionistSession(),
+            patient.id(),
+            doctor.id(),
+            targetDate.atTime(9, 0),
+            targetDate.atTime(9, 30));
+
+    loginAsReceptionist();
+    fire("#reception-nav-calendar");
+    selectCombo("#reception-calendar-view-mode", "Schedule");
+    waitForNode("#reception-calendar-schedule-list");
+    waitForNode("#doctor-calendar-schedule-date-" + targetDate);
+
+    fire("#reception-calendar-next");
+    WaitForAsyncUtils.waitForFxEvents();
+
+    assertTrue(
+        lookup("#doctor-calendar-schedule-date-" + targetDate).tryQuery().isEmpty(),
+        "Receptionist Schedule should advance by seven days");
   }
 
   @Test
@@ -869,6 +950,11 @@ final class ReceptionistViewTest extends ApplicationTest {
         });
   }
 
+  private void assertCompactDatePickerBounds(DatePicker picker) {
+    double width = picker.getBoundsInParent().getWidth();
+    assertTrue(width >= 132.0 && width <= 180.0, "Unexpected rendered date-picker width: " + width);
+  }
+
   @SuppressWarnings("unchecked")
   private void selectFirstAppointment(String selector) {
     interact(() -> lookup(selector).queryAs(TableView.class).getSelectionModel().selectFirst());
@@ -945,6 +1031,28 @@ final class ReceptionistViewTest extends ApplicationTest {
     } catch (TimeoutException exception) {
       throw new AssertionError("Timed out waiting for " + selector, exception);
     }
+  }
+
+  private static MouseEvent primaryClick() {
+    return new MouseEvent(
+        MouseEvent.MOUSE_CLICKED,
+        5,
+        5,
+        5,
+        5,
+        MouseButton.PRIMARY,
+        1,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        null);
   }
 
   private void join(Thread thread) {

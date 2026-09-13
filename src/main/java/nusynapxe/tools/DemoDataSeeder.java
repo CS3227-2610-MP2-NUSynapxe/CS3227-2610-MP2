@@ -13,13 +13,16 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import nusynapxe.DatabasePaths;
 import nusynapxe.domain.Account;
+import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
-import nusynapxe.domain.CalendarWeek;
+import nusynapxe.domain.ClinicalRecord;
 import nusynapxe.domain.DoctorCalendarSettings;
 import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
+import nusynapxe.domain.Prescription;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
 import nusynapxe.domain.Sex;
@@ -27,32 +30,49 @@ import nusynapxe.domain.WorkingInterval;
 import nusynapxe.persistence.AccountRepository;
 import nusynapxe.persistence.AppointmentRepository;
 import nusynapxe.persistence.CalendarSettingsRepository;
+import nusynapxe.persistence.ClinicalRecordRepository;
 import nusynapxe.persistence.PatientRepository;
 import nusynapxe.persistence.SqliteDatabase;
 import nusynapxe.service.AccountService;
 
 /** Creates and removes the local-development SQLite database used by the scripts. */
 public final class DemoDataSeeder {
-  /** Singapore timezone used to place showcase appointments around the current week. */
+  /** Singapore timezone used to place showcase appointments in a rolling window. */
   private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Singapore");
 
   private static final String ADMIN_USERNAME = "admin.demo";
   private static final String ADMIN_PASSWORD = "DemoAdmin123!";
-  private static final String ADA_USERNAME = "doctor.ada";
-  private static final String ADA_PASSWORD = "DemoDoctor123!";
-  private static final String GRACE_USERNAME = "doctor.grace";
-  private static final String GRACE_PASSWORD = "DemoDoctor123!";
-  private static final String RECEPTION_USERNAME = "reception.demo";
-  private static final String RECEPTION_PASSWORD = "DemoReception123!";
-  private static final int GENERATED_FUTURE_APPOINTMENTS = 32;
+  private static final String ADA_USERNAME = "ada";
+  private static final String ADA_PASSWORD = "ada1234!";
+  private static final String GRACE_USERNAME = "grace";
+  private static final String GRACE_PASSWORD = "grace123!";
+  private static final String RECEPTION_USERNAME = "reception";
+  private static final String RECEPTION_PASSWORD = "recept123!";
+  private static final int HISTORICAL_DAYS = 7;
+  private static final int FUTURE_DAYS = 14;
+  private static final int APPOINTMENTS_PER_DOCTOR_PER_DAY = 2;
+  private static final List<AppointmentStatus> HISTORICAL_STATUSES =
+      List.of(
+          AppointmentStatus.COMPLETED,
+          AppointmentStatus.CHECKED_IN,
+          AppointmentStatus.CHECKED_OUT,
+          AppointmentStatus.ACCEPTED,
+          AppointmentStatus.DECLINED,
+          AppointmentStatus.CANCELLED,
+          AppointmentStatus.PENDING);
   private static final List<AppointmentStatus> FUTURE_STATUSES =
       List.of(
           AppointmentStatus.PENDING,
           AppointmentStatus.ACCEPTED,
-          AppointmentStatus.ACCEPTED,
-          AppointmentStatus.CANCELLED,
-          AppointmentStatus.PENDING,
-          AppointmentStatus.ACCEPTED);
+          AppointmentStatus.DECLINED,
+          AppointmentStatus.CANCELLED);
+  private static final List<LocalTime> ADA_APPOINTMENT_TIMES =
+      List.of(LocalTime.of(9, 0), LocalTime.of(14, 0));
+  private static final List<LocalTime> GRACE_APPOINTMENT_TIMES =
+      List.of(LocalTime.of(10, 0), LocalTime.of(15, 0));
+  private static final Set<AppointmentStatus> CONSULTATION_STATUSES =
+      Set.of(
+          AppointmentStatus.CHECKED_IN, AppointmentStatus.COMPLETED, AppointmentStatus.CHECKED_OUT);
 
   private DemoDataSeeder() {
     throw new AssertionError("Utility class");
@@ -104,7 +124,7 @@ public final class DemoDataSeeder {
   }
 
   /**
-   * Seeds a fresh database with staff, patients, calendar preferences, and appointments.
+   * Seeds a fresh database with staff, patients, calendar preferences, appointments, and history.
    *
    * <p>Seeding refuses a database that already contains accounts, patients, or appointments. Use
    * the reset script first when replacing an existing local-development database.
@@ -122,6 +142,7 @@ public final class DemoDataSeeder {
       AccountRepository accounts = new AccountRepository(database);
       PatientRepository patients = new PatientRepository(database);
       AppointmentRepository appointments = new AppointmentRepository(database);
+      ClinicalRecordRepository clinicalRecords = new ClinicalRecordRepository(database);
       requireEmpty(accounts, patients, appointments);
 
       AccountService accountService = new AccountService(accounts);
@@ -152,8 +173,10 @@ public final class DemoDataSeeder {
 
       List<Patient> createdPatients = createPatients(patients);
       saveCalendarSettings(database, ada, grace);
-      int appointmentCount = createAppointments(appointments, ada, grace, createdPatients);
-      return new SeedSummary(4, createdPatients.size(), appointmentCount);
+      List<Appointment> createdAppointments =
+          createAppointments(appointments, ada, grace, createdPatients);
+      seedClinicalHistory(clinicalRecords, createdAppointments);
+      return new SeedSummary(4, createdPatients.size(), createdAppointments.size());
     }
   }
 
@@ -273,7 +296,199 @@ public final class DemoDataSeeder {
             "90 Heritage Street",
             174.0,
             79.0,
-            true));
+            true),
+        new Patient(
+            0,
+            IdentityType.OTHER,
+            "SHOWCASE-07",
+            "SG",
+            "Grace",
+            "Chong",
+            "1993-08-16",
+            Sex.FEMALE,
+            "65",
+            "85678901",
+            "grace.chong@example.test",
+            "18 Harbour View",
+            168.0,
+            58.0,
+            true),
+        new Patient(
+            0,
+            IdentityType.OTHER,
+            "SHOWCASE-08",
+            "SG",
+            "Hassan",
+            "Khan",
+            "1988-03-09",
+            Sex.MALE,
+            "65",
+            "86789012",
+            "hassan.khan@example.test",
+            "22 Hilltop Drive",
+            176.0,
+            81.0,
+            true),
+        new Patient(
+            0,
+            IdentityType.OTHER,
+            "SHOWCASE-09",
+            "SG",
+            "Irene",
+            "Goh",
+            "1975-12-21",
+            Sex.FEMALE,
+            "65",
+            "87890123",
+            "irene.goh@example.test",
+            "6 Maple Street",
+            162.0,
+            67.0,
+            true),
+        new Patient(
+            0,
+            IdentityType.OTHER,
+            "SHOWCASE-10",
+            "SG",
+            "Jared",
+            "Lee",
+            "2000-05-14",
+            Sex.MALE,
+            "65",
+            "88901234",
+            "jared.lee@example.test",
+            "44 Lakeside Walk",
+            181.0,
+            76.0,
+            true),
+        new Patient(
+            0,
+            IdentityType.OTHER,
+            "SHOWCASE-11",
+            "SG",
+            "Kavita",
+            "Nair",
+            "1990-10-03",
+            Sex.FEMALE,
+            "65",
+            "89012345",
+            "kavita.nair@example.test",
+            "9 Palm Grove",
+            158.0,
+            55.0,
+            true),
+        new Patient(
+            0,
+            IdentityType.OTHER,
+            "SHOWCASE-12",
+            "SG",
+            "Leon",
+            "Ong",
+            "1982-07-28",
+            Sex.MALE,
+            "65",
+            "80123456",
+            "leon.ong@example.test",
+            "73 Garden Terrace",
+            179.0,
+            83.0,
+            true),
+        new Patient(
+            0,
+            IdentityType.OTHER,
+            "SHOWCASE-13",
+            "SG",
+            "Mei",
+            "Soh",
+            "1996-01-19",
+            Sex.FEMALE,
+            "65",
+            "81235670",
+            "mei.soh@example.test",
+            "15 Sunset Avenue",
+            164.0,
+            57.0,
+            true),
+        new Patient(
+            0,
+            IdentityType.OTHER,
+            "SHOWCASE-14",
+            "SG",
+            "Nabil",
+            "Rahim",
+            "1970-09-07",
+            Sex.MALE,
+            "65",
+            "82356781",
+            "nabil.rahim@example.test",
+            "28 Heritage Lane",
+            173.0,
+            78.0,
+            true),
+        new Patient(
+            0,
+            IdentityType.OTHER,
+            "SHOWCASE-15",
+            "SG",
+            "Olivia",
+            "Teo",
+            "2004-04-25",
+            Sex.FEMALE,
+            "65",
+            "83467892",
+            "olivia.teo@example.test",
+            "3 Studio Crescent",
+            169.0,
+            61.0,
+            true),
+        new Patient(
+            0,
+            IdentityType.OTHER,
+            "SHOWCASE-16",
+            "SG",
+            "Pavel",
+            "Ivanov",
+            "1987-06-11",
+            Sex.MALE,
+            "65",
+            "84578903",
+            "pavel.ivanov@example.test",
+            "52 Riverbank Road",
+            184.0,
+            88.0,
+            true),
+        new Patient(
+            0,
+            IdentityType.OTHER,
+            "SHOWCASE-17",
+            "SG",
+            "Sara",
+            "Yeo",
+            "1999-11-02",
+            Sex.FEMALE,
+            "65",
+            "85689014",
+            "sara.yeo@example.test",
+            "11 Orchard Rise",
+            161.0,
+            54.0,
+            false),
+        new Patient(
+            0,
+            IdentityType.OTHER,
+            "SHOWCASE-18",
+            "SG",
+            "Tariq",
+            "Halim",
+            "1964-02-13",
+            Sex.MALE,
+            "65",
+            "86790125",
+            "tariq.halim@example.test",
+            "87 Heritage Street",
+            177.0,
+            82.0,
+            false));
   }
 
   private static void saveCalendarSettings(SqliteDatabase database, Account ada, Account grace)
@@ -318,88 +533,92 @@ public final class DemoDataSeeder {
         DayOfWeek.FRIDAY);
   }
 
-  private static int createAppointments(
+  private static List<Appointment> createAppointments(
       AppointmentRepository repository, Account ada, Account grace, List<Patient> patients)
       throws SQLException {
-    LocalDate weekStart =
-        CalendarWeek.containing(LocalDate.now(CLINIC_ZONE), DayOfWeek.MONDAY).start();
-    int count = createAdaWeek(repository, ada, patients, weekStart);
-    count += createAdaFutureSchedule(repository, ada, patients, weekStart);
-    count += createGraceSchedule(repository, grace, patients, weekStart);
-    return count;
-  }
-
-  private static int createAdaWeek(
-      AppointmentRepository repository, Account doctor, List<Patient> patients, LocalDate weekStart)
-      throws SQLException {
-    List<AppointmentSpec> appointments =
-        List.of(
-            new AppointmentSpec(0, LocalTime.of(9, 0), AppointmentStatus.COMPLETED, 0),
-            new AppointmentSpec(1, LocalTime.of(10, 30), AppointmentStatus.ACCEPTED, 1),
-            new AppointmentSpec(2, LocalTime.of(13, 0), AppointmentStatus.CHECKED_IN, 2),
-            new AppointmentSpec(3, LocalTime.of(15, 0), AppointmentStatus.PENDING, 3),
-            new AppointmentSpec(4, LocalTime.of(11, 0), AppointmentStatus.CANCELLED, 4),
-            new AppointmentSpec(5, LocalTime.of(9, 30), AppointmentStatus.ACCEPTED, 5),
-            new AppointmentSpec(6, LocalTime.of(14, 0), AppointmentStatus.PENDING, 0));
-    createAppointmentSpecs(repository, doctor, patients, weekStart, appointments);
-    return appointments.size();
-  }
-
-  private static int createAdaFutureSchedule(
-      AppointmentRepository repository, Account doctor, List<Patient> patients, LocalDate weekStart)
-      throws SQLException {
-    for (int index = 0; index < GENERATED_FUTURE_APPOINTMENTS; index++) {
-      LocalDate date = weekStart.plusDays(7L + index);
-      AppointmentStatus status = FUTURE_STATUSES.get(index % FUTURE_STATUSES.size());
-      createAppointment(
-          repository,
-          doctor,
-          patients.get(index % patients.size()),
-          date.atTime(LocalTime.of(9, 0)),
-          status);
+    LocalDate today = LocalDate.now(CLINIC_ZONE);
+    List<Patient> schedulablePatients = patients.stream().filter(Patient::active).toList();
+    List<Appointment> created = new ArrayList<>();
+    for (int dayOffset = -HISTORICAL_DAYS; dayOffset <= FUTURE_DAYS; dayOffset++) {
+      LocalDate date = today.plusDays(dayOffset);
+      int dayIndex = dayOffset + HISTORICAL_DAYS;
+      for (int slot = 0; slot < APPOINTMENTS_PER_DOCTOR_PER_DAY; slot++) {
+        int patientIndex = Math.floorMod(dayIndex * 4 + slot, schedulablePatients.size());
+        created.add(
+            createAppointment(
+                repository,
+                ada,
+                schedulablePatients.get(patientIndex),
+                date.atTime(ADA_APPOINTMENT_TIMES.get(slot)),
+                appointmentStatus(dayIndex, 0, slot)));
+        created.add(
+            createAppointment(
+                repository,
+                grace,
+                schedulablePatients.get((patientIndex + 2) % schedulablePatients.size()),
+                date.atTime(GRACE_APPOINTMENT_TIMES.get(slot)),
+                appointmentStatus(dayIndex, 1, slot)));
+      }
     }
-    return GENERATED_FUTURE_APPOINTMENTS;
+    return List.copyOf(created);
   }
 
-  private static int createGraceSchedule(
-      AppointmentRepository repository, Account doctor, List<Patient> patients, LocalDate weekStart)
-      throws SQLException {
-    List<AppointmentSpec> appointments =
-        List.of(
-            new AppointmentSpec(1, LocalTime.of(9, 0), AppointmentStatus.ACCEPTED, 2),
-            new AppointmentSpec(2, LocalTime.of(11, 0), AppointmentStatus.PENDING, 3),
-            new AppointmentSpec(4, LocalTime.of(15, 0), AppointmentStatus.COMPLETED, 4),
-            new AppointmentSpec(6, LocalTime.of(10, 0), AppointmentStatus.ACCEPTED, 5),
-            new AppointmentSpec(7, LocalTime.of(14, 0), AppointmentStatus.PENDING, 1));
-    createAppointmentSpecs(repository, doctor, patients, weekStart, appointments);
-    return appointments.size();
+  private static AppointmentStatus appointmentStatus(int dayIndex, int doctorIndex, int slot) {
+    List<AppointmentStatus> statuses =
+        dayIndex < HISTORICAL_DAYS ? HISTORICAL_STATUSES : FUTURE_STATUSES;
+    return statuses.get(Math.floorMod(dayIndex * 4 + doctorIndex * 2 + slot, statuses.size()));
   }
 
-  private static void createAppointmentSpecs(
-      AppointmentRepository repository,
-      Account doctor,
-      List<Patient> patients,
-      LocalDate weekStart,
-      List<AppointmentSpec> specifications)
-      throws SQLException {
-    for (AppointmentSpec specification : specifications) {
-      createAppointment(
-          repository,
-          doctor,
-          patients.get(specification.patientIndex()),
-          weekStart.plusDays(specification.dayOffset()).atTime(specification.time()),
-          specification.status());
-    }
-  }
-
-  private static void createAppointment(
+  private static Appointment createAppointment(
       AppointmentRepository repository,
       Account doctor,
       Patient patient,
       LocalDateTime startsAt,
       AppointmentStatus status)
       throws SQLException {
-    repository.create(patient.id(), doctor.id(), startsAt, startsAt.plusMinutes(30), status);
+    return repository.create(patient.id(), doctor.id(), startsAt, startsAt.plusMinutes(30), status);
+  }
+
+  private static void seedClinicalHistory(
+      ClinicalRecordRepository repository, List<Appointment> appointments) throws SQLException {
+    LocalDate today = LocalDate.now(CLINIC_ZONE);
+    for (Appointment appointment : appointments) {
+      if (!appointment.startsAt().toLocalDate().isBefore(today)
+          || !CONSULTATION_STATUSES.contains(appointment.status())) {
+        continue;
+      }
+      ClinicalRecord record =
+          repository.save(
+              new ClinicalRecord(
+                  0,
+                  appointment.patientId(),
+                  appointment.id(),
+                  appointment.doctorId(),
+                  diagnosisFor(appointment.status()),
+                  "Seeded consultation notes for dashboard and clinical-history demos.",
+                  "Seeded follow-up instructions for the next appointment."));
+      if (appointment.status() == AppointmentStatus.COMPLETED
+          || appointment.status() == AppointmentStatus.CHECKED_OUT) {
+        repository.addPrescription(
+            new Prescription(
+                0,
+                record.id(),
+                "DemoCare tablets",
+                "1 tablet",
+                "Twice daily",
+                "5 days",
+                "Take after meals."));
+      }
+    }
+  }
+
+  private static String diagnosisFor(AppointmentStatus status) {
+    return switch (status) {
+      case CHECKED_IN -> "Routine consultation in progress";
+      case COMPLETED -> "Routine follow-up completed";
+      case CHECKED_OUT -> "Stable condition at checkout";
+      default -> throw new IllegalArgumentException("Unsupported clinical status: " + status);
+    };
   }
 
   private static Session session(Account account) {
@@ -433,10 +652,5 @@ public final class DemoDataSeeder {
         throw new SQLException("The database path is a directory: " + file);
       }
     }
-  }
-
-  private record AppointmentSpec(
-      int dayOffset, LocalTime time, AppointmentStatus status, int patientIndex) {
-    // Immutable appointment creation input.
   }
 }

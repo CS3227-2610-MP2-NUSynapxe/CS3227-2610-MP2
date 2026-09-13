@@ -174,11 +174,34 @@
 }
 
 .date-picker {
-    -fx-padding: 0;
+    -fx-padding: 0 8px;
+    -fx-pref-height: 34px;
+    -fx-min-height: 34px;
+    -fx-max-height: 34px;
 }
 
 .date-picker > .text-field {
-    -fx-padding: 9px 11px;
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-background-radius: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 0 8px;
+    -fx-text-fill: #17324d;
+}
+
+.date-picker > .arrow-button {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-background-radius: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 0 6px;
+}
+
+.date-picker > .arrow-button:hover {
+    -fx-background-color: #e7f2f1;
+    -fx-background-radius: 5px;
 }
 
 .text-area .content {
@@ -193,6 +216,11 @@
 .text-area:focused {
     -fx-border-color: #0f8f83;
     -fx-border-width: 2px;
+}
+
+.date-picker > .text-field:focused {
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
 }
 
 .feedback-banner {
@@ -420,8 +448,28 @@
     -fx-max-width: infinity;
 }
 
+.date-picker.compact-date-picker {
+    -fx-min-width: 132px;
+    -fx-pref-width: 150px;
+    -fx-max-width: 170px;
+}
+
 .search-suggestion-field > .text-field {
     -fx-pref-height: 38px;
+}
+
+.patient-directory-page {
+    -fx-max-height: infinity;
+}
+
+.patient-directory-search-bar {
+    -fx-alignment: center-left;
+    -fx-max-width: infinity;
+}
+
+.patient-directory-search-bar > .text-field {
+    -fx-pref-width: 420px;
+    -fx-max-width: infinity;
 }
 
 .search-suggestions {
@@ -697,6 +745,49 @@
     -fx-font-weight: bold;
 }
 
+.selection-summary.status-pending {
+    -fx-background-color: #fff3d6;
+    -fx-border-color: #d4ae4d;
+    -fx-text-fill: #805b00;
+}
+
+.selection-summary.status-accepted,
+.selection-summary.status-checked-in {
+    -fx-background-color: #d9efed;
+    -fx-border-color: #66b8ae;
+    -fx-text-fill: #175c58;
+}
+
+.selection-summary.status-completed,
+.selection-summary.status-checked-out {
+    -fx-background-color: #e2eaf8;
+    -fx-border-color: #83a3d5;
+    -fx-text-fill: #294d7d;
+}
+
+.selection-summary.status-declined {
+    -fx-background-color: #fbe3d0;
+    -fx-border-color: #d99456;
+    -fx-text-fill: #9a4a12;
+}
+
+.selection-summary.status-cancelled {
+    -fx-background-color: #f5e5e5;
+    -fx-border-color: #c88a8a;
+    -fx-text-fill: #9f2f3d;
+}
+
+.selection-summary.status-unknown {
+    -fx-background-color: #e8eef4;
+    -fx-border-color: #b9c8d6;
+    -fx-text-fill: #52677b;
+}
+
+.read-only-field {
+    -fx-background-color: #f7fafc;
+    -fx-text-fill: #52677b;
+}
+
 .calendar-page,
 .calendar-settings-page {
     -fx-background-color: #ffffff;
@@ -827,6 +918,45 @@
 
 .calendar-appointment-block:hover {
     -fx-background-color: #d2ece8;
+}
+
+.calendar-time-off-block {
+    -fx-background-color: #f2e8ff;
+    -fx-background-radius: 7px;
+    -fx-border-color: #8d6db3;
+    -fx-border-radius: 7px;
+    -fx-border-width: 1px;
+    -fx-padding: 5px 7px;
+}
+
+.calendar-time-off-block:hover {
+    -fx-background-color: #e8d9fa;
+}
+
+.calendar-time-off-title {
+    -fx-font-weight: bold;
+    -fx-text-fill: #452c63;
+}
+
+.calendar-time-off-time {
+    -fx-font-size: 11px;
+    -fx-text-fill: #604477;
+}
+
+.calendar-time-grid-compact .calendar-appointment-block,
+.calendar-time-grid-compact .calendar-time-off-block {
+    -fx-padding: 2px 4px;
+}
+
+.calendar-time-grid-compact .calendar-appointment-patient,
+.calendar-time-grid-compact .calendar-time-off-title {
+    -fx-font-size: 11px;
+}
+
+.calendar-time-grid-compact .calendar-appointment-time,
+.calendar-time-grid-compact .calendar-time-off-time,
+.calendar-time-grid-compact .calendar-appointment-status {
+    -fx-font-size: 9px;
 }
 
 .calendar-appointment-status-pending {
@@ -1003,77 +1133,6 @@
 
 .calendar-schedule-error {
     -fx-text-fill: #a33e48;
-}
-
-.calendar-week-picker {
-    -fx-background-color: #ffffff;
-    -fx-background-radius: 10px;
-    -fx-border-color: #b9c8d6;
-    -fx-border-radius: 10px;
-    -fx-border-width: 1px;
-    -fx-effect: dropshadow(gaussian, rgba(23, 50, 77, 0.22), 14, 0.2, 0, 4);
-}
-
-.calendar-picker-heading {
-    -fx-text-fill: #17324d;
-    -fx-font-size: 15px;
-    -fx-font-weight: bold;
-}
-
-.calendar-picker-icon-button {
-    -fx-background-color: #e7eef5;
-    -fx-padding: 5px 10px;
-}
-
-.calendar-picker-month-grid,
-.calendar-picker-year-grid {
-    -fx-padding: 6px 0 0 0;
-}
-
-.calendar-picker-day-heading,
-.calendar-picker-week-number {
-    -fx-text-fill: #52677b;
-    -fx-font-size: 11px;
-    -fx-font-weight: bold;
-}
-
-.calendar-picker-date,
-.calendar-picker-month {
-    -fx-background-color: transparent;
-    -fx-border-color: transparent;
-    -fx-padding: 7px 8px;
-    -fx-font-weight: normal;
-}
-
-.calendar-picker-date:hover,
-.calendar-picker-month:hover,
-.calendar-picker-week-number:hover {
-    -fx-background-color: #e7f2f1;
-}
-
-.calendar-picker-other-month {
-    -fx-text-fill: #a4b1bd;
-}
-
-.calendar-picker-current-month {
-    -fx-text-fill: #17324d;
-}
-
-.calendar-picker-selected-week {
-    -fx-background-color: #d9efed;
-    -fx-text-fill: #175c58;
-}
-
-.calendar-picker-selected-date {
-    -fx-background-color: #0f8f83;
-    -fx-background-radius: 999px;
-    -fx-text-fill: #ffffff;
-}
-
-.calendar-picker-selected-month {
-    -fx-background-color: #d9efed;
-    -fx-text-fill: #175c58;
-    -fx-font-weight: bold;
 }
 
 .calendar-settings-days {

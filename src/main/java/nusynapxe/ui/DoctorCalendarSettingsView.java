@@ -23,7 +23,6 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
-import javafx.util.StringConverter;
 import nusynapxe.domain.DoctorCalendarSettings;
 import nusynapxe.domain.Session;
 import nusynapxe.domain.WorkingInterval;
@@ -31,7 +30,7 @@ import nusynapxe.service.AuthorizationException;
 import nusynapxe.service.ClinicServices;
 import nusynapxe.service.ValidationException;
 
-/** Builds the Doctor-owned Calendar display-preferences page. */
+/** Builds the Doctor-owned Calendar working-hours settings page. */
 public final class DoctorCalendarSettingsView {
   private static final String SETTINGS_ID_PREFIX = "doctor-calendar-settings-";
   private static final List<String> START_OPTIONS = timeOptions(0, 1410);
@@ -42,9 +41,11 @@ public final class DoctorCalendarSettingsView {
   private final Runnable onBack;
   private final Runnable onSaved;
   private final Label feedback;
-  private final ComboBox<DayOfWeek> firstDay = UiComponents.compactSelector();
   private final Map<DayOfWeek, DayEditor> dayEditors = new EnumMap<>(DayOfWeek.class);
   private final BorderPane root;
+  private Button saveButton;
+  private DayOfWeek firstDayOfWeek = DayOfWeek.SUNDAY;
+  private boolean settingsLoaded;
 
   /**
    * Creates a Calendar settings page for one authenticated Doctor.
@@ -80,7 +81,15 @@ public final class DoctorCalendarSettingsView {
   public void reload() {
     try {
       populate(services.calendarService().getSettings(session));
+      settingsLoaded = true;
+      if (saveButton != null) {
+        saveButton.setDisable(false);
+      }
     } catch (SQLException | AuthorizationException | ValidationException exception) {
+      settingsLoaded = false;
+      if (saveButton != null) {
+        saveButton.setDisable(true);
+      }
       feedback.setText(userMessage(exception, "Calendar settings are temporarily unavailable"));
     }
   }
@@ -92,32 +101,6 @@ public final class DoctorCalendarSettingsView {
     HBox toolbar = new HBox(12, back, UiComponents.pageTitle("Calendar settings"));
     toolbar.setAlignment(Pos.CENTER_LEFT);
     toolbar.getStyleClass().add("calendar-settings-toolbar");
-
-    firstDay.setId("doctor-calendar-settings-first-day");
-    firstDay.setAccessibleText("First day of the week");
-    firstDay.setItems(FXCollections.observableArrayList(DayOfWeek.values()));
-    firstDay.setConverter(
-        new StringConverter<>() {
-          @Override
-          public String toString(DayOfWeek day) {
-            return day == null ? "" : day.getDisplayName(TextStyle.FULL, Locale.ENGLISH);
-          }
-
-          @Override
-          public DayOfWeek fromString(String value) {
-            return value == null || value.isBlank()
-                ? null
-                : DayOfWeek.valueOf(value.toUpperCase(Locale.ROOT));
-          }
-        });
-    VBox preferences =
-        UiComponents.card(
-            "doctor-calendar-settings-preferences",
-            UiComponents.sectionHeading("Calendar preferences"),
-            UiComponents.supportingText(
-                "Working hours control grey shading only. They do not block appointments."),
-            UiComponents.fieldGroup("Show the first day of the week as", firstDay),
-            timezoneRow());
 
     VBox days = new VBox(10);
     days.setId("doctor-calendar-settings-days");
@@ -133,17 +116,19 @@ public final class DoctorCalendarSettingsView {
             UiComponents.sectionHeading("Work hours"),
             UiComponents.supportingText(
                 "Add another interval to create a break, such as a lunch break."),
+            timezoneRow(),
             days);
 
-    Button save = UiComponents.primaryButton("Save settings", "doctor-calendar-settings-save");
-    save.setAccessibleText("Save Calendar settings");
-    save.setOnAction(event -> save());
+    saveButton = UiComponents.primaryButton("Save settings", "doctor-calendar-settings-save");
+    saveButton.setAccessibleText("Save Calendar settings");
+    saveButton.setDisable(true);
+    saveButton.setOnAction(event -> save());
     Button cancel = UiComponents.secondaryButton("Cancel", "doctor-calendar-settings-cancel");
     cancel.setAccessibleText("Cancel Calendar setting edits");
     cancel.setOnAction(event -> onBack.run());
-    HBox actions = UiComponents.actionBar(save, cancel);
+    HBox actions = UiComponents.actionBar(saveButton, cancel);
 
-    VBox content = new VBox(16, preferences, workingHours, actions);
+    VBox content = new VBox(16, workingHours, actions);
     content.setPadding(new Insets(0, 4, 24, 4));
     ScrollPane scroll = new ScrollPane(content);
     scroll.setId("doctor-calendar-settings-scroll");
@@ -166,23 +151,24 @@ public final class DoctorCalendarSettingsView {
   }
 
   private void populate(DoctorCalendarSettings settings) {
-    firstDay.setValue(settings.firstDayOfWeek());
+    firstDayOfWeek = settings.firstDayOfWeek();
     for (DayOfWeek day : DayOfWeek.values()) {
       dayEditors.get(day).populate(settings.intervals(day));
     }
   }
 
   private void save() {
+    if (!settingsLoaded) {
+      feedback.setText("Calendar settings are not loaded");
+      return;
+    }
     try {
-      if (firstDay.getValue() == null) {
-        throw new ValidationException("Choose the first day of the week");
-      }
       Map<DayOfWeek, List<WorkingInterval>> intervals = new EnumMap<>(DayOfWeek.class);
       for (DayOfWeek day : DayOfWeek.values()) {
         intervals.put(day, dayEditors.get(day).readIntervals());
       }
       DoctorCalendarSettings settings =
-          new DoctorCalendarSettings(session.accountId(), firstDay.getValue(), intervals);
+          new DoctorCalendarSettings(session.accountId(), firstDayOfWeek, intervals);
       services.calendarService().saveSettings(session, settings);
       feedback.setText("Calendar settings saved");
       onSaved.run();

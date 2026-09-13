@@ -14,6 +14,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import javafx.application.Platform;
+import javafx.geometry.Bounds;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
@@ -32,18 +34,18 @@ import javafx.scene.shape.Rectangle;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.CalendarAppointment;
 import nusynapxe.domain.CalendarAppointmentBlock;
+import nusynapxe.domain.CalendarTimeOffBlock;
 import nusynapxe.domain.CalendarTimeSegment.SegmentKind;
 import nusynapxe.domain.CalendarWeek;
 import nusynapxe.domain.DoctorCalendarSettings;
 import nusynapxe.domain.DoctorCalendarWeek;
+import nusynapxe.domain.DoctorTimeOff;
+import nusynapxe.domain.WorkingInterval;
 import nusynapxe.service.CalendarCalculations;
 import nusynapxe.service.CalendarService;
 
 /** Renders the scrollable seven-day time grid used by the Doctor Calendar. */
 final class CalendarTimeGrid extends BorderPane {
-  /** Height of one 30-minute calendar slot, including room for card content. */
-  private static final double HALF_HOUR_HEIGHT = 100;
-
   private static final double APPOINTMENT_INSET = 2;
   private static final double TIME_AXIS_WIDTH = 44;
   private static final double MIN_DAY_COLUMN_WIDTH = 120;
@@ -58,19 +60,30 @@ final class CalendarTimeGrid extends BorderPane {
   private final DoctorCalendarWeek data;
   private final Clock clock;
   private final InteractionHandlers handlers;
+  private final DisplayProfile profile;
   private final Map<LocalDate, DayColumn> columns = new LinkedHashMap<>();
+  private ScrollPane scroll;
 
   CalendarTimeGrid(CalendarWeek week, DoctorCalendarWeek data, Clock clock) {
-    this(week.dates(), data, clock, InteractionHandlers.none());
+    this(week.dates(), data, clock, InteractionHandlers.none(), DisplayProfile.FULL);
   }
 
   CalendarTimeGrid(
       CalendarWeek week, DoctorCalendarWeek data, Clock clock, InteractionHandlers handlers) {
-    this(week.dates(), data, clock, handlers);
+    this(week.dates(), data, clock, handlers, DisplayProfile.FULL);
   }
 
   CalendarTimeGrid(
       List<LocalDate> dates, DoctorCalendarWeek data, Clock clock, InteractionHandlers handlers) {
+    this(dates, data, clock, handlers, DisplayProfile.FULL);
+  }
+
+  CalendarTimeGrid(
+      List<LocalDate> dates,
+      DoctorCalendarWeek data,
+      Clock clock,
+      InteractionHandlers handlers,
+      DisplayProfile profile) {
     Objects.requireNonNull(dates, "dates");
     if (dates.isEmpty()) {
       throw new IllegalArgumentException("Calendar dates must not be empty");
@@ -79,10 +92,13 @@ final class CalendarTimeGrid extends BorderPane {
     this.data = data;
     this.clock = clock;
     this.handlers = Objects.requireNonNull(handlers, "handlers");
+    this.profile = Objects.requireNonNull(profile, "profile");
     setId("doctor-calendar-time-grid");
     getStyleClass().add("calendar-time-grid");
+    getStyleClass().add("calendar-time-grid-" + profile.styleName());
     build();
     updateCurrentTime(LocalDateTime.now(clock));
+    scrollToUsefulTime(LocalDateTime.now(clock));
   }
 
   /** Refreshes elapsed shading and the current-time line from the supplied local time. */
@@ -102,7 +118,7 @@ final class CalendarTimeGrid extends BorderPane {
       column.currentLine.setVisible(currentMinute >= 0);
       column.currentLine.setManaged(currentMinute >= 0);
       if (currentMinute >= 0) {
-        column.currentLine.setTranslateY(currentMinute * HALF_HOUR_HEIGHT / 30.0);
+        column.currentLine.setTranslateY(currentMinute * profile.halfHourHeight() / 30.0);
       }
     }
   }
@@ -144,9 +160,9 @@ final class CalendarTimeGrid extends BorderPane {
           new Label(TIME_FORMAT.format(java.time.LocalTime.MIDNIGHT.plusMinutes(index * 30L)));
       label.setId("doctor-calendar-time-label-" + index);
       label.getStyleClass().add("calendar-time-label");
-      label.setPrefHeight(HALF_HOUR_HEIGHT);
-      label.setMinHeight(HALF_HOUR_HEIGHT);
-      label.setMaxHeight(HALF_HOUR_HEIGHT);
+      label.setPrefHeight(profile.halfHourHeight());
+      label.setMinHeight(profile.halfHourHeight());
+      label.setMaxHeight(profile.halfHourHeight());
       label.setAlignment(Pos.TOP_LEFT);
       timeAxis.getChildren().add(label);
     }
@@ -163,15 +179,16 @@ final class CalendarTimeGrid extends BorderPane {
       bodyRow.getChildren().add(column.surface);
     }
     grid.getChildren().addAll(headerRow, bodyRow);
-    ScrollPane scroll = new ScrollPane(grid);
+    scroll = new ScrollPane(grid);
     scroll.setId("doctor-calendar-scroll");
     scroll.setPannable(true);
     scroll.setFitToHeight(false);
     scroll.setFitToWidth(true);
     VBox center = new VBox(8);
-    if (data.appointments().isEmpty()) {
+    if (data.appointments().isEmpty() && data.timeOff().isEmpty()) {
       Label empty =
-          UiComponents.emptyState("doctor-calendar-empty", "No appointments in this date range.");
+          UiComponents.emptyState(
+              "doctor-calendar-empty", "No appointments or blocked time in this date range.");
       center.getChildren().add(empty);
     }
     center.getChildren().add(scroll);
@@ -186,27 +203,27 @@ final class CalendarTimeGrid extends BorderPane {
     surface.setMinWidth(MIN_DAY_COLUMN_WIDTH);
     surface.setPrefWidth(DAY_COLUMN_WIDTH);
     surface.setMaxWidth(Double.MAX_VALUE);
-    surface.setMinHeight(HALF_HOUR_HEIGHT * HALF_HOURS_PER_DAY);
-    surface.setPrefHeight(HALF_HOUR_HEIGHT * HALF_HOURS_PER_DAY);
+    surface.setMinHeight(profile.halfHourHeight() * HALF_HOURS_PER_DAY);
+    surface.setPrefHeight(profile.halfHourHeight() * HALF_HOURS_PER_DAY);
     VBox periods = new VBox();
     periods.setMouseTransparent(true);
-    periods.setPrefHeight(HALF_HOUR_HEIGHT * HALF_HOURS_PER_DAY);
+    periods.setPrefHeight(profile.halfHourHeight() * HALF_HOURS_PER_DAY);
     List<Region> periodCells = new ArrayList<>();
     for (int index = 0; index < HALF_HOURS_PER_DAY; index++) {
       Region period = new Region();
       period.setId("doctor-calendar-period-" + day + "-" + index);
       period.getStyleClass().add("calendar-period");
-      period.setPrefHeight(HALF_HOUR_HEIGHT);
-      period.setMinHeight(HALF_HOUR_HEIGHT);
-      period.setMaxHeight(HALF_HOUR_HEIGHT);
+      period.setPrefHeight(profile.halfHourHeight());
+      period.setMinHeight(profile.halfHourHeight());
+      period.setMaxHeight(profile.halfHourHeight());
       periods.getChildren().add(period);
       periodCells.add(period);
     }
     Pane eventPane = new Pane();
     eventPane.setId("doctor-calendar-events-" + day);
     eventPane.setPickOnBounds(true);
-    eventPane.setPrefHeight(HALF_HOUR_HEIGHT * HALF_HOURS_PER_DAY);
-    eventPane.setMinHeight(HALF_HOUR_HEIGHT * HALF_HOURS_PER_DAY);
+    eventPane.setPrefHeight(profile.halfHourHeight() * HALF_HOURS_PER_DAY);
+    eventPane.setMinHeight(profile.halfHourHeight() * HALF_HOURS_PER_DAY);
     eventPane.setPrefWidth(DAY_COLUMN_WIDTH);
     eventPane.setMinWidth(MIN_DAY_COLUMN_WIDTH);
     eventPane.setMaxWidth(Double.MAX_VALUE);
@@ -220,9 +237,20 @@ final class CalendarTimeGrid extends BorderPane {
       eventPane.getChildren().add(node);
       placements.add(new EventPlacement(node, block));
     }
+    List<TimeOffPlacement> timeOffPlacements = new ArrayList<>();
+    for (CalendarTimeOffBlock block :
+        CalendarCalculations.timeOffBlocksForDay(day, data.timeOff())) {
+      Node node = timeOffNode(block);
+      eventPane.getChildren().add(node);
+      timeOffPlacements.add(new TimeOffPlacement(node, block));
+    }
     eventPane
         .widthProperty()
-        .addListener((observable, previous, current) -> layoutEvents(eventPane, placements));
+        .addListener(
+            (observable, previous, current) -> {
+              layoutEvents(eventPane, placements);
+              layoutTimeOff(eventPane, timeOffPlacements);
+            });
     eventPane.setOnMouseClicked(
         event -> {
           if (event.getButton() == MouseButton.PRIMARY && handlers.emptySlot() != null) {
@@ -232,6 +260,7 @@ final class CalendarTimeGrid extends BorderPane {
           }
         });
     layoutEvents(eventPane, placements);
+    layoutTimeOff(eventPane, timeOffPlacements);
     Region currentLine = new Region();
     currentLine.setId("doctor-calendar-current-time-line-" + day);
     currentLine.getStyleClass().add("calendar-current-time-line");
@@ -260,17 +289,24 @@ final class CalendarTimeGrid extends BorderPane {
     patient.setMinWidth(0);
     patient.setMaxWidth(Double.MAX_VALUE);
     patient.setEllipsisString("…");
-    Label time =
-        new Label(
-            formatTime(block.appointment().startsAt())
-                + " – "
-                + formatTime(block.appointment().endsAt()));
+    String start = formatMinute(block.startMinute());
+    String end = formatMinute(block.endMinute());
+    Label time = new Label(start + " – " + end);
     time.getStyleClass().add("calendar-appointment-time");
     Label status = UiComponents.statusBadge(block.appointment().status().name());
     status.getStyleClass().add("calendar-appointment-status");
-    content.getChildren().addAll(patient, time, status);
+    if (profile == DisplayProfile.COMPACT) {
+      time.setText(
+          time.getText()
+              + " · "
+              + UiComponents.humanizeStatus(block.appointment().status().name()));
+      content.getChildren().addAll(patient, time);
+    } else {
+      content.getChildren().addAll(patient, time, status);
+    }
     AppointmentStatus appointmentStatus = block.appointment().status();
-    if (handlers.decision() != null
+    if (profile.inlineDecisions()
+        && handlers.decision() != null
         && (appointmentStatus == AppointmentStatus.PENDING
             || appointmentStatus == AppointmentStatus.ACCEPTED)) {
       Button accept =
@@ -322,9 +358,9 @@ final class CalendarTimeGrid extends BorderPane {
     blockNode.setAccessibleText(
         block.appointment().patientDisplayName()
             + ", "
-            + formatTime(block.appointment().startsAt())
+            + start
             + " to "
-            + formatTime(block.appointment().endsAt())
+            + end
             + ", "
             + UiComponents.humanizeStatus(block.appointment().status().name()));
     blockNode.setFocusTraversable(handlers.selected() != null);
@@ -346,7 +382,99 @@ final class CalendarTimeGrid extends BorderPane {
     return blockNode;
   }
 
-  private static void layoutEvents(Pane eventPane, List<EventPlacement> placements) {
+  private Node timeOffNode(CalendarTimeOffBlock block) {
+    Label title = new Label("Blocked time");
+    title.getStyleClass().add("calendar-time-off-title");
+    String start = formatMinute(block.startMinute());
+    String end = formatMinute(block.endMinute());
+    Label time = new Label(start + " – " + end);
+    time.getStyleClass().add("calendar-time-off-time");
+    VBox content = new VBox(2, title, time);
+    StackPane node = new StackPane(content);
+    node.setManaged(false);
+    node.setId("doctor-calendar-time-off-" + block.timeOff().id() + "-" + block.day());
+    node.getStyleClass().add("calendar-time-off-block");
+    node.setAccessibleText("Blocked time, " + start + " to " + end);
+    node.setFocusTraversable(handlers.timeOffSelected() != null);
+    node.setOnMouseClicked(
+        event -> {
+          if (event.getButton() == MouseButton.PRIMARY) {
+            if (handlers.timeOffSelected() != null) {
+              handlers.timeOffSelected().accept(block.timeOff());
+            }
+            event.consume();
+          }
+        });
+    node.setOnKeyPressed(
+        event -> {
+          if (event.getCode() == KeyCode.ENTER || event.getCode() == KeyCode.SPACE) {
+            if (handlers.timeOffSelected() != null) {
+              handlers.timeOffSelected().accept(block.timeOff());
+            }
+            event.consume();
+          }
+        });
+    return node;
+  }
+
+  private void layoutTimeOff(Pane eventPane, List<TimeOffPlacement> placements) {
+    double width = eventPane.getWidth() > 0 ? eventPane.getWidth() : eventPane.getPrefWidth();
+    for (TimeOffPlacement placement : placements) {
+      CalendarTimeOffBlock block = placement.block();
+      double height =
+          Math.max(
+              1,
+              (block.endMinute() - block.startMinute()) * profile.halfHourHeight() / 30.0
+                  - (2 * APPOINTMENT_INSET));
+      placement
+          .node()
+          .resizeRelocate(
+              0,
+              block.startMinute() * profile.halfHourHeight() / 30.0 + APPOINTMENT_INSET,
+              width,
+              height);
+    }
+  }
+
+  /** Scrolls the timeline near the most useful visible minute. */
+  void scrollToUsefulTime(LocalDateTime now) {
+    int minute = CalendarCalculations.initialScrollMinute(dates, data, now);
+    Platform.runLater(
+        () -> {
+          scroll.applyCss();
+          scroll.layout();
+          scroll.setVvalue(scrollValueForMinute(minute));
+        });
+  }
+
+  private double scrollValueForMinute(int minute) {
+    Bounds viewport = scroll.getViewportBounds();
+    Node content = scroll.getContent();
+    if (content == null || viewport.getHeight() <= 0) {
+      return 0;
+    }
+    double contentHeight = content.getLayoutBounds().getHeight();
+    double maxScroll = contentHeight - viewport.getHeight();
+    if (maxScroll <= 0) {
+      return 0;
+    }
+
+    double bodyTop = 0;
+    double bodyHeight = contentHeight;
+    if (content instanceof VBox grid && grid.getChildren().size() > 1) {
+      Node body = grid.getChildren().get(1);
+      bodyTop = body.getLayoutY();
+      bodyHeight = body.getLayoutBounds().getHeight();
+    }
+    if (bodyHeight <= 0) {
+      return 0;
+    }
+    double clampedMinute = Math.max(0, Math.min(WorkingInterval.MINUTES_PER_DAY, minute));
+    double targetOffset = bodyTop + clampedMinute * bodyHeight / WorkingInterval.MINUTES_PER_DAY;
+    return Math.max(0, Math.min(1, targetOffset / maxScroll));
+  }
+
+  private void layoutEvents(Pane eventPane, List<EventPlacement> placements) {
     double width = eventPane.getWidth();
     if (width <= 0) {
       width = eventPane.getPrefWidth();
@@ -358,23 +486,19 @@ final class CalendarTimeGrid extends BorderPane {
       double slotHeight =
           Math.max(
               1,
-              (block.endMinute() - block.startMinute()) * HALF_HOUR_HEIGHT / 30.0
+              (block.endMinute() - block.startMinute()) * profile.halfHourHeight() / 30.0
                   - (2 * APPOINTMENT_INSET));
       node.resizeRelocate(
           block.lane() * laneWidth,
-          block.startMinute() * HALF_HOUR_HEIGHT / 30.0 + APPOINTMENT_INSET,
+          block.startMinute() * profile.halfHourHeight() / 30.0 + APPOINTMENT_INSET,
           laneWidth,
           slotHeight);
     }
   }
 
-  private static int clickedMinute(double y) {
-    int halfHour = (int) Math.floor(Math.max(0, y) / HALF_HOUR_HEIGHT);
+  private int clickedMinute(double y) {
+    int halfHour = (int) Math.floor(Math.max(0, y) / profile.halfHourHeight());
     return Math.min((HALF_HOURS_PER_DAY - 2) * 30, halfHour * 30);
-  }
-
-  private static String formatTime(java.time.LocalDateTime timestamp) {
-    return TIME_FORMAT.format(timestamp.toLocalTime());
   }
 
   private static String periodDescription(
@@ -437,13 +561,45 @@ final class CalendarTimeGrid extends BorderPane {
     // Immutable association used during layout.
   }
 
+  private record TimeOffPlacement(Node node, CalendarTimeOffBlock block) {
+    // Immutable association used during layout.
+  }
+
+  enum DisplayProfile {
+    FULL(100, true, "full"),
+    COMPACT(44, false, "compact");
+
+    private final double slotHeight;
+    private final boolean showInlineDecisions;
+    private final String cssSuffix;
+
+    DisplayProfile(double halfHourHeight, boolean inlineDecisions, String styleName) {
+      this.slotHeight = halfHourHeight;
+      this.showInlineDecisions = inlineDecisions;
+      this.cssSuffix = styleName;
+    }
+
+    double halfHourHeight() {
+      return slotHeight;
+    }
+
+    boolean inlineDecisions() {
+      return showInlineDecisions;
+    }
+
+    String styleName() {
+      return cssSuffix;
+    }
+  }
+
   /** Callbacks supplied by the owning Doctor Calendar page. */
   record InteractionHandlers(
       Consumer<CalendarAppointment> selected,
       BiConsumer<CalendarAppointment, AppointmentStatus> decision,
-      Consumer<LocalDateTime> emptySlot) {
+      Consumer<LocalDateTime> emptySlot,
+      Consumer<DoctorTimeOff> timeOffSelected) {
     static InteractionHandlers none() {
-      return new InteractionHandlers(null, null, null);
+      return new InteractionHandlers(null, null, null, null);
     }
   }
 }

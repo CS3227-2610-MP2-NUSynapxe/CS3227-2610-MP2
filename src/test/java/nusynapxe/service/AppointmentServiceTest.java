@@ -12,9 +12,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.TimeZone;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
+import nusynapxe.domain.DoctorTimeOff;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
@@ -124,6 +126,35 @@ final class AppointmentServiceTest {
                   fixture.doctorSession(),
                   LocalDateTime.of(2026, 9, 1, 9, 45),
                   LocalDateTime.of(2026, 9, 1, 10, 15)));
+    }
+  }
+
+  @Test
+  void doctorRemovesOnlyOwnedTimeOff() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      Accounts fixture = accounts(database);
+      AppointmentService service = service(database);
+      DoctorTimeOff interval =
+          service.blockTimeOff(fixture.doctorSession(), APPOINTMENT_START, APPOINTMENT_END);
+
+      assertThrows(
+          AuthorizationException.class,
+          () -> service.removeTimeOff(fixture.receptionistSession(), interval.id()));
+      assertThrows(
+          ValidationException.class,
+          () -> service.removeTimeOff(fixture.otherDoctorSession(), interval.id()));
+      service.removeTimeOff(fixture.doctorSession(), interval.id());
+      Appointment replacement =
+          service.book(
+              fixture.receptionistSession(),
+              fixture.patient().id(),
+              fixture.doctor().id(),
+              APPOINTMENT_START,
+              APPOINTMENT_END);
+      assertEquals(AppointmentStatus.PENDING, replacement.status());
+      assertThrows(
+          ValidationException.class,
+          () -> service.removeTimeOff(fixture.doctorSession(), interval.id()));
     }
   }
 
@@ -310,6 +341,40 @@ final class AppointmentServiceTest {
           ValidationException.class,
           () -> service.checkIn(fixture.doctorSession(), appointment.id()));
       assertEquals(AppointmentStatus.ACCEPTED, service.get(appointment.id()).status());
+    }
+  }
+
+  @Test
+  void defaultClockUsesClinicTimezoneForCheckIn() throws SQLException {
+    TimeZone originalTimeZone = TimeZone.getDefault();
+    try {
+      TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+      try (SqliteDatabase database = openDatabase()) {
+        Accounts fixture = accounts(database);
+        AppointmentService service =
+            new AppointmentService(
+                new AppointmentRepository(database),
+                new AccountRepository(database),
+                new PatientRepository(database));
+        LocalDateTime startsAt =
+            LocalDateTime.now(CalendarService.CLINIC_ZONE)
+                .minusMinutes(1)
+                .withSecond(0)
+                .withNano(0);
+        Appointment appointment =
+            service.book(
+                fixture.doctorSession(),
+                fixture.patient().id(),
+                fixture.doctor().id(),
+                startsAt,
+                startsAt.plusMinutes(30));
+
+        assertEquals(
+            AppointmentStatus.CHECKED_IN,
+            service.checkIn(fixture.doctorSession(), appointment.id()).status());
+      }
+    } finally {
+      TimeZone.setDefault(originalTimeZone);
     }
   }
 

@@ -81,18 +81,28 @@ To recreate the demo database in one step, use
 `.\scripts\seed-demo-data.ps1 -Reset`. The standalone reset script requires
 `-Force` for an existing database; seeding an existing database without
 `-Reset` fails safely. The seed contains two Doctors, a System Admin, a
-Receptionist, six patients, calendar settings with a lunch break, and enough
-future appointments to exercise the Schedule view's lazy loading.
+Receptionist, 18 patients (including inactive directory examples), calendar
+settings with a lunch break, and two appointments per Doctor for every date
+from the previous seven days through the next fourteen days. Appointment
+statuses cover the lifecycle, and historical checked-in, completed, and
+checked-out visits include clinical records; completed and checked-out visits
+also include prescriptions. The script prints the short showcase credentials:
+
+```text
+Doctor       ada / ada1234!
+Doctor       grace / grace123!
+Receptionist reception / recept123!
+```
+
+The System Admin credential remains `admin.demo / DemoAdmin123!`. All of these
+accounts and passwords are for local demonstrations only and must not be used
+in a production database.
 
 After seeding, launch the application normally:
 
 ```powershell
 .\gradlew.bat run
 ```
-
-The script prints the demo credentials after a successful seed. These accounts
-and passwords are for local demonstrations only and must not be used in a
-production database.
 
 The complete operating instructions are in the [User Guide](docs/UserGuide.md).
 The package, persistence, security, testing, and CI details are in the
@@ -109,6 +119,7 @@ Versions are pinned for reproducible builds as of 31 August 2026.
 | JavaFX | 25.0.4 |
 | SQLite JDBC | 3.53.2.1 |
 | JUnit Jupiter | 6.1.3 |
+| ArchUnit | 1.5.0 |
 | TestFX | 4.0.18 |
 | Mockito | 5.23.0 |
 | Spotless | 8.10.1 |
@@ -128,7 +139,8 @@ Versions are pinned for reproducible builds as of 31 August 2026.
 .\gradlew.bat check javadoc --no-daemon --console=plain
 ```
 
-`check` runs JUnit (including TestFX), Checkstyle, PMD, SpotBugs with
+`check` runs JUnit (including TestFX and
+`nusynapxe.architecture.ArchitectureTest`), Checkstyle, PMD, SpotBugs with
 FindSecBugs, and JaCoCo. Reports are written below `build/reports/`, including
 the HTML coverage report at `build/reports/jacoco/test/html/index.html`.
 

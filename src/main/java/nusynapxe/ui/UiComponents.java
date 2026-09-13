@@ -1,5 +1,6 @@
 package nusynapxe.ui;
 
+import java.time.LocalDate;
 import java.util.Locale;
 import java.util.Objects;
 import javafx.animation.FadeTransition;
@@ -9,6 +10,7 @@ import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
@@ -24,6 +26,9 @@ import javafx.util.Duration;
 final class UiComponents {
   private static final String ERROR_FEEDBACK_STYLE = "error-feedback";
   private static final String SHOW_PASSWORD = "Show password";
+  private static final double COMPACT_DATE_PICKER_MIN_WIDTH = 132;
+  private static final double COMPACT_DATE_PICKER_PREF_WIDTH = 150;
+  private static final double COMPACT_DATE_PICKER_MAX_WIDTH = 170;
 
   private UiComponents() {
     throw new AssertionError("Utility class");
@@ -42,6 +47,7 @@ final class UiComponents {
     Label label = new Label(text);
     label.getStyleClass().add("supporting-text");
     label.setWrapText(true);
+    label.setMaxWidth(Double.MAX_VALUE);
     return label;
   }
 
@@ -81,7 +87,7 @@ final class UiComponents {
     label.getStyleClass().add("field-label");
     if (control != null) {
       label.setLabelFor(control);
-      if (control instanceof Region region) {
+      if (control instanceof Region region && !(control instanceof DatePicker)) {
         region.setMaxWidth(Double.MAX_VALUE);
       }
     }
@@ -133,6 +139,29 @@ final class UiComponents {
     ComboBox<T> selector = new ComboBox<>();
     applyCompactSelector(selector);
     return selector;
+  }
+
+  /** Creates a DatePicker using the shared minimal field style. */
+  static DatePicker compactDatePicker() {
+    return compactDatePicker(null);
+  }
+
+  /** Creates an optionally prefilled DatePicker using the shared minimal field style. */
+  static DatePicker compactDatePicker(LocalDate initialValue) {
+    DatePicker picker = initialValue == null ? new DatePicker() : new DatePicker(initialValue);
+    picker.setMinWidth(COMPACT_DATE_PICKER_MIN_WIDTH);
+    picker.setPrefWidth(COMPACT_DATE_PICKER_PREF_WIDTH);
+    picker.setMaxWidth(COMPACT_DATE_PICKER_MAX_WIDTH);
+    applyCompactDatePicker(picker);
+    return picker;
+  }
+
+  /** Applies the shared minimal field style to an existing DatePicker. */
+  static void applyCompactDatePicker(DatePicker picker) {
+    Objects.requireNonNull(picker, "picker");
+    if (!picker.getStyleClass().contains("compact-date-picker")) {
+      picker.getStyleClass().add("compact-date-picker");
+    }
   }
 
   /** Applies the shared compact selector style to an existing ComboBox. */

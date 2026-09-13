@@ -434,6 +434,57 @@ public final class AppointmentRepository {
     }
   }
 
+  /**
+   * Returns one doctor's time-off intervals that overlap a half-open range.
+   *
+   * @param doctorId doctor identifier
+   * @param rangeStart inclusive range start timestamp
+   * @param rangeEnd exclusive range end timestamp
+   * @return immutable overlapping intervals ordered by start timestamp
+   * @throws IllegalArgumentException if the range does not end after it starts
+   * @throws NullPointerException if a range timestamp is {@code null}
+   * @throws SQLException if the query fails
+   */
+  public List<DoctorTimeOff> findTimeOffByDoctor(
+      long doctorId, LocalDateTime rangeStart, LocalDateTime rangeEnd) throws SQLException {
+    validateInterval(rangeStart, rangeEnd);
+    try (PreparedStatement statement =
+        database
+            .connection()
+            .prepareStatement(
+                SELECT_PREFIX
+                    + TIME_OFF_COLUMNS
+                    + " FROM doctor_time_off WHERE doctor_id = ? "
+                    + "AND starts_at < ? AND ends_at > ? ORDER BY starts_at, id")) {
+      statement.setLong(1, doctorId);
+      SqliteQueries.bindTimestamp(statement, 2, rangeEnd);
+      SqliteQueries.bindTimestamp(statement, 3, rangeStart);
+      return SqliteQueries.readAll(statement, AppointmentRepository::readTimeOff);
+    }
+  }
+
+  /**
+   * Deletes a time-off interval only when it belongs to the supplied Doctor.
+   *
+   * @param id time-off identifier
+   * @param doctorId owning doctor identifier
+   * @return whether an owned interval was deleted
+   * @throws SQLException if the delete fails
+   */
+  public boolean deleteTimeOff(long id, long doctorId) throws SQLException {
+    return SqliteTransactions.execute(
+        database,
+        connection -> {
+          try (PreparedStatement statement =
+              connection.prepareStatement(
+                  "DELETE FROM doctor_time_off WHERE id = ? AND doctor_id = ?")) {
+            statement.setLong(1, id);
+            statement.setLong(2, doctorId);
+            return statement.executeUpdate() == 1;
+          }
+        });
+  }
+
   private static void validateInterval(LocalDateTime startsAt, LocalDateTime endsAt) {
     Objects.requireNonNull(startsAt, "startsAt");
     Objects.requireNonNull(endsAt, "endsAt");
@@ -463,7 +514,8 @@ public final class AppointmentRepository {
       long excludedAppointmentId)
       throws SQLException {
     String sql =
-        "SELECT 1 FROM appointments WHERE doctor_id = ? AND id <> ? AND status <> 'CANCELLED' "
+        "SELECT 1 FROM appointments WHERE doctor_id = ? AND id <> ? "
+            + "AND status NOT IN ('DECLINED', 'CANCELLED') "
             + "AND starts_at < ? AND ends_at > ? LIMIT 1";
     try (PreparedStatement statement = connection.prepareStatement(sql)) {
       statement.setLong(1, doctorId);
