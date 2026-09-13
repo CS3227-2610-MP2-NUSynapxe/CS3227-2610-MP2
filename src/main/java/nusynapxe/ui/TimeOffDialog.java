@@ -2,6 +2,7 @@ package nusynapxe.ui;
 
 import java.sql.SQLException;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Objects;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -24,6 +25,8 @@ import nusynapxe.service.ValidationException;
 
 /** Doctor-owned create and remove dialogs for explicit Calendar time off. */
 final class TimeOffDialog {
+  private static final DateTimeFormatter DATE_TIME_FORMAT =
+      DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm");
   private static final String PREFIX = "doctor-calendar-time-off-dialog";
 
   private TimeOffDialog() {
@@ -95,11 +98,9 @@ final class TimeOffDialog {
     Stage dialog = dialogStage(workspaceFeedback, "Blocked time");
     Label interval =
         new Label(
-            timeOff.startsAt().toLocalDate()
-                + "\n"
-                + timeOff.startsAt().toLocalTime()
+            DATE_TIME_FORMAT.format(timeOff.startsAt())
                 + " – "
-                + timeOff.endsAt().toLocalTime());
+                + DATE_TIME_FORMAT.format(timeOff.endsAt()));
     interval.setId("doctor-calendar-time-off-details-interval");
     Button remove =
         UiComponents.dangerButton("Remove blocked time", "doctor-calendar-time-off-remove");

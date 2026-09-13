@@ -225,6 +225,36 @@ final class DoctorViewTest extends ApplicationTest {
   }
 
   @Test
+  void dashboardNavigationRestoresTheLastDateWhenThePickerIsCleared() {
+    loginAsDoctor();
+    DatePicker date = lookup("#doctor-dashboard-date").queryAs(DatePicker.class);
+
+    interact(() -> date.setValue(null));
+    fire("#doctor-dashboard-next");
+
+    assertEquals(appointmentDate, date.getValue());
+    verifyThat("#doctor-feedback", isVisible());
+  }
+
+  @Test
+  void dashboardDateLoadFailureDoesNotLeaveAStaleDateAndGrid() throws SQLException {
+    loginAsDoctor();
+    DatePicker date = lookup("#doctor-dashboard-date").queryAs(DatePicker.class);
+    LocalDate loadedDate = date.getValue();
+
+    try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database.path());
+        var statement = connection.createStatement()) {
+      statement.executeUpdate("DROP TABLE appointments");
+    }
+
+    fire("#doctor-dashboard-next");
+
+    assertEquals(loadedDate, date.getValue());
+    assertTrue(lookup("#doctor-dashboard-time-grid").tryQuery().isPresent());
+    verifyThat("#doctor-feedback", isVisible());
+  }
+
+  @Test
   void dashboardAndPatientDirectoryUseTheApprovedCompactPageLayout() {
     loginAsDoctor();
     DatePicker dashboardDate = lookup("#doctor-dashboard-date").queryAs(DatePicker.class);

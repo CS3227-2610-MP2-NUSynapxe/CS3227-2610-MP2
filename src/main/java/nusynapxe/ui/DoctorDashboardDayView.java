@@ -39,6 +39,7 @@ final class DoctorDashboardDayView {
   private final DatePicker date;
   private final Timeline ticker;
   private CalendarTimeGrid grid;
+  private LocalDate loadedDate;
   private long selectedAppointmentId;
   private boolean shown;
 
@@ -102,6 +103,7 @@ final class DoctorDashboardDayView {
     root.getProperties().put(TICKER_RUNNING_PROPERTY, false);
   }
 
+  @SuppressWarnings("PMD.NullAssignment")
   void refresh() {
     LocalDate selectedDate = date.getValue();
     if (selectedDate == null) {
@@ -130,6 +132,7 @@ final class DoctorDashboardDayView {
       grid.setId("doctor-dashboard-time-grid");
       root.setCenter(grid);
       BorderPane.setMargin(grid, new Insets(12, 0, 0, 0));
+      loadedDate = selectedDate;
       if (retained != null) {
         onSelectionChanged.accept(retained);
       }
@@ -137,6 +140,12 @@ final class DoctorDashboardDayView {
         ticker.play();
       }
     } catch (SQLException | AuthorizationException | ValidationException exception) {
+      if (loadedDate != null && !loadedDate.equals(selectedDate)) {
+        date.setValue(loadedDate);
+      } else if (loadedDate == null) {
+        grid = null;
+        root.setCenter(null);
+      }
       UiComponents.showError(
           feedback,
           exception.getMessage() == null
@@ -176,7 +185,13 @@ final class DoctorDashboardDayView {
   }
 
   private void moveDate(long days) {
-    date.setValue(date.getValue().plusDays(days));
+    LocalDate current = date.getValue();
+    if (current == null) {
+      date.setValue(loadedDate == null ? LocalDate.now(clock) : loadedDate);
+      UiComponents.showError(feedback, "Select a Dashboard date");
+      return;
+    }
+    date.setValue(current.plusDays(days));
     dateChanged();
   }
 

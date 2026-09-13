@@ -239,6 +239,51 @@ final class DoctorCalendarViewTest extends ApplicationTest {
   }
 
   @Test
+  void crossMidnightTimeOffDetailsShowBothDates() throws SQLException {
+    LocalDate startDate = today();
+    LocalDate endDate = startDate.plusDays(1);
+    var crossMidnight =
+        new AppointmentRepository(database)
+            .createTimeOff(doctorId, startDate.atTime(23, 30), endDate.atTime(0, 30));
+
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    waitForNode("#doctor-calendar-page");
+    interact(
+        () ->
+            lookup("#doctor-calendar-time-off-" + crossMidnight.id() + "-" + startDate)
+                .query()
+                .getOnMouseClicked()
+                .handle(primaryClick()));
+
+    waitForNode("#doctor-calendar-time-off-details");
+    String interval =
+        lookup("#doctor-calendar-time-off-details-interval").queryAs(Label.class).getText();
+    assertTrue(interval.contains(startDate.toString()));
+    assertTrue(interval.contains(endDate.toString()));
+    assertTrue(interval.contains("23:30"));
+    assertTrue(interval.contains("00:30"));
+    fire("#doctor-calendar-time-off-close");
+  }
+
+  @Test
+  void agendaBlockTimeUsesTheVisibleAnchorDate() {
+    loginAsDoctor();
+    fire("#doctor-nav-calendar");
+    selectCombo("#doctor-calendar-view-mode", "Agenda");
+    fire("#doctor-calendar-next");
+    LocalDate anchor =
+        lookup("#doctor-calendar-schedule-date").queryAs(DatePicker.class).getValue();
+
+    fire("#doctor-calendar-block-time");
+    waitForNode("#doctor-calendar-time-off-dialog-content");
+    assertEquals(
+        anchor,
+        lookup("#doctor-calendar-time-off-dialog-date").queryAs(DatePicker.class).getValue());
+    fire("#doctor-calendar-time-off-dialog-cancel");
+  }
+
+  @Test
   void invalidTimeOffKeepsDialogInputForCorrection() {
     loginAsDoctor();
     fire("#doctor-nav-calendar");

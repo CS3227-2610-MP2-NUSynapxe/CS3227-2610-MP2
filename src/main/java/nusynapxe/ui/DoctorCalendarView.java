@@ -391,8 +391,13 @@ public final class DoctorCalendarView {
   private void openCreateTimeOff() {
     try {
       LocalDate today = LocalDate.now(clock);
-      List<LocalDate> visibleDates = selectedDates();
-      LocalDate date = visibleDates.contains(today) ? today : visibleDates.getFirst();
+      LocalDate date;
+      if (isAgendaMode()) {
+        date = scheduleAnchor;
+      } else {
+        List<LocalDate> visibleDates = selectedDates();
+        date = visibleDates.contains(today) ? today : visibleDates.getFirst();
+      }
       LocalDateTime now = LocalDateTime.now(clock);
       int minute = date.equals(today) ? (now.getMinute() < 30 ? 0 : 30) : 0;
       int hour = date.equals(today) ? now.getHour() : 9;
