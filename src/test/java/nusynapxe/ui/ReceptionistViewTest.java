@@ -592,9 +592,15 @@ final class ReceptionistViewTest extends ApplicationTest {
     String csv = ReceptionistView.reportCsv(report);
     assertTrue(csv.startsWith("receipt,dateTime,patientId,patientName,doctor,amount,method"));
     assertTrue(csv.contains("7,2026-09-01T12:30,4,Pat Lee,Dr. Ada,45.00,CARD"));
+    assertTrue(csv.contains("summary,1,1,45.00"));
+    assertTrue(csv.contains("paymentMethod,CARD,45.00"));
+    assertTrue(csv.contains("doctor,Dr. Ada,45.00"));
 
     String json = ReceptionistView.reportJson(report);
+    assertTrue(json.contains("\"successfulPaymentCount\":1"));
     assertTrue(json.contains("\"receiptCount\":1"));
+    assertTrue(json.contains("\"paymentMethods\":{\"CARD\":\"45.00\"}"));
+    assertTrue(json.contains("\"doctors\":{\"Dr. Ada\":\"45.00\"}"));
     assertTrue(json.contains("\"patientName\":\"Pat Lee\""));
     assertTrue(json.contains("\"method\":\"CARD\""));
   }

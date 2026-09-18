@@ -1370,16 +1370,33 @@ public final class ReceptionistView {
           .append(receipt.method())
           .append('\n');
     }
+    csv.append('\n')
+        .append("summary,successfulPayments,receiptCount,total\n")
+        .append("summary,")
+        .append(report.receiptCount())
+        .append(',')
+        .append(report.receiptCount())
+        .append(',')
+        .append(formatMinor(report.totalMinor()))
+        .append('\n');
+    appendCsvTotals(csv, "paymentMethod", report.byMethod());
+    appendCsvTotals(csv, "doctor", report.byDoctor());
     return csv.toString();
   }
 
   static String reportJson(RevenueReport report) {
     StringBuilder json =
-        new StringBuilder("{\"receiptCount\":")
+        new StringBuilder("{\"successfulPaymentCount\":")
+            .append(report.receiptCount())
+            .append(",\"receiptCount\":")
             .append(report.receiptCount())
             .append(",\"total\":\"")
             .append(formatMinor(report.totalMinor()))
-            .append("\",\"receipts\":[");
+            .append("\",\"paymentMethods\":")
+            .append(jsonTotals(report.byMethod()))
+            .append(",\"doctors\":")
+            .append(jsonTotals(report.byDoctor()))
+            .append(",\"receipts\":[");
     for (int index = 0; index < report.receipts().size(); index++) {
       Receipt receipt = report.receipts().get(index);
       if (index > 0) {
@@ -1402,6 +1419,29 @@ public final class ReceptionistView {
           .append("\"}");
     }
     return json.append("]}").toString();
+  }
+
+  private static void appendCsvTotals(StringBuilder csv, String category, Map<?, Long> totals) {
+    totals.entrySet().stream()
+        .sorted(java.util.Comparator.comparing(entry -> entry.getKey().toString()))
+        .forEach(
+            entry ->
+                csv.append(category)
+                    .append(',')
+                    .append(entry.getKey())
+                    .append(',')
+                    .append(formatMinor(entry.getValue()))
+                    .append('\n'));
+  }
+
+  private static String jsonTotals(Map<?, Long> totals) {
+    java.util.StringJoiner json = new java.util.StringJoiner(",", "{", "}");
+    totals.entrySet().stream()
+        .sorted(java.util.Comparator.comparing(entry -> entry.getKey().toString()))
+        .forEach(
+            entry ->
+                json.add("\"" + entry.getKey() + "\":\"" + formatMinor(entry.getValue()) + "\""));
+    return json.toString();
   }
 
   private static void refreshSchedule(
