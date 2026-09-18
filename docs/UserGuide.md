@@ -23,7 +23,9 @@ selectable destination. Doctors use the same rail pattern for **Dashboard**,
 Short operation notices appear below the header and close automatically after
 six seconds.
 
-## Installing NUSynapxe
+## Getting started
+
+### Installation
 
 Tagged releases publish native installers for Windows (`.msi`), macOS
 (`.dmg`), and Linux (`.deb`) as GitHub Release assets. Download the installer
@@ -31,7 +33,7 @@ for your platform from the repository's Releases page and run it; no separate
 Java installation is required, since the installer bundles a matching Java
 runtime. To build and run from source instead, see **First launch** below.
 
-## First launch
+### First launch
 
 From the repository root, start the desktop application:
 
@@ -45,7 +47,7 @@ non-blank characters, and the matching confirmation. Select **Create System
 Admin**. A successful setup always goes to Login; the setup form cannot be
 used again once an account exists.
 
-## Login and logout
+### Login and logout
 
 Enter an enabled account's username and password on Login and select **Log
 in**. The application opens the workspace for the account's role. Invalid,
@@ -226,26 +228,27 @@ to open its administrative details and choose **Check in patient** when the
 appointment start time has arrived. The queue refreshes automatically after a
 successful check-in. Clinical notes and prescriptions are never shown.
 
-1. After the assigned Doctor accepts the appointment, reopen **Appointments
-   across all Doctors** and select the appointment; the table refreshes automatically.
-2. Check-in is handled through the appointment workflow at or after the scheduled
-   start time; the all-Doctor dashboard has no standalone **Check in selected**
-   button.
-3. The Doctor records the consultation and selects **Mark consultation
-   completed**. Open the separate **Checkout** tab and select the appointment.
-4. Select the completed appointment to open its checkout window. Enter a
+1. After the assigned Doctor accepts the appointment, open **Check in**, apply
+   any patient, Doctor, date, or status filters, and select the appointment.
+2. At or after its scheduled start time, choose **Check in patient** in the
+   administrative-details popup.
+3. The assigned Doctor records the consultation and selects **Mark consultation
+   completed**.
+4. Open **Checkout**, use its Patient, Doctor, and date filters to find the
+   completed appointment, and select it to open the checkout window. Enter a
    positive charge in major currency units, such as `45.00`, choose Cash,
    Card, Transfer, or Other, and select **Complete checkout** in that window. This
    records the successful payment and changes the appointment to
    `CHECKED_OUT`.
-6. In the **Checkout** workspace, use the Patient, Doctor, and date filters to
-   find completed appointments ready for payment. After checkout, the receipt
-   preview shows the daily receipt number and Singapore timestamp. Open the
+5. After checkout, the receipt preview shows the daily receipt number and
+   Singapore timestamp. Open the
    **Receipts** sub-tab to browse the receipt table and select a receipt to view
    its persisted details. Checkout, queue, receipt, and revenue result tables do
    not display generated Patient or Doctor ID columns.
-5. Open **Daily revenue**, enter a date as `yyyy-MM-dd`, and select **Show revenue** to see the count
-   and total of successful checkouts for that local clinic date.
+6. Open **Revenue Reports**, choose an inclusive From/To range and any optional
+   patient, Doctor, or payment-method filters, then select **Generate report**.
+   The results show the successful-payment count, total, payment-method and
+   Doctor breakdowns, and matching receipt rows.
 
 Zero, negative, malformed, or missing amounts are rejected. Cancelled visits
 and unsuccessful payment attempts do not contribute to the revenue summary.
@@ -404,3 +407,44 @@ Use `.\scripts\reset-demo-database.ps1 -Force` when only an empty schema is
 needed. Both scripts accept `-DatabasePath` when an alternate database is
 required. Close NUSynapxe before resetting or replacing the database. The demo
 credentials and data are not suitable for production use.
+
+## Troubleshooting
+
+### Login always reports invalid credentials
+
+Usernames and passwords are case-sensitive, and disabled accounts receive the
+same generic message as unknown accounts. Confirm that the correct account was
+created by System Admin. For showcase data, reset and reseed only if replacing
+the current local demo database is intentional.
+
+### A patient or Doctor does not appear in a booking search
+
+Type part of the name or supported identifying information and select a result
+from the suggestions; typed text alone does not select the record. Inactive
+patients remain in the directory and history but cannot be chosen for a new
+booking. Only accounts with the Doctor role are offered.
+
+### Booking or blocked time is rejected
+
+The end must be after the start, and active appointments or Doctor time off may
+not overlap. Pending, accepted, checked-in, completed, and checked-out visits
+reserve their intervals. Declined and cancelled visits release them. Adjacent
+half-hour slots are allowed.
+
+### Check-in or checkout is unavailable
+
+Check-in requires an accepted appointment whose scheduled start time has
+arrived. Checkout requires the assigned Doctor to mark the consultation
+completed first. Refresh the relevant tab after another role changes the visit.
+
+### A report or search shows no rows
+
+Choose **All statuses**, **All Doctors**, or **All methods** to clear a previous
+selection, verify the inclusive date range, then apply the filters again. Empty
+results do not delete or change stored records.
+
+### The installer shows a trust warning
+
+Current installers are not code-signed or notarized. Continue only when the
+package was downloaded from this project's GitHub Releases page. Do not install
+copies received from an untrusted source.
