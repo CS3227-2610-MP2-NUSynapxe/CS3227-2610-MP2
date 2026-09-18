@@ -128,11 +128,18 @@ final class ReceptionistViewTest extends ApplicationTest {
     selectWorkspaceTab(1);
     verifyThat("#reception-book", isVisible());
 
-    LocalDateTime start = LocalDateTime.now().minusMinutes(5).withSecond(0).withNano(0);
+    LocalDateTime start =
+        LocalDateTime.now(CalendarService.CLINIC_ZONE)
+            .minusHours(1)
+            .withMinute(0)
+            .withSecond(0)
+            .withNano(0);
+    LocalDateTime end = start.plusMinutes(30);
+    setDatePicker("#reception-appointment-date", start.toLocalDate());
     selectCombo("#reception-start-hour", String.format("%02d", start.getHour()));
-    selectCombo("#reception-start-minute", "00");
-    selectCombo("#reception-end-hour", String.format("%02d", start.getHour()));
-    selectCombo("#reception-end-minute", "30");
+    selectCombo("#reception-start-minute", String.format("%02d", start.getMinute()));
+    selectCombo("#reception-end-hour", String.format("%02d", end.getHour()));
+    selectCombo("#reception-end-minute", String.format("%02d", end.getMinute()));
     fire("#reception-book");
     verifyThat("#reception-feedback", hasText("Appointment booked and awaiting Doctor acceptance"));
     assertTrue(textLabel("#reception-schedule-summary").contains("Pending: 1"));
