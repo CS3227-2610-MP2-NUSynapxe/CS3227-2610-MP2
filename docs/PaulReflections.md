@@ -314,8 +314,8 @@ payment. Because a modified OpenSpec requirement replaces the whole block,
 archiving it in that state would have silently removed valid behaviour from the
 main specification. The audit also found stale main-spec language describing a
 weekly Calendar picker, a visible first-day preference, Patient ID columns, and
-an Edit-first directory action, even though the implemented product used date
-ranges, no first-day selector, no internal ID columns, and a View-first flow.
+an Edit first directory action, even though the implemented product used date
+ranges, no first day selector, no internal ID columns, and a View-first flow.
 
 **How the prompt evolved.** The task moved from “mark and archive” to a
 verification sequence: read every proposal, design, delta spec, and task file;
