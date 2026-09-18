@@ -72,6 +72,7 @@ public final class ReceptionistView {
   private static final String PATIENT_LABEL = "Patient";
   private static final String SUBTAB_CONTENT_STYLE = "subtab-content";
   private static final String DATE_TIME_PATTERN = "yyyy-MM-dd HH:mm";
+  private static final int JSON_CONTROL_CHARACTER_LIMIT = 0x20;
   private static final DateTimeFormatter DATE_TIME_FORMAT =
       DateTimeFormatter.ofPattern(DATE_TIME_PATTERN);
   private static final ZoneId SINGAPORE_ZONE = ZoneId.of("Asia/Singapore");
@@ -1361,13 +1362,13 @@ public final class ReceptionistView {
           .append(',')
           .append(receipt.patientId())
           .append(',')
-          .append(receipt.patientName())
+          .append(csvField(receipt.patientName()))
           .append(',')
-          .append(receipt.doctorName())
+          .append(csvField(receipt.doctorName()))
           .append(',')
           .append(formatMinor(receipt.amountMinor()))
           .append(',')
-          .append(receipt.method())
+          .append(csvField(receipt.method()))
           .append('\n');
     }
     csv.append('\n')
@@ -1390,9 +1391,9 @@ public final class ReceptionistView {
             .append(report.receiptCount())
             .append(",\"receiptCount\":")
             .append(report.receiptCount())
-            .append(",\"total\":\"")
-            .append(formatMinor(report.totalMinor()))
-            .append("\",\"paymentMethods\":")
+            .append(",\"total\":")
+            .append(jsonString(formatMinor(report.totalMinor())))
+            .append(",\"paymentMethods\":")
             .append(jsonTotals(report.byMethod()))
             .append(",\"doctors\":")
             .append(jsonTotals(report.byDoctor()))
@@ -1404,19 +1405,19 @@ public final class ReceptionistView {
       }
       json.append("{\"receiptNumber\":")
           .append(receipt.sequenceNumber())
-          .append(",\"dateTime\":\"")
-          .append(receipt.recordedAt())
-          .append("\",\"patientId\":")
+          .append(",\"dateTime\":")
+          .append(jsonString(receipt.recordedAt()))
+          .append(",\"patientId\":")
           .append(receipt.patientId())
-          .append(",\"patientName\":\"")
-          .append(receipt.patientName())
-          .append("\",\"doctor\":\"")
-          .append(receipt.doctorName())
-          .append("\",\"amount\":\"")
-          .append(formatMinor(receipt.amountMinor()))
-          .append("\",\"method\":\"")
-          .append(receipt.method())
-          .append("\"}");
+          .append(",\"patientName\":")
+          .append(jsonString(receipt.patientName()))
+          .append(",\"doctor\":")
+          .append(jsonString(receipt.doctorName()))
+          .append(",\"amount\":")
+          .append(jsonString(formatMinor(receipt.amountMinor())))
+          .append(",\"method\":")
+          .append(jsonString(receipt.method()))
+          .append('}');
     }
     return json.append("]}").toString();
   }
@@ -1428,7 +1429,7 @@ public final class ReceptionistView {
             entry ->
                 csv.append(category)
                     .append(',')
-                    .append(entry.getKey())
+                    .append(csvField(entry.getKey()))
                     .append(',')
                     .append(formatMinor(entry.getValue()))
                     .append('\n'));
@@ -1440,8 +1441,45 @@ public final class ReceptionistView {
         .sorted(java.util.Comparator.comparing(entry -> entry.getKey().toString()))
         .forEach(
             entry ->
-                json.add("\"" + entry.getKey() + "\":\"" + formatMinor(entry.getValue()) + "\""));
+                json.add(
+                    jsonString(entry.getKey()) + ":" + jsonString(formatMinor(entry.getValue()))));
     return json.toString();
+  }
+
+  private static String csvField(Object value) {
+    String text = String.valueOf(value);
+    if (text.indexOf(',') < 0
+        && text.indexOf('"') < 0
+        && text.indexOf('\r') < 0
+        && text.indexOf('\n') < 0) {
+      return text;
+    }
+    return '"' + text.replace("\"", "\"\"") + '"';
+  }
+
+  private static String jsonString(Object value) {
+    String text = String.valueOf(value);
+    StringBuilder escaped = new StringBuilder(text.length() + 2).append('"');
+    for (int index = 0; index < text.length(); index++) {
+      char character = text.charAt(index);
+      switch (character) {
+        case '"' -> escaped.append("\\\"");
+        case '\\' -> escaped.append("\\\\");
+        case '\b' -> escaped.append("\\b");
+        case '\f' -> escaped.append("\\f");
+        case '\n' -> escaped.append("\\n");
+        case '\r' -> escaped.append("\\r");
+        case '\t' -> escaped.append("\\t");
+        default -> {
+          if (character < JSON_CONTROL_CHARACTER_LIMIT) {
+            escaped.append(String.format(Locale.ROOT, "\\u%04x", (int) character));
+          } else {
+            escaped.append(character);
+          }
+        }
+      }
+    }
+    return escaped.append('"').toString();
   }
 
   private static void refreshSchedule(
