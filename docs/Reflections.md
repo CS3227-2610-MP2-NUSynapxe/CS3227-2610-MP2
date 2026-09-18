@@ -4,8 +4,8 @@ This project was completed by a team of two. The links below lead to each
 member's individual reflection on the use of a customized single AI agent
 during the development of NUSynapxe.
 
-- [Paul's reflection](<paul reflections.md>)
-- [John's reflection](<john reflections.md>)
+- [Paul's reflection](PaulReflections.md)
+- [John's reflection](JohnReflections.md)
 
 Paul's completed reflection discusses how the agent was configured, detailed
 skill examples from implementation and testing, limitations encountered, and

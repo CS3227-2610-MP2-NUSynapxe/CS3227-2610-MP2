@@ -26,11 +26,13 @@ context; the **Quality Gate** ran tests and static analysis; and the
 the product. I chose a responsibility according to the type of decision being
 made rather than asking one unrestricted agent prompt to do everything.
 
-The three examples below were selected because they demonstrate different
+The five examples below were selected because they demonstrate different
 parts of Agentic Software Engineering: (1) using a specification workflow to
 control requirements, (2) using a domain-focused agent for a complex UI
-workflow that still needed human visual judgement, and (3) using automated
-quality gates to detect regressions beyond the feature being changed.
+workflow that still needed human visual judgement, (3) using automated
+quality gates to detect regressions beyond the feature being changed, (4)
+using the agent for production build and release engineering, and (5)
+correcting stale planning artifacts instead of trusting their apparent status.
 
 ---
 
@@ -223,6 +225,140 @@ external checks that remain outstanding.
 
 ---
 
+## Example 4: Building Reproducible CI and Cross-platform Releases
+
+**Prompt and context.** I used the agent to establish the shared engineering
+foundation for NUSynapxe. This included Java 25 and JavaFX, the Gradle Wrapper,
+SQLite JDBC, test and static-analysis dependencies, GitHub Actions CI,
+Docusaurus documentation, Dependabot, and formal release automation. The
+release workflow had to validate a version tag, run the appropriate quality
+checks, build native packages on Windows, macOS, and Linux, and attach the
+resulting `.msi`, `.dmg`, and `.deb` files to one GitHub release.
+
+**Why I formulated the task this way.** Build and release configuration is
+repetitive but exacting. A wrong plugin version, task dependency, artifact path,
+Java module, or workflow permission can make an otherwise correct application
+impossible to build or distribute. I therefore asked the agent to investigate
+compatibility first, pin versions explicitly, and connect each release step to
+an observable output instead of merely generating a collection of plausible
+configuration files.
+
+**What the agent assumed.** The agent initially treated locally plausible
+configuration as stronger evidence than it was. A Gradle file can parse while
+the GitHub runner still lacks a packaging tool, an artifact path can look
+correct while referring to a directory created only on another operating
+system, and a workflow can be syntactically valid while lacking the permissions
+needed to publish a release. The agent also could not infer whether a network,
+certificate, or authentication failure came from the project or the execution
+environment without further evidence.
+
+**How the prompt evolved.** The task began as project setup, then became a
+sequence of narrower checks: confirm tool versions, create the Gradle quality
+tasks, run them locally, reproduce them in CI, publish reports, build one native
+package per operating system, and finally publish all three assets from a
+version tag. When an integration problem occurred, I asked the agent to inspect
+the failing command and actual report or artifact path rather than redesigning
+the whole workflow.
+
+**Verification.** I used the pinned Gradle Wrapper and Java 25 toolchain, ran
+the local quality gate, checked that CI used the same commands, and inspected
+the public workflow results and release assets. The successful release
+contained the expected Windows, macOS, and Linux installers. The Docusaurus
+production build and GitHub Pages deployment provided separate evidence for
+the documentation pipeline. Where local verification was impossible, I
+recorded the limitation instead of reporting the task as fully proven.
+
+**Engineering judgement required.** The agent was useful for coordinating
+versions, Gradle tasks, workflow YAML, and report locations, but I remained
+responsible for deciding the release shape and the acceptable platform-specific
+differences. For example, macOS could not run the TestFX suite in the same way
+as Linux under a virtual display, so the workflow needed a deliberate platform
+decision rather than blindly using identical commands everywhere.
+
+**When prompting was less effective.** Repeated prompting did not fix external
+certificate chains, unavailable network access, missing GitHub authentication,
+or operating-system packaging prerequisites. In those situations, reading the
+actual error and separating project failures from environment failures was
+faster than asking the agent to keep proposing configuration changes.
+
+**What I would do differently.** I would define a release acceptance matrix at
+the start, listing the required operating systems, artifact names, bundled
+runtime expectations, smoke tests, checksums, and publication evidence. I would
+also add an automated launch smoke test for each packaged application where the
+runner permits it. This would give the agent an exact definition of “release
+ready” and make external verification gaps visible earlier.
+
+---
+
+## Example 5: Correcting Stale OpenSpec Artifacts Before Archival
+
+**Prompt and context.** Near the end of the project, I asked the agent to audit
+and archive completed OpenSpec changes. The Receptionist revenue-report feature
+was implemented and tested, but its task file still showed `0/12` completed.
+The Doctor dashboard/calendar change showed `37/37`, but it remained active
+instead of archived. I asked the agent to reconcile the artifacts with the
+actual implementation, validate them strictly, synchronize the main specs, and
+archive only changes supported by evidence.
+
+**Why I formulated the task this way.** Simply changing every unchecked box to
+checked would have made the status look complete without proving anything. I
+required a mapping from each task and requirement to code, tests,
+documentation, or a successful verification command. This treated the
+planning artifacts as an auditable engineering record rather than an
+administrative checklist.
+
+**What the agent discovered.** Strict validation found that the revenue delta
+modified an existing checkout requirement but omitted two earlier scenarios:
+duplicate checkout rejection and viewing a receipt without creating another
+payment. Because a modified OpenSpec requirement replaces the whole block,
+archiving it in that state would have silently removed valid behaviour from the
+main specification. The audit also found stale main-spec language describing a
+weekly Calendar picker, a visible first-day preference, Patient ID columns, and
+an Edit-first directory action, even though the implemented product used date
+ranges, no first-day selector, no internal ID columns, and a View-first flow.
+
+**How the prompt evolved.** The task moved from “mark and archive” to a
+verification sequence: read every proposal, design, delta spec, and task file;
+find implementation and test evidence; preserve omitted scenarios; compare
+each delta with its main capability; update obsolete contracts; validate all
+specifications; and only then move the changes into the dated archive. During
+that review, the agent also noticed that the export requirement promised
+totals, breakdowns, and details, while the CSV and JSON output did not preserve
+all of them. I corrected the implementation and regression test before treating
+the change as complete.
+
+**Verification.** The revenue change finished with `12/12` evidenced tasks and
+the Doctor change with `37/37`. I checked that all twenty Doctor-change
+requirements and their scenarios appeared in the corresponding main specs.
+After synchronization and archival, OpenSpec reported no active changes and
+all fifteen main specifications passed strict validation. I reran the focused
+Receptionist tests and the complete Gradle quality gate after correcting the
+exports.
+
+**Engineering judgement required.** The agent could find textual differences,
+but deciding which document represented the current product still required
+judgement. Blindly synchronizing an older revenue delta would have reintroduced
+a Patient ID requirement that a later privacy and UI decision had removed. I
+had to preserve the approved current behaviour while retaining the historical
+rationale in the archived change.
+
+**When prompting was less effective.** Status numbers alone were misleading.
+`0/12` did not mean the feature was absent, and `37/37` did not prove that the
+main specifications were synchronized. Likewise, valid Markdown did not prove
+that the export implementation satisfied the written behaviour. The agent
+created extra work when it treated artifact completeness, semantic correctness,
+and implementation evidence as the same thing.
+
+**What I would do differently.** I would update task checkboxes immediately
+after each verified increment and archive a change soon after it reaches a
+stable release, rather than allowing implementation and planning artifacts to
+drift. I would also automate a requirement-to-test evidence table and make
+strict OpenSpec validation part of the pull-request quality gate. This would
+turn final archival into a confirmation step rather than a late reconstruction
+exercise.
+
+---
+
 ## What I Would Do Differently Overall
 
 The customized agent was most effective when it had a specific role, relevant
@@ -256,6 +392,6 @@ visual quality, scope control, or verification. The most reliable pattern was:
 `human-defined intent -> agent-assisted planning and implementation -> automated evidence -> human review`
 
 The value of Agentic Software Engineering was not that the agent produced the
-correct answer on every first attempt. Its value was that a well-designed
+correct answer on every first attempt. Its value was that a well designed
 process made the output inspectable, correctable, and progressively more
 reliable.
