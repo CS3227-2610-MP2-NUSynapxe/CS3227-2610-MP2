@@ -92,9 +92,9 @@ The Doctor Calendar SHALL provide a manual refresh control that reloads the acti
 - **WHEN** the Doctor activates refresh while viewing a selected time-grid range
 - **THEN** Calendar reloads appointments and availability for the same range
 
-#### Scenario: Doctor refreshes Schedule mode
-- **WHEN** the Doctor activates refresh while viewing Schedule mode
-- **THEN** Calendar reloads the Schedule using the same anchor and retains Schedule mode
+#### Scenario: Doctor refreshes Agenda mode
+- **WHEN** the Doctor activates refresh while viewing Agenda mode
+- **THEN** Calendar reloads the Agenda using the same anchor and retains Agenda mode
 
 ### Requirement: Calendar settings SHALL omit the obsolete first-day preference
 

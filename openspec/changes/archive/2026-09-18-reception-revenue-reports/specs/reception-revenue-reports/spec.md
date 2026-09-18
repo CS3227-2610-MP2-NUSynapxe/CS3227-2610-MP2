@@ -34,8 +34,9 @@ use the Singapore clinic timezone.
 
 ### Requirement: Revenue reports SHALL show receipt details
 
-The report SHALL list receipt number, payment date/time, Patient ID and name,
-Doctor name, amount, and payment method without exposing clinical information.
+The report SHALL use table columns for receipt number, payment date/time,
+patient name, Doctor name, amount, and payment method without generated Patient
+or Doctor ID columns and without exposing clinical information.
 
 #### Scenario: Receipt-backed detail rows are displayed
 - **WHEN** a report contains matching successful payments

@@ -1,3 +1,8 @@
+## Purpose
+
+Provides deterministic local-development data for demonstrating and testing
+the complete multi-role clinic workflow safely.
+
 ## ADDED Requirements
 
 ### Requirement: The local demo seed SHALL provide representative clinic history
