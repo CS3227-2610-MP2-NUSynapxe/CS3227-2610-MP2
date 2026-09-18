@@ -51,7 +51,7 @@ a Receptionist SHALL not be granted access to clinical information.
 
 ### Requirement: The system SHALL support conflict-free appointment scheduling across the clinic
 
-An authenticated Receptionist SHALL be able to book, cancel, and reschedule appointments for any Doctor. An authenticated Doctor SHALL be able to create, view, and manage only appointments assigned to that Doctor. A Doctor-created appointment SHALL start in the `ACCEPTED` state; a Receptionist-created appointment SHALL start in the `PENDING` state. An assigned Doctor SHALL be able to accept or decline their own pending or accepted appointments and reschedule their own pending or accepted appointments. A Receptionist SHALL be able to reschedule pending, accepted, or declined appointments for any Doctor. A Doctor SHALL NOT reschedule a declined appointment or change another Doctor's appointment. A Doctor's reschedule SHALL leave the appointment accepted, while a Receptionist's reschedule SHALL leave it pending. The system SHALL reject an appointment whose time interval overlaps another non-cancelled appointment or blocked time for the same Doctor, including a declined appointment, and SHALL leave the prior schedule unchanged when a booking or reschedule is rejected.
+An authenticated Receptionist SHALL be able to book, cancel, and reschedule appointments for any Doctor. An authenticated Doctor SHALL be able to create, view, and manage only appointments assigned to that Doctor. A Doctor-created appointment SHALL start in the `ACCEPTED` state; a Receptionist-created appointment SHALL start in the `PENDING` state. An assigned Doctor SHALL be able to accept or decline their own pending or accepted appointments and reschedule their own pending or accepted appointments. A Receptionist SHALL be able to reschedule pending, accepted, or declined appointments for any Doctor. A Doctor SHALL NOT reschedule a declined appointment or change another Doctor's appointment. A Doctor's reschedule SHALL leave the appointment accepted, while a Receptionist's reschedule SHALL leave it pending. The system SHALL reject an appointment whose time interval overlaps another appointment for the same Doctor in `PENDING`, `ACCEPTED`, `CHECKED_IN`, `COMPLETED`, or `CHECKED_OUT` status, or overlaps blocked time for that Doctor, and SHALL leave the prior schedule unchanged when a booking or reschedule is rejected. `DECLINED` and `CANCELLED` appointments SHALL remain recorded but SHALL NOT reserve their former intervals.
 
 #### Scenario: Receptionist books an appointment for any Doctor
 - **WHEN** a Receptionist submits a valid patient, Doctor, date, time, and duration for an available slot
@@ -67,7 +67,7 @@ An authenticated Receptionist SHALL be able to book, cancel, and reschedule appo
 
 #### Scenario: Doctor declines an assigned appointment
 - **WHEN** the assigned Doctor declines a `PENDING` or `ACCEPTED` appointment before check-in
-- **THEN** the appointment changes to `DECLINED` and remains available for Receptionist coordination
+- **THEN** the appointment changes to `DECLINED`, remains available for Receptionist coordination, and releases its former interval for another appointment or time off
 
 #### Scenario: Doctor reschedules an assigned appointment
 - **WHEN** the assigned Doctor reschedules their own `PENDING` or `ACCEPTED` appointment into an available interval
@@ -86,16 +86,44 @@ An authenticated Receptionist SHALL be able to book, cancel, and reschedule appo
 - **THEN** the service rejects the request and preserves the appointment interval and state
 
 #### Scenario: Overlapping appointment is rejected
-- **WHEN** a Receptionist or assigned Doctor attempts to book or reschedule an appointment into a slot overlapping another non-cancelled appointment for the same Doctor
+- **WHEN** a Receptionist or assigned Doctor attempts to book or reschedule an appointment into a slot overlapping an appointment for the same Doctor in `PENDING`, `ACCEPTED`, `CHECKED_IN`, `COMPLETED`, or `CHECKED_OUT` status
 - **THEN** the service reports a scheduling conflict and the original appointment schedule remains unchanged
 
+#### Scenario: Declined appointment does not block a replacement
+- **WHEN** a Receptionist or assigned Doctor books an appointment in an interval occupied only by a `DECLINED` appointment
+- **THEN** the new appointment is created and the declined appointment remains recorded with its existing details and state
+
 #### Scenario: Doctor blocks time off
-- **WHEN** a Doctor submits a valid time-off interval that does not overlap an existing appointment
+- **WHEN** a Doctor submits a valid time-off interval that does not overlap an availability-blocking appointment or existing time off
 - **THEN** the interval is persisted as unavailable time and future bookings in that interval are rejected
+
+#### Scenario: Doctor blocks time formerly occupied by a declined appointment
+- **WHEN** a Doctor submits valid time off in an interval occupied only by a `DECLINED` appointment
+- **THEN** the time off is persisted and the declined appointment remains recorded with its existing details and state
 
 #### Scenario: Doctor cannot manage another Doctor's schedule
 - **WHEN** a Doctor attempts to view or change an appointment or time-off interval belonging to another Doctor
 - **THEN** the service rejects the request without returning or changing the other Doctor's schedule
+
+### Requirement: Doctor time-off intervals SHALL be reversible by their owner
+
+An authenticated Doctor SHALL be able to remove an existing time-off interval owned by that Doctor. Removing time off SHALL delete only that interval and SHALL NOT change appointment assignments, times, or lifecycle states. A different Doctor, a Receptionist, or another role SHALL NOT be able to remove the interval through the Doctor operation.
+
+#### Scenario: Doctor removes their own time off
+- **WHEN** an authenticated Doctor requests removal of an existing time-off interval owned by that Doctor
+- **THEN** only that interval is deleted and its former time becomes available subject to all other appointment and conflict rules
+
+#### Scenario: Doctor attempts to remove another Doctor's time off
+- **WHEN** an authenticated Doctor requests removal of an interval owned by another Doctor
+- **THEN** the operation is rejected without revealing or changing the other Doctor's interval
+
+#### Scenario: Non-Doctor attempts to remove Doctor time off
+- **WHEN** an authenticated user without the Doctor role invokes the Doctor time-off removal operation
+- **THEN** the operation is rejected and the interval remains unchanged
+
+#### Scenario: Doctor removes a missing interval
+- **WHEN** a Doctor requests removal of a time-off identifier that does not exist for that Doctor
+- **THEN** the operation reports a safe not-found outcome and changes no schedule data
 
 ### Requirement: The system SHALL enforce the appointment workflow from booking through checkout
 
@@ -163,7 +191,7 @@ Only the Doctor assigned to a consultation SHALL be able to create or edit its d
 
 ### Requirement: A Receptionist SHALL be able to record checkout payments and generate a daily revenue summary
 
-After an appointment is completed, a Receptionist SHALL be able to record a valid checkout charge and payment method for the patient. The service SHALL reject negative, zero, malformed, or otherwise invalid payment amounts and SHALL reject a second successful checkout for the same appointment. A successful checkout SHALL create a receipt with a unique Singapore-local daily sequence number and persisted receipt timestamp. Receptionists SHALL be able to retrieve and view receipts without creating another payment. A daily revenue summary SHALL total successful checkout payments recorded on the selected local clinic date and SHALL exclude cancelled appointments and unsuccessful payment attempts.
+After an appointment is completed, a Receptionist SHALL be able to record a valid checkout charge and payment method for the patient. The service SHALL reject negative, zero, malformed, or otherwise invalid payment amounts and SHALL reject a second successful checkout for the same appointment. A successful checkout SHALL create a receipt with a unique Singapore-local daily sequence number and persisted receipt timestamp. Receptionists SHALL be able to retrieve and view receipts without creating another payment. Revenue reports SHALL aggregate only successful checkout payments and their linked receipts, excluding cancelled appointments and unsuccessful payment attempts.
 
 #### Scenario: Receptionist completes checkout
 - **WHEN** a Receptionist records a valid positive payment for a completed appointment
@@ -190,6 +218,6 @@ After an appointment is completed, a Receptionist SHALL be able to record a vali
 - **THEN** the report totals and detail rows are derived from successful persisted payments and linked receipts
 
 #### Scenario: Revenue excludes cancelled or unsuccessful transactions
-- **WHEN** the selected date contains a cancelled appointment or an unsuccessful payment attempt
-- **THEN** those records contribute zero to the successful payment count and total
+- **WHEN** the selected period contains cancelled appointments or unsuccessful payment attempts
+- **THEN** those transactions are excluded from the report count, totals, and breakdowns
 

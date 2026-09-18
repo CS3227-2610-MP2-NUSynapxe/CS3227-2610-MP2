@@ -1,5 +1,10 @@
 # Architecture checks
 
+## Purpose
+
+Protects the production package boundaries and prevents dependency cycles from
+silently weakening the application's layered architecture.
+
 ## ADDED Requirements
 
 ### Requirement: Enforce package dependency direction

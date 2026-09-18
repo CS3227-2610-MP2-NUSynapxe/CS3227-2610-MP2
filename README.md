@@ -117,12 +117,12 @@ Versions are pinned for reproducible builds as of 31 August 2026.
 | Java | 25 (toolchain) |
 | Gradle Wrapper | 9.7.1 |
 | JavaFX | 25.0.4 |
-| SQLite JDBC | 3.53.2.1 |
+| SQLite JDBC | 3.53.4.0 |
 | JUnit Jupiter | 6.1.3 |
 | ArchUnit | 1.5.0 |
 | TestFX | 4.0.18 |
 | Mockito | 5.23.0 |
-| Spotless | 8.10.1 |
+| Spotless | 8.10.2 |
 | Google Java Format | 1.36.1 |
 | Checkstyle | 14.1.0 |
 | PMD | 7.26.0 |

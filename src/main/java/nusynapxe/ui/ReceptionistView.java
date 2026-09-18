@@ -72,6 +72,7 @@ public final class ReceptionistView {
   private static final String PATIENT_LABEL = "Patient";
   private static final String SUBTAB_CONTENT_STYLE = "subtab-content";
   private static final String DATE_TIME_PATTERN = "yyyy-MM-dd HH:mm";
+  private static final int JSON_CONTROL_CHARACTER_LIMIT = 0x20;
   private static final DateTimeFormatter DATE_TIME_FORMAT =
       DateTimeFormatter.ofPattern(DATE_TIME_PATTERN);
   private static final ZoneId SINGAPORE_ZONE = ZoneId.of("Asia/Singapore");
@@ -642,12 +643,15 @@ public final class ReceptionistView {
                         reportPatient.getText(),
                         reportDoctor.getValue() == null ? null : reportDoctor.getValue().id(),
                         selectedPaymentMethod(reportMethod.getValue()));
+            String summary = formatRevenueSummary(report);
             currentReport[0] = report;
             reportRows.setItems(FXCollections.observableArrayList(report.receipts()));
-            reportSummary.setText(formatRevenueSummary(report));
+            reportSummary.setText(summary);
             UiComponents.showMessage(feedback, "Revenue report generated");
           } catch (ValidationException | AuthorizationException exception) {
             UiComponents.showError(feedback, exception.getMessage());
+          } catch (ArithmeticException exception) {
+            UiComponents.showError(feedback, "Revenue total exceeds the supported range");
           } catch (SQLException exception) {
             UiComponents.showError(feedback, "Revenue report is temporarily unavailable");
           }
@@ -1348,6 +1352,8 @@ public final class ReceptionistView {
       UiComponents.showMessage(feedback, "Revenue report exported");
     } catch (java.io.IOException exception) {
       UiComponents.showError(feedback, "Revenue report export failed");
+    } catch (ArithmeticException exception) {
+      UiComponents.showError(feedback, "Revenue total exceeds the supported range");
     }
   }
 
@@ -1361,25 +1367,42 @@ public final class ReceptionistView {
           .append(',')
           .append(receipt.patientId())
           .append(',')
-          .append(receipt.patientName())
+          .append(csvField(receipt.patientName()))
           .append(',')
-          .append(receipt.doctorName())
+          .append(csvField(receipt.doctorName()))
           .append(',')
           .append(formatMinor(receipt.amountMinor()))
           .append(',')
-          .append(receipt.method())
+          .append(csvField(receipt.method()))
           .append('\n');
     }
+    csv.append('\n')
+        .append("summary,successfulPayments,receiptCount,total\n")
+        .append("summary,")
+        .append(report.receiptCount())
+        .append(',')
+        .append(report.receiptCount())
+        .append(',')
+        .append(formatMinor(report.totalMinor()))
+        .append('\n');
+    appendCsvTotals(csv, "paymentMethod", report.byMethod());
+    appendCsvTotals(csv, "doctor", report.byDoctor());
     return csv.toString();
   }
 
   static String reportJson(RevenueReport report) {
     StringBuilder json =
-        new StringBuilder("{\"receiptCount\":")
+        new StringBuilder("{\"successfulPaymentCount\":")
             .append(report.receiptCount())
-            .append(",\"total\":\"")
-            .append(formatMinor(report.totalMinor()))
-            .append("\",\"receipts\":[");
+            .append(",\"receiptCount\":")
+            .append(report.receiptCount())
+            .append(",\"total\":")
+            .append(jsonString(formatMinor(report.totalMinor())))
+            .append(",\"paymentMethods\":")
+            .append(jsonTotals(report.byMethod()))
+            .append(",\"doctors\":")
+            .append(jsonTotals(report.byDoctor()))
+            .append(",\"receipts\":[");
     for (int index = 0; index < report.receipts().size(); index++) {
       Receipt receipt = report.receipts().get(index);
       if (index > 0) {
@@ -1387,21 +1410,81 @@ public final class ReceptionistView {
       }
       json.append("{\"receiptNumber\":")
           .append(receipt.sequenceNumber())
-          .append(",\"dateTime\":\"")
-          .append(receipt.recordedAt())
-          .append("\",\"patientId\":")
+          .append(",\"dateTime\":")
+          .append(jsonString(receipt.recordedAt()))
+          .append(",\"patientId\":")
           .append(receipt.patientId())
-          .append(",\"patientName\":\"")
-          .append(receipt.patientName())
-          .append("\",\"doctor\":\"")
-          .append(receipt.doctorName())
-          .append("\",\"amount\":\"")
-          .append(formatMinor(receipt.amountMinor()))
-          .append("\",\"method\":\"")
-          .append(receipt.method())
-          .append("\"}");
+          .append(",\"patientName\":")
+          .append(jsonString(receipt.patientName()))
+          .append(",\"doctor\":")
+          .append(jsonString(receipt.doctorName()))
+          .append(",\"amount\":")
+          .append(jsonString(formatMinor(receipt.amountMinor())))
+          .append(",\"method\":")
+          .append(jsonString(receipt.method()))
+          .append('}');
     }
     return json.append("]}").toString();
+  }
+
+  private static void appendCsvTotals(StringBuilder csv, String category, Map<?, Long> totals) {
+    totals.entrySet().stream()
+        .sorted(java.util.Comparator.comparing(entry -> entry.getKey().toString()))
+        .forEach(
+            entry ->
+                csv.append(category)
+                    .append(',')
+                    .append(csvField(entry.getKey()))
+                    .append(',')
+                    .append(formatMinor(entry.getValue()))
+                    .append('\n'));
+  }
+
+  private static String jsonTotals(Map<?, Long> totals) {
+    java.util.StringJoiner json = new java.util.StringJoiner(",", "{", "}");
+    totals.entrySet().stream()
+        .sorted(java.util.Comparator.comparing(entry -> entry.getKey().toString()))
+        .forEach(
+            entry ->
+                json.add(
+                    jsonString(entry.getKey()) + ":" + jsonString(formatMinor(entry.getValue()))));
+    return json.toString();
+  }
+
+  private static String csvField(Object value) {
+    String text = String.valueOf(value);
+    if (text.indexOf(',') < 0
+        && text.indexOf('"') < 0
+        && text.indexOf('\r') < 0
+        && text.indexOf('\n') < 0) {
+      return text;
+    }
+    return '"' + text.replace("\"", "\"\"") + '"';
+  }
+
+  private static String jsonString(Object value) {
+    String text = String.valueOf(value);
+    StringBuilder escaped = new StringBuilder(text.length() + 2).append('"');
+    for (int index = 0; index < text.length(); index++) {
+      char character = text.charAt(index);
+      switch (character) {
+        case '"' -> escaped.append("\\\"");
+        case '\\' -> escaped.append("\\\\");
+        case '\b' -> escaped.append("\\b");
+        case '\f' -> escaped.append("\\f");
+        case '\n' -> escaped.append("\\n");
+        case '\r' -> escaped.append("\\r");
+        case '\t' -> escaped.append("\\t");
+        default -> {
+          if (character < JSON_CONTROL_CHARACTER_LIMIT) {
+            escaped.append(String.format(Locale.ROOT, "\\u%04x", (int) character));
+          } else {
+            escaped.append(character);
+          }
+        }
+      }
+    }
+    return escaped.append('"').toString();
   }
 
   private static void refreshSchedule(

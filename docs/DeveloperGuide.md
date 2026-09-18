@@ -1,15 +1,34 @@
 # Developer Guide
 
-## Toolchain and commands
+## Development prerequisites
 
 The project uses Java 25, Gradle Wrapper 9.7.1, JavaFX 25.0.4, SQLite JDBC
-3.53.2.1, and Node.js 24 for the Docusaurus site. JavaFX is resolved by the
+3.53.4.0, and Node.js 24 for the Docusaurus site. JavaFX is resolved by the
 Gradle plugin; a separate JavaFX SDK is not required.
 
-Run the desktop application or the Java quality gate from the repository root:
+Use the checked-in Gradle Wrapper rather than a separately installed Gradle
+version. Native Windows packaging additionally requires WiX Toolset v3 or
+newer, but WiX is not needed for normal development or testing.
+
+## Getting started
+
+### Running NUSynapxe from source
+
+Run the desktop application from the repository root:
 
 ```powershell
 .\gradlew.bat run
+```
+
+On macOS or Linux, use `./gradlew run`. The application creates or opens the
+local database described in the User Guide unless the
+`nusynapxe.database` Java system property supplies an isolated path.
+
+### Useful build and quality commands
+
+Run the complete local Java quality gate with:
+
+```powershell
 .\gradlew.bat spotlessApply check javadoc --no-daemon --console=plain
 ```
 
@@ -29,9 +48,9 @@ Useful focused commands are:
 
 `spotlessApply` formats Java source. `spotlessCheck` is the read-only CI
 equivalent. `check` runs JUnit, Checkstyle, PMD, SpotBugs with FindSecBugs, and
-JaCoCo. Production quality gates fail the build on violations; PMD and
-SpotBugs test tasks are disabled because their framework-specific analysis is
-not useful for the TestFX harness.
+JaCoCo. Production quality gates fail the build on violations. `pmdTest` is
+enabled with its test-specific ruleset; `spotbugsTest` is disabled because
+bytecode analysis of the TestFX harness is not part of the production contract.
 
 ### Demo database tooling
 
@@ -59,7 +78,36 @@ The wrapper prints the short showcase credentials `ada` / `ada1234!`, `grace` /
 `admin.demo` / `DemoAdmin123!`. Keep these credentials and generated records
 limited to local demonstrations.
 
-## Package layout and boundaries
+## Product definition
+
+### Goal
+
+NUSynapxe is a local desktop clinic application that coordinates patient
+administration, Doctor schedules, appointment lifecycle, consultation records,
+checkout, receipts, and revenue reporting while enforcing role and ownership
+boundaries between System Admin, Receptionist, and Doctor users.
+
+### Current capabilities
+
+- System Admin creates and views Doctor and Receptionist accounts.
+- Receptionists maintain administrative patient data, schedule and check in
+  visits, complete checkout, view receipts, and generate revenue reports.
+- Doctors maintain administrative patient data, manage their own schedule and
+  time off, decide assigned appointments, and record assigned consultations and
+  prescriptions.
+- SQLite stores versioned local data, and native installers package the Java
+  runtime for Windows, macOS, and Linux.
+
+### Non-goals
+
+The current product does not provide cloud synchronization, online booking,
+government identity verification, insurance claims, inventory management,
+multi-clinic tenancy, or an in-application backup/restore workflow. Calendar
+working hours shade the display but do not impose booking policy.
+
+## Architecture
+
+### Package layout and boundaries
 
 ```text
 src/main/java/nusynapxe/             Application entry point and database paths
@@ -81,7 +129,7 @@ Repositories contain explicit projections and transaction boundaries. This
 keeps the confidentiality boundary testable even if a future UI accidentally
 renders an unauthorized control.
 
-### Architecture tests
+### Enforced dependency rules
 
 `nusynapxe.architecture.ArchitectureTest` uses ArchUnit 1.5.0 to import only
 production classes and enforce the package direction documented above. Domain
@@ -477,6 +525,110 @@ build/reports/jacoco/test/html/index.html
 build/reports/jacoco/test/jacocoTestReport.xml
 ```
 
+## Testing strategy
+
+### Test levels
+
+```mermaid
+flowchart TB
+    Domain["Domain tests\nrecords, transitions, calculations, boundaries"]
+    Persistence["Persistence tests\nreal temporary SQLite and migrations"]
+    Service["Service tests\nauthorization, validation, transactions"]
+    Integration["Workflow integration\nrole-separated clinic lifecycle"]
+    UI["TestFX UI tests\nnavigation, forms, tables, dialogs"]
+    Architecture["Architecture tests\npackage direction and cycles"]
+    Tools["Tool tests\nrepeatable reset and demo data"]
+    Domain --> Service
+    Persistence --> Service
+    Service --> Integration
+    Integration --> UI
+    Architecture -. independent structural gate .-> Domain
+    Tools --> Persistence
+```
+
+Repository and service tests use isolated databases under JUnit `@TempDir`;
+they never open the developer's default clinic database. Time-sensitive service
+tests inject fixed `Clock` values. TestFX classes create their own temporary
+database and wait for JavaFX events instead of depending on arbitrary sleeps.
+This keeps the suite repeatable and prevents test patients, credentials, or
+clinical records from leaking into local working data.
+
+### Test inventory
+
+The current source contains 168 `@Test` methods across 35 test classes. The
+inventory is grouped by the package boundary it exercises so it can be checked
+against the architecture rather than maintained as a long list of class names.
+
+| Test area | Classes | Tests | Main evidence |
+| --- | ---: | ---: | --- |
+| Application root | 1 | 2 | Stable and normalized default database paths. |
+| Architecture | 1 | 5 | Layer direction, exceptions, slice cycles, and UI/persistence separation. |
+| Domain | 3 | 9 | Calendar invariants, schedule paging values, exact revenue boundaries and overflow rejection. |
+| Persistence | 8 | 36 | Schema creation/migration, transactions, CRUD, conflicts, wildcard escaping, deletion blockers, and pagination. |
+| Service | 14 | 51 | Authentication, authorization, patient validation, appointment lifecycle, billing, clinical ownership, and end-to-end workflow. |
+| Tools | 1 | 2 | Protected reset and deterministic demo-data seeding. |
+| UI | 7 | 63 | Login/routing, role workspaces, searchable selectors, responsive tables, dialogs, calendars, feedback, checkout, and exports. |
+| **Total** | **35** | **168** | Source inventory; rerun the suite after any production or test change. |
+
+### Risk-based coverage priorities
+
+| Risk | Mitigation and automated evidence |
+| --- | --- |
+| Unauthorized clinical-data access | Service role/ownership checks, projection-specific repositories, `AuthorizationTest`, `ClinicalServiceTest`, and `ClinicWorkflowIntegrationTest`. |
+| Partial appointment, checkout, or deletion writes | Explicit SQLite transactions and rollback tests in service and persistence suites. |
+| Time conflicts and lifecycle mistakes | Boundary tests for adjacent/overlapping intervals, released declined/cancelled slots, check-in timing, and invalid transitions. |
+| Monetary sign, precision, or overflow errors | Integer minor-unit storage; `BigDecimal.longValueExact()` at UI parsing; positive service validation; exact report aggregation; `BillingServiceTest` and `RevenueReportTest`, including `Long.MAX_VALUE` and overflow. |
+| Migration data loss | `SchemaMigrationTest` covers every supported source version and rollback after partial failure. |
+| Search mistakes or SQL wildcard leakage | Repository tests cover names, identity/contact fields, combined criteria, deterministic ordering, and literal `%`/`_` input. |
+| Duplicate or skipped agenda rows | Stable `(startsAt, appointmentId)` cursors and sparse-page/concurrent-insert tests. |
+| Invalid CSV or JSON exports | Receptionist export tests cover quotes, commas, backslashes, line breaks, tabs, and JSON control characters. |
+| Layer erosion | ArchUnit rules reject forbidden dependencies and package cycles during `check`. |
+| UI regressions | TestFX covers semantic control ids and workflows; manual review remains appropriate for visual balance, native file choosers, and installer behaviour. |
+
+Extreme-value tests are required wherever input is converted to a narrower
+representation or later aggregated. A boundary is not considered covered only
+because rejected input was tested: the largest supported valid value and the
+first overflowing combination must also have explicit expected behaviour. This
+rule directly protects money, identifiers, date ranges, page sizes, and
+calendar arithmetic from silent wraparound.
+
+### Local verification commands
+
+From the repository root:
+
+```powershell
+# Windows PowerShell
+.\gradlew.bat spotlessApply
+.\gradlew.bat test --no-daemon --console=plain
+.\gradlew.bat check javadoc --no-daemon --console=plain
+git diff --check
+```
+
+```bash
+# macOS/Linux
+./gradlew spotlessApply
+./gradlew test --no-daemon --console=plain
+xvfb-run --auto-servernum ./gradlew check javadoc --no-daemon --console=plain
+git diff --check
+```
+
+Use `spotlessCheck` instead of `spotlessApply` when a read-only formatting
+check is required. A passing `test` task is not the complete quality gate.
+
+### Quality tasks and reports
+
+| Task or tool | Purpose | Output or failure policy |
+| --- | --- | --- |
+| `spotlessApply` / `spotlessCheck` | Apply or verify Google Java Format. | Formatting differences fail `spotlessCheck`. |
+| `checkstyleMain`, `checkstyleTest` | Enforce the configured Java style rules. | Reports are under `build/reports/checkstyle/`; violations fail. |
+| `pmdMain`, `pmdTest` | Run production and test-specific PMD rulesets. | Reports are under `build/reports/pmd/`; violations fail. |
+| `spotbugsMain` with FindSecBugs | Analyse production bytecode at maximum effort. | Reports are under `build/reports/spotbugs/`; medium-confidence findings fail. |
+| `test` | Run JUnit, ArchUnit, repository/service tests, integration tests, and TestFX. | JUnit XML and HTML reports are generated under `build/`. |
+| `jacocoTestReport` | Generate instruction and branch coverage evidence. | HTML/XML reports use the paths above and are published by CI. |
+| `javadoc` | Verify and generate public API documentation. | Output is under `build/docs/javadoc/`; warnings promoted by compilation policy fail where configured. |
+| `npm ci && npm run build` in `website/` | Reproduce and build the documentation site. | Broken Docusaurus links fail the production build. |
+| `git diff --check` | Detect whitespace errors in the final patch. | Must produce no errors before commit. |
+
 ## Documentation site and CI
 
 From the repository root, build or serve the Docusaurus site with:
@@ -488,8 +640,10 @@ npm run build
 npm run start
 ```
 
-`website/docusaurus.config.js` reads `README.md` and the two files in `docs/`
-as documentation pages. Broken site links fail the production build. GitHub
+`website/docusaurus.config.js` includes `README.md` and `docs/**/*.md` in the
+documentation build. The sidebar exposes the overview and the two guides;
+reflection files remain unlisted but are still parsed by the production build.
+Broken site links fail the production build. GitHub
 Actions uses JDK 25, Node.js 24, `xvfb-run`, `./gradlew check javadoc`, and
 `npm ci && npm run build`; it publishes the generated `build/reports/` files
 as a quality-report artifact. `website/src/css/custom.css` mirrors the desktop
@@ -531,3 +685,47 @@ release, push a tag from `master`:
 git tag v0.2.0
 git push origin v0.2.0
 ```
+
+## Requirements-to-implementation mapping
+
+| Requirement | Implementation | Automated evidence |
+| --- | --- | --- |
+| Role-based authentication and confidentiality | `AuthenticationService`, `Authorization`, administrative projections, assigned-Doctor checks | `AuthenticationServiceTest`, `AuthorizationTest`, `ClinicalServiceTest`, workflow integration test |
+| Patient administration without exposing clinical history | `PatientService`, `PatientRepository`, `PatientDirectoryView` | Patient service/repository suites and Doctor/Receptionist TestFX suites |
+| Appointment lifecycle and conflict prevention | `AppointmentService`, `AppointmentTransitions`, `AppointmentRepository` | Service and repository schedule tests |
+| Doctor Calendar, agenda, settings, and time off | `CalendarService`, calendar domain records, `DoctorCalendarView` | Calendar domain/service/calculation and TestFX suites |
+| Atomic checkout, receipts, and revenue | `BillingService`, payment/receipt repositories, `RevenueReport` | Billing, persistence, integration, revenue-boundary, and export tests |
+| Versioned local persistence | `SqliteDatabase`, `SchemaInitializer`, `SqliteTransactions` | Database, transaction, and migration suites |
+| Enforced package boundaries and quality gates | Gradle configuration, ArchUnit, Checkstyle, PMD, SpotBugs, JaCoCo | `ArchitectureTest`, `check`, CI reports |
+| Reproducible documentation and delivery | Docusaurus configuration, `packageNative`, CI/Pages/release workflows | Documentation build and platform release jobs |
+
+Behavioural or architectural changes should update the relevant OpenSpec
+artifact first, implement and test the change, synchronize the main specs, pass
+strict OpenSpec validation, and archive the completed change. Documentation
+examples must be checked against the final method signatures, visible labels,
+and build configuration rather than an earlier design draft.
+
+## Known limitations and future work
+
+- The application and database are local to one computer; there is no cloud
+  synchronization or built-in backup/restore workflow.
+- Identity-document validation checks documented syntax but not government
+  checksums or external registries.
+- Calendar working intervals control shading only; appointment conflicts and
+  explicit Doctor time off enforce availability.
+- Native installers are not code-signed or notarized, so operating systems may
+  display a publisher or trust warning.
+- Hosted macOS release jobs compile tests and run static checks but do not run
+  the TestFX runtime suite because the workflow has no Xvfb equivalent.
+
+## Acknowledgements
+
+| Source | Use in NUSynapxe |
+| --- | --- |
+| [OpenJFX](https://openjfx.io/) | Desktop UI controls and application lifecycle. |
+| [SQLite](https://www.sqlite.org/docs.html) and [Xerial SQLite JDBC](https://github.com/xerial/sqlite-jdbc) | Embedded relational storage and JDBC driver. |
+| [Google libphonenumber](https://github.com/google/libphonenumber) | Country calling-code metadata. |
+| [JUnit](https://junit.org/), [TestFX](https://github.com/TestFX/TestFX), and [ArchUnit](https://www.archunit.org/) | Unit/integration testing, JavaFX interaction, and package-boundary enforcement. |
+| [Spotless](https://github.com/diffplug/spotless), [Checkstyle](https://checkstyle.org/), [PMD](https://pmd.github.io/), [SpotBugs](https://spotbugs.github.io/), [FindSecBugs](https://find-sec-bugs.github.io/), and [JaCoCo](https://www.jacoco.org/jacoco/) | Formatting, static analysis, security checks, and coverage reports. |
+| [Docusaurus](https://docusaurus.io/) and [Mermaid](https://mermaid.js.org/) | Documentation site and source-controlled diagrams. |
+| [GitHub Actions](https://docs.github.com/actions) and `jpackage` | Continuous verification, documentation deployment, and native packaging. |
