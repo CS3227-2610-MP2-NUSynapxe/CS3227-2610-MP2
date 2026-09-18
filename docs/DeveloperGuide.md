@@ -3,7 +3,7 @@
 ## Toolchain and commands
 
 The project uses Java 25, Gradle Wrapper 9.7.1, JavaFX 25.0.4, SQLite JDBC
-3.53.2.1, and Node.js 24 for the Docusaurus site. JavaFX is resolved by the
+3.53.4.0, and Node.js 24 for the Docusaurus site. JavaFX is resolved by the
 Gradle plugin; a separate JavaFX SDK is not required.
 
 Run the desktop application or the Java quality gate from the repository root:
