@@ -643,12 +643,15 @@ public final class ReceptionistView {
                         reportPatient.getText(),
                         reportDoctor.getValue() == null ? null : reportDoctor.getValue().id(),
                         selectedPaymentMethod(reportMethod.getValue()));
+            String summary = formatRevenueSummary(report);
             currentReport[0] = report;
             reportRows.setItems(FXCollections.observableArrayList(report.receipts()));
-            reportSummary.setText(formatRevenueSummary(report));
+            reportSummary.setText(summary);
             UiComponents.showMessage(feedback, "Revenue report generated");
           } catch (ValidationException | AuthorizationException exception) {
             UiComponents.showError(feedback, exception.getMessage());
+          } catch (ArithmeticException exception) {
+            UiComponents.showError(feedback, "Revenue total exceeds the supported range");
           } catch (SQLException exception) {
             UiComponents.showError(feedback, "Revenue report is temporarily unavailable");
           }
@@ -1349,6 +1352,8 @@ public final class ReceptionistView {
       UiComponents.showMessage(feedback, "Revenue report exported");
     } catch (java.io.IOException exception) {
       UiComponents.showError(feedback, "Revenue report export failed");
+    } catch (ArithmeticException exception) {
+      UiComponents.showError(feedback, "Revenue total exceeds the supported range");
     }
   }
 

@@ -32,31 +32,31 @@ public record RevenueReport(List<Receipt> receipts) {
    * Returns the total amount in minor currency units.
    *
    * @return sum of receipt amounts
+   * @throws ArithmeticException if the total exceeds the supported {@code long} range
    */
   public long totalMinor() {
-    return receipts.stream().mapToLong(Receipt::amountMinor).sum();
+    return receipts.stream().mapToLong(Receipt::amountMinor).reduce(0L, Math::addExact);
   }
 
   /**
    * Returns successful receipt counts grouped by payment method.
    *
    * @return payment methods mapped to their total amount in minor units
+   * @throws ArithmeticException if a grouped total exceeds the supported {@code long} range
    */
   public Map<PaymentMethod, Long> byMethod() {
     return receipts.stream()
-        .collect(
-            Collectors.groupingBy(Receipt::method, Collectors.summingLong(Receipt::amountMinor)));
+        .collect(Collectors.toMap(Receipt::method, Receipt::amountMinor, Math::addExact));
   }
 
   /**
    * Returns successful receipt totals grouped by Doctor name.
    *
    * @return doctor display names mapped to their total amount in minor units
+   * @throws ArithmeticException if a grouped total exceeds the supported {@code long} range
    */
   public Map<String, Long> byDoctor() {
     return receipts.stream()
-        .collect(
-            Collectors.groupingBy(
-                Receipt::doctorName, Collectors.summingLong(Receipt::amountMinor)));
+        .collect(Collectors.toMap(Receipt::doctorName, Receipt::amountMinor, Math::addExact));
   }
 }
