@@ -27,11 +27,27 @@ six seconds.
 
 ### Installation
 
-Tagged releases publish native installers for Windows (`.msi`), macOS
-(`.dmg`), and Linux (`.deb`) as GitHub Release assets. Download the installer
+Tagged releases publish native installers and fat JARs as GitHub Release
+assets. The native installers are the easiest option: download the installer
 for your platform from the repository's Releases page and run it; no separate
-Java installation is required, since the installer bundles a matching Java
-runtime. To build and run from source instead, see **First launch** below.
+Java installation is required, since each installer bundles a matching Java
+runtime. The release provides Windows x64 (`.msi`), Windows ARM64 compatibility
+(`.msi`, an x64 package for Windows emulation), Linux x64/ARM64 (`.deb`), and
+macOS x64/ARM64 (`.dmg`) installers.
+
+The release also provides one platform-specific fat JAR beside each installer
+and one convenience JAR named `NUSynapxe-<version>.jar`. The convenience JAR
+includes JavaFX runtime files for Windows x64, Linux x64, and macOS ARM64. It
+requires Java 25 on the machine and can be started with:
+
+```text
+java --version
+java -jar NUSynapxe-<version>.jar
+```
+
+Use the matching platform-specific fat JAR for macOS x64, Linux ARM64, or
+Windows ARM64 compatibility, or use a native installer instead. To build and
+run from source, see **First launch** below.
 
 ### First launch
 

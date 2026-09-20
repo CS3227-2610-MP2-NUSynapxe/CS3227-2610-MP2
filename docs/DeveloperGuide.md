@@ -671,15 +671,43 @@ Gradle plugin. The finished installer is copied to
 `.msi` on Windows requires the [WiX Toolset](https://wixtoolset.org) v3+ on
 `PATH`.
 
-`.github/workflows/release.yml` runs this task on a matrix of
-`windows-latest`, `macos-latest`, and `ubuntu-latest` runners whenever a tag
-matching `vX.Y.Z` is pushed. Each job re-runs the quality gate for its
-platform (macOS skips the TestFX-dependent `check`/`jacocoTestReport` tasks
-because there is no `xvfb` equivalent there), builds its installer, and
-uploads it as a workflow artifact. A final `publish` job downloads all three
-installers and attaches them to a GitHub Release for that tag using
-`softprops/action-gh-release`, with auto-generated release notes. To cut a
-release, push a tag from `master`:
+The `fatJar` task builds the current host's platform-specific executable JAR:
+
+```powershell
+.\gradlew.bat fatJar "-PreleaseVersion=0.1.0" --no-daemon
+```
+
+It writes `build/libs/NUSynapxe-<version>-fat.jar`. The JAR contains the
+application, its non-JavaFX runtime dependencies, and the JavaFX modules for
+the host platform. It requires a matching Java 25 runtime when it is run
+outside a native installer.
+
+The `universalFatJar` task assembles one additional executable JAR for the
+three explicitly supported targets Windows x64, Linux x64, and macOS ARM64:
+
+```powershell
+.\gradlew.bat universalFatJar "-PreleaseVersion=0.1.0" --no-daemon
+```
+
+It writes `build/libs/NUSynapxe-<version>.jar`. This task excludes the host's
+JavaFX artifacts and embeds the JavaFX `win`, `linux`, and `mac-aarch64`
+artifacts in a deterministic order, together with the application and its
+other runtime dependencies. Because JavaFX contains native libraries, this is
+not a platform-neutral Java-only JAR: it requires Java 25 and is limited to
+those three OS/architecture combinations. Use a platform-specific fat JAR or
+native installer for the other targets.
+
+`.github/workflows/release.yml` runs the native packaging and platform-specific
+fat JAR task on six explicit Windows/Linux/macOS x64 and ARM64 targets whenever
+a tag matching `vX.Y.Z` is pushed. The Windows ARM64 job intentionally uses an
+x64 Java/JavaFX build for Windows ARM emulation. A separate Windows x64 job
+builds the universal JAR. Each target uploads one installer and one JAR; the
+universal job uploads the additional `NUSynapxe-<version>.jar`. The final
+`publish` job verifies and attaches 13 files to the GitHub Release: six native
+installers, six platform-specific fat JARs, and the one universal JAR. macOS
+jobs compile tests and run static checks but skip the TestFX runtime suite
+because there is no `xvfb` equivalent there. To cut a release, push a tag from
+`master`:
 
 ```bash
 git tag v0.2.0
@@ -715,6 +743,9 @@ and build configuration rather than an earlier design draft.
   explicit Doctor time off enforce availability.
 - Native installers are not code-signed or notarized, so operating systems may
   display a publisher or trust warning.
+- The universal JAR requires Java 25 and embeds native JavaFX files for Windows
+  x64, Linux x64, and macOS ARM64 only; it is not a replacement for the
+  platform-specific JARs or native installers on other targets.
 - Hosted macOS release jobs compile tests and run static checks but do not run
   the TestFX runtime suite because the workflow has no Xvfb equivalent.
 

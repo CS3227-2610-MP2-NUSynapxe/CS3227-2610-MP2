@@ -1,4 +1,4 @@
-name: Release desktop installers
+name: Release desktop artifacts
 
 on:
   push:
@@ -32,22 +32,43 @@ jobs:
           fi
 
   package:
-    name: Package ${{ matrix.platform }}
+    name: Package ${{ matrix.artifact_suffix }}
     needs: prepare-release
     if: needs.prepare-release.outputs.is-release == 'true'
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          - os: windows-2025
             platform: windows
             extension: msi
-          - os: macos-latest
-            platform: macos
-            extension: dmg
-          - os: ubuntu-latest
+            artifact_suffix: windows-x64
+            jdk_architecture: x64
+          - os: windows-11-vs2026-arm
+            platform: windows
+            extension: msi
+            artifact_suffix: windows-arm64-compat
+            jdk_architecture: x64
+          - os: ubuntu-24.04
             platform: linux
             extension: deb
+            artifact_suffix: linux-x64
+            jdk_architecture: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            extension: deb
+            artifact_suffix: linux-arm64
+            jdk_architecture: aarch64
+          - os: macos-15-intel
+            platform: macos
+            extension: dmg
+            artifact_suffix: macos-x64
+            jdk_architecture: x64
+          - os: macos-15
+            platform: macos
+            extension: dmg
+            artifact_suffix: macos-arm64
+            jdk_architecture: aarch64
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -60,6 +81,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+          architecture: ${{ matrix.jdk_architecture }}
           cache: gradle
 
       - name: Install WiX Toolset
@@ -74,37 +96,122 @@ jobs:
       - name: Verify and package on Windows
         if: runner.os == 'Windows'
         shell: pwsh
-        run: .\gradlew.bat spotlessCheck check jacocoTestReport javadoc packageNative "-PreleaseVersion=${{ needs.prepare-release.outputs.version }}" --no-daemon
+        run: .\gradlew.bat spotlessCheck check jacocoTestReport javadoc packageNative fatJar "-PreleaseVersion=${{ needs.prepare-release.outputs.version }}" --no-daemon
 
       - name: Verify and package on macOS
         if: runner.os == 'macOS'
-        run: ./gradlew spotlessCheck checkstyleMain checkstyleTest pmdMain compileTestJava javadoc packageNative -PreleaseVersion=${{ needs.prepare-release.outputs.version }} --no-daemon
+        run: ./gradlew spotlessCheck checkstyleMain checkstyleTest pmdMain compileTestJava javadoc packageNative fatJar -PreleaseVersion=${{ needs.prepare-release.outputs.version }} --no-daemon
 
       - name: Verify and package on Ubuntu
         if: runner.os == 'Linux'
-        run: xvfb-run --auto-servernum ./gradlew spotlessCheck check jacocoTestReport javadoc packageNative -PreleaseVersion=${{ needs.prepare-release.outputs.version }} --no-daemon
+        run: xvfb-run --auto-servernum ./gradlew spotlessCheck check jacocoTestReport javadoc packageNative fatJar -PreleaseVersion=${{ needs.prepare-release.outputs.version }} --no-daemon
 
-      - name: Upload native installer
+      - name: Stage release assets on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = '${{ needs.prepare-release.outputs.version }}'
+          $suffix = '${{ matrix.artifact_suffix }}'
+          $assetDirectory = 'release-assets'
+          New-Item -ItemType Directory -Path $assetDirectory -Force | Out-Null
+          Copy-Item "build/packages/NUSynapxe-$version-${{ matrix.platform }}.${{ matrix.extension }}" `
+            "$assetDirectory/NUSynapxe-$version-$suffix.${{ matrix.extension }}"
+          Copy-Item "build/libs/NUSynapxe-$version-fat.jar" `
+            "$assetDirectory/NUSynapxe-$version-$suffix.jar"
+
+      - name: Stage release assets on Unix
+        if: runner.os != 'Windows'
+        run: |
+          version='${{ needs.prepare-release.outputs.version }}'
+          suffix='${{ matrix.artifact_suffix }}'
+          mkdir -p release-assets
+          cp "build/packages/NUSynapxe-${version}-${{ matrix.platform }}.${{ matrix.extension }}" \
+            "release-assets/NUSynapxe-${version}-${suffix}.${{ matrix.extension }}"
+          cp "build/libs/NUSynapxe-${version}-fat.jar" \
+            "release-assets/NUSynapxe-${version}-${suffix}.jar"
+
+      - name: Upload installer and fat JAR
         uses: actions/upload-artifact@v7
         with:
-          name: NUSynapxe-${{ needs.prepare-release.outputs.version }}-${{ matrix.platform }}
-          path: build/packages/NUSynapxe-${{ needs.prepare-release.outputs.version }}-${{ matrix.platform }}.${{ matrix.extension }}
+          name: NUSynapxe-${{ needs.prepare-release.outputs.version }}-${{ matrix.artifact_suffix }}
+          path: release-assets/*
+          if-no-files-found: error
+
+  universal-jar:
+    name: Package universal JAR
+    needs: prepare-release
+    if: needs.prepare-release.outputs.is-release == 'true'
+    runs-on: windows-2025
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+          architecture: x64
+          cache: gradle
+
+      - name: Build universal JAR
+        shell: pwsh
+        run: .\gradlew.bat universalFatJar "-PreleaseVersion=${{ needs.prepare-release.outputs.version }}" --no-daemon
+
+      - name: Upload universal JAR
+        uses: actions/upload-artifact@v7
+        with:
+          name: NUSynapxe-${{ needs.prepare-release.outputs.version }}-universal
+          path: build/libs/NUSynapxe-${{ needs.prepare-release.outputs.version }}.jar
           if-no-files-found: error
 
   publish:
     name: Publish GitHub Release
-    needs: [prepare-release, package]
-    if: needs.prepare-release.outputs.is-release == 'true' && needs.package.result == 'success'
+    needs: [prepare-release, package, universal-jar]
+    if: needs.prepare-release.outputs.is-release == 'true' && needs.package.result == 'success' && needs.universal-jar.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Download all native installers
+      - name: Download all installers and fat JARs
         uses: actions/download-artifact@v8
         with:
           path: release-assets
           pattern: NUSynapxe-${{ needs.prepare-release.outputs.version }}-*
           merge-multiple: true
+
+      - name: Verify release asset count and names
+        shell: bash
+        run: |
+          version='${{ needs.prepare-release.outputs.version }}'
+          expected=(
+            "NUSynapxe-${version}.jar"
+            "NUSynapxe-${version}-windows-x64.msi"
+            "NUSynapxe-${version}-windows-x64.jar"
+            "NUSynapxe-${version}-windows-arm64-compat.msi"
+            "NUSynapxe-${version}-windows-arm64-compat.jar"
+            "NUSynapxe-${version}-linux-x64.deb"
+            "NUSynapxe-${version}-linux-x64.jar"
+            "NUSynapxe-${version}-linux-arm64.deb"
+            "NUSynapxe-${version}-linux-arm64.jar"
+            "NUSynapxe-${version}-macos-x64.dmg"
+            "NUSynapxe-${version}-macos-x64.jar"
+            "NUSynapxe-${version}-macos-arm64.dmg"
+            "NUSynapxe-${version}-macos-arm64.jar"
+          )
+          actual_count=$(find release-assets -maxdepth 1 -type f | wc -l)
+          if [[ "$actual_count" -ne "${#expected[@]}" ]]; then
+            echo "Expected ${#expected[@]} release assets, found $actual_count."
+            exit 1
+          fi
+          for asset in "${expected[@]}"; do
+            if [[ ! -f "release-assets/$asset" ]]; then
+              echo "Missing release asset: $asset"
+              exit 1
+            fi
+          done
 
       - name: Create or update release
         uses: softprops/action-gh-release@v3
