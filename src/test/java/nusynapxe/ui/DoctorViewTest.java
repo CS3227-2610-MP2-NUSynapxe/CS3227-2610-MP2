@@ -470,6 +470,87 @@ final class DoctorViewTest extends ApplicationTest {
   }
 
   @Test
+  void doctorOpensReadOnlyClinicalHistoryFromPatientsAndDashboard() throws SQLException {
+    addPatientHistory();
+
+    loginAsDoctor();
+    selectDashboardAppointment(1);
+    verifyThat("#doctor-view-patient-history", isVisible());
+    fire("#doctor-view-patient-history");
+
+    verifyThat("#doctor-patients-page", isVisible());
+    verifyThat("#doctor-clinical-history-view", isVisible());
+    verifyThat("#doctor-history-list", isVisible());
+    assertEquals(
+        1,
+        lookup("#doctor-history-list")
+            .queryAs(javafx.scene.control.ListView.class)
+            .getItems()
+            .size());
+    assertTrue(
+        lookup("#doctor-history-list").queryAs(javafx.scene.control.ListView.class).getHeight()
+            >= 180.0,
+        "Consultation history list should have enough height to show multiple records");
+    verifyThat("#doctor-history-diagnosis", isVisible());
+    assertFalse(lookup("#doctor-history-diagnosis").queryAs(TextInputControl.class).isEditable());
+    assertTrue(
+        lookup("#doctor-history-diagnosis").queryAs(TextInputControl.class).getHeight() >= 72.0,
+        "Diagnosis field should show several lines of text");
+    assertFalse(
+        lookup("#doctor-history-consultation-notes").queryAs(TextInputControl.class).isEditable());
+    assertTrue(
+        lookup("#doctor-history-consultation-notes").queryAs(TextInputControl.class).getHeight()
+            >= 72.0,
+        "Consultation notes field should show several lines of text");
+    assertFalse(lookup("#doctor-history-follow-up").queryAs(TextInputControl.class).isEditable());
+    assertTrue(
+        lookup("#doctor-history-follow-up").queryAs(TextInputControl.class).getHeight() >= 72.0,
+        "Follow-up notes field should show several lines of text");
+    assertEquals(
+        1,
+        lookup("#doctor-history-prescription-list")
+            .queryAs(javafx.scene.control.ListView.class)
+            .getItems()
+            .size());
+    assertTrue(
+        lookup("#doctor-history-prescription-list")
+                .queryAs(javafx.scene.control.ListView.class)
+                .getHeight()
+            >= 96.0,
+        "Prescription list should have enough height to show its rows");
+    assertTrue(lookup("#doctor-history-save").tryQuery().isEmpty());
+    assertTrue(lookup("#doctor-history-edit").tryQuery().isEmpty());
+
+    fire("#doctor-nav-patients");
+    verifyThat("#doctor-patient-directory-view", isVisible());
+    fire("#doctor-patient-clinical-history");
+    verifyThat("#doctor-clinical-history-view", isVisible());
+  }
+
+  @Test
+  void clinicalHistoryShowsAnExplicitEmptyStateForPatientsWithoutCompletedConsultations()
+      throws SQLException {
+    loginAsDoctor();
+    fire("#doctor-nav-patients");
+    fire("#doctor-patient-clinical-history");
+
+    SearchSuggestionField<Patient> selector = historySelector();
+    Patient patientWithoutHistory = services.patientService().getAdministrative(doctorSession(), 2);
+    interact(() -> selector.select(patientWithoutHistory));
+    fire("#doctor-history-load");
+
+    assertEquals(
+        "No completed consultations found for this patient.",
+        lookup("#doctor-history-state").queryAs(Label.class).getText());
+    assertTrue(
+        lookup("#doctor-history-list")
+            .queryAs(javafx.scene.control.ListView.class)
+            .getItems()
+            .isEmpty());
+    verifyThat("#doctor-history-detail-empty", isVisible());
+  }
+
+  @Test
   void pendingRescheduleOpensTheCalendarAppointmentEditor() throws SQLException {
     Appointment pending = createAvailableAppointment("Reschedule", "Patient");
 
@@ -696,6 +777,11 @@ final class DoctorViewTest extends ApplicationTest {
 
   private void setText(String selector, String value) {
     interact(() -> lookup(selector).queryAs(TextInputControl.class).setText(value));
+  }
+
+  @SuppressWarnings("unchecked")
+  private SearchSuggestionField<Patient> historySelector() {
+    return (SearchSuggestionField<Patient>) lookup("#doctor-history-patient").query();
   }
 
   @SuppressWarnings("unchecked")

@@ -5,9 +5,13 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import nusynapxe.domain.Appointment;
+import nusynapxe.domain.AppointmentStatus;
+import nusynapxe.domain.ClinicalHistoryEntry;
 import nusynapxe.domain.ClinicalRecord;
 import nusynapxe.domain.Prescription;
 
@@ -127,6 +131,47 @@ public final class ClinicalRecordRepository {
     }
   }
 
+  /**
+   * Returns terminal consultation history for one patient, newest appointment first.
+   *
+   * <p>The projection intentionally joins appointment and assigned Doctor context here so callers
+   * cannot accidentally display an in-progress consultation or lose the Doctor attribution.
+   *
+   * @param patientId patient identifier
+   * @return immutable terminal consultation history ordered by appointment timestamp and id
+   * @throws SQLException if the query fails
+   */
+  public List<ClinicalHistoryEntry> findHistoryByPatient(long patientId) throws SQLException {
+    String sql =
+        "SELECT c.id AS record_id, c.patient_id AS record_patient_id, "
+            + "c.appointment_id AS record_appointment_id, c.doctor_id AS record_doctor_id, "
+            + "c.diagnosis, c.consultation_notes, c.follow_up_notes, "
+            + "a.id AS appointment_id, a.patient_id AS appointment_patient_id, "
+            + "a.doctor_id AS appointment_doctor_id, a.starts_at, a.ends_at, a.status, "
+            + "u.display_name AS doctor_name "
+            + "FROM clinical_records c "
+            + "JOIN appointments a ON a.id = c.appointment_id "
+            + "JOIN users u ON u.id = a.doctor_id "
+            + "WHERE c.patient_id = ? AND a.status IN ('COMPLETED', 'CHECKED_OUT') "
+            + "ORDER BY a.starts_at DESC, a.id DESC";
+    try (PreparedStatement statement = database.connection().prepareStatement(sql)) {
+      statement.setLong(1, patientId);
+      try (ResultSet resultSet = statement.executeQuery()) {
+        List<ClinicalHistoryEntry> history = new ArrayList<>();
+        while (resultSet.next()) {
+          ClinicalRecord record = readHistoryRecord(resultSet);
+          history.add(
+              new ClinicalHistoryEntry(
+                  readHistoryAppointment(resultSet),
+                  resultSet.getString("doctor_name"),
+                  record,
+                  findPrescriptions(record.id())));
+        }
+        return List.copyOf(history);
+      }
+    }
+  }
+
   private static ClinicalRecord insertRecord(java.sql.Connection connection, ClinicalRecord record)
       throws SQLException {
     String sql =
@@ -189,6 +234,27 @@ public final class ClinicalRecordRepository {
         resultSet.getString("diagnosis"),
         resultSet.getString("consultation_notes"),
         resultSet.getString("follow_up_notes"));
+  }
+
+  private static ClinicalRecord readHistoryRecord(ResultSet resultSet) throws SQLException {
+    return new ClinicalRecord(
+        resultSet.getLong("record_id"),
+        resultSet.getLong("record_patient_id"),
+        resultSet.getLong("record_appointment_id"),
+        resultSet.getLong("record_doctor_id"),
+        resultSet.getString("diagnosis"),
+        resultSet.getString("consultation_notes"),
+        resultSet.getString("follow_up_notes"));
+  }
+
+  private static Appointment readHistoryAppointment(ResultSet resultSet) throws SQLException {
+    return new Appointment(
+        resultSet.getLong("appointment_id"),
+        resultSet.getLong("appointment_patient_id"),
+        resultSet.getLong("appointment_doctor_id"),
+        SqliteQueries.parseTimestamp(resultSet.getString("starts_at")),
+        SqliteQueries.parseTimestamp(resultSet.getString("ends_at")),
+        AppointmentStatus.valueOf(resultSet.getString("status")));
   }
 
   private static Prescription readPrescription(ResultSet resultSet) throws SQLException {

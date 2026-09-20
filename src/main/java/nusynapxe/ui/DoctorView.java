@@ -107,6 +107,20 @@ public final class DoctorView {
     selectionSummary.setId("doctor-selected-appointment");
     selectionSummary.getStyleClass().add("selection-summary");
     selectionSummary.setWrapText(true);
+    ClinicalHistoryView clinicalHistoryView =
+        ClinicalHistoryView.create(services, session, feedback);
+    Runnable[] showHistoryHolder = new Runnable[1];
+    Button viewPatientHistory =
+        UiComponents.secondaryButton("View consultation history", "doctor-view-patient-history");
+    viewPatientHistory.setOnAction(
+        event -> {
+          if (selection.patientId == 0) {
+            UiComponents.showError(feedback, APPOINTMENT_REQUIRED);
+            return;
+          }
+          clinicalHistoryView.showPatient(selection.patientId);
+          showHistoryHolder[0].run();
+        });
     Label noSelection =
         UiComponents.emptyState(
             "doctor-no-selection",
@@ -322,7 +336,8 @@ public final class DoctorView {
             diagnosis,
             consultationNotes,
             followUpNotes,
-            prescriptions);
+            prescriptions,
+            viewPatientHistory);
     nodesHolder[0] = nodes;
     updateSelectionState(selection, nodes, null, null);
 
@@ -355,8 +370,13 @@ public final class DoctorView {
             session,
             "doctor",
             feedback,
-            ignoredPatientId -> dashboardHolder[0].refresh());
-    ScrollPane patientsPage = new ScrollPane(patientDirectory.view());
+            ignoredPatientId -> dashboardHolder[0].refresh(),
+            () -> showHistoryHolder[0].run());
+    setVisibleManaged(clinicalHistoryView.view(), false);
+    StackPane patientPages = new StackPane(patientDirectory.view(), clinicalHistoryView.view());
+    patientPages.setId("doctor-patient-pages");
+    patientPages.setMaxHeight(Double.MAX_VALUE);
+    ScrollPane patientsPage = new ScrollPane(patientPages);
     patientsPage.setId("doctor-patients-page");
     patientsPage.setFitToWidth(true);
     patientsPage.setFitToHeight(true);
@@ -375,6 +395,25 @@ public final class DoctorView {
         new VBox(0, navigationTitle, dashboardNavigation, patientsNavigation, calendarNavigation);
     navigation.setId("doctor-navigation");
     DoctorCalendarSettingsView[] settingsHolder = new DoctorCalendarSettingsView[1];
+    Runnable showDirectory =
+        () -> {
+          setVisibleManaged(patientDirectory.view(), true);
+          setVisibleManaged(clinicalHistoryView.view(), false);
+          patientDirectory.refresh();
+          clinicalHistoryView.refreshPatients();
+        };
+    Runnable showClinicalHistory =
+        () -> {
+          dashboardHolder[0].hide();
+          calendarHolder[0].hide();
+          setVisibleManaged(patientDirectory.view(), false);
+          setVisibleManaged(clinicalHistoryView.view(), true);
+          pages.getChildren().setAll(patientsPage);
+          patientsNavigation.getStyleClass().add(ACTIVE_NAVIGATION_STYLE);
+          dashboardNavigation.getStyleClass().remove(ACTIVE_NAVIGATION_STYLE);
+          calendarNavigation.getStyleClass().remove(ACTIVE_NAVIGATION_STYLE);
+        };
+    showHistoryHolder[0] = showClinicalHistory;
     Runnable showCalendar =
         () -> {
           dashboardHolder[0].hide();
@@ -410,7 +449,7 @@ public final class DoctorView {
         event -> {
           calendarHolder[0].hide();
           dashboardHolder[0].hide();
-          patientDirectory.refresh();
+          showDirectory.run();
           pages.getChildren().setAll(patientsPage);
           patientsNavigation.getStyleClass().add(ACTIVE_NAVIGATION_STYLE);
           dashboardNavigation.getStyleClass().remove(ACTIVE_NAVIGATION_STYLE);
@@ -491,7 +530,10 @@ public final class DoctorView {
     nodes
         .patientDetailsCard()
         .getChildren()
-        .setAll(UiComponents.sectionHeading("Patient details"), patientDetails);
+        .setAll(
+            UiComponents.sectionHeading("Patient details"),
+            patientDetails,
+            UiComponents.actionBar(nodes.viewPatientHistory()));
     nodes.selectedContent().getChildren().add(nodes.patientDetailsCard());
 
     switch (appointment.status()) {
@@ -634,6 +676,7 @@ public final class DoctorView {
     Appointment appointment = resolvedAppointment.orElse(null);
     Patient patient = resolvedPatient.orElse(null);
     selection.appointmentId = appointment == null || patient == null ? 0 : appointment.id();
+    selection.patientId = patient == null ? 0 : patient.id();
     updateSelectionState(selection, nodes, appointment, patient);
     boolean clinicalLoaded =
         loadClinical(
@@ -756,11 +799,13 @@ public final class DoctorView {
       TextField diagnosis,
       TextArea consultationNotes,
       TextArea followUpNotes,
-      ListView<Prescription> prescriptions) {
+      ListView<Prescription> prescriptions,
+      Button viewPatientHistory) {
     // Record components define the complete selected-pane node bundle.
   }
 
   private static final class SelectionState {
     private long appointmentId;
+    private long patientId;
   }
 }

@@ -6,8 +6,10 @@ import java.util.Objects;
 import java.util.Optional;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
+import nusynapxe.domain.ClinicalHistoryEntry;
 import nusynapxe.domain.ClinicalRecord;
 import nusynapxe.domain.Prescription;
+import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
 import nusynapxe.persistence.AppointmentRepository;
 import nusynapxe.persistence.ClinicalRecordRepository;
@@ -45,6 +47,38 @@ public final class ClinicalService {
     Appointment appointment = appointment(appointmentId);
     Authorization.requireDoctorOwnership(actor, appointment.doctorId());
     return clinicalRecords.findByAppointment(appointmentId);
+  }
+
+  /**
+   * Returns a completed consultation for any authenticated Doctor.
+   *
+   * @param actor authenticated Doctor session
+   * @param appointmentId appointment identifier
+   * @return the terminal clinical record, or empty when no record was saved
+   * @throws AuthorizationException if the actor is not a Doctor or the consultation is not
+   *     completed
+   * @throws SQLException if the appointment or clinical record query fails
+   * @throws ValidationException if the appointment does not exist
+   */
+  public Optional<ClinicalRecord> findForDoctorHistory(Session actor, long appointmentId)
+      throws SQLException {
+    Appointment appointment = terminalClinicalAppointment(actor, appointmentId);
+    return clinicalRecords.findByAppointment(appointment.id());
+  }
+
+  /**
+   * Lists all terminal consultation history for a patient for any authenticated Doctor.
+   *
+   * @param actor authenticated Doctor session
+   * @param patientId patient identifier
+   * @return immutable history entries ordered newest first
+   * @throws AuthorizationException if the actor is not a Doctor
+   * @throws SQLException if the history query fails
+   */
+  public List<ClinicalHistoryEntry> historyForDoctor(Session actor, long patientId)
+      throws SQLException {
+    Authorization.requireRole(actor, Role.DOCTOR);
+    return clinicalRecords.findHistoryByPatient(patientId);
   }
 
   /**
@@ -145,6 +179,38 @@ public final class ClinicalService {
             .findByAppointment(appointmentId)
             .orElseThrow(() -> new ValidationException("Clinical record does not exist"));
     return clinicalRecords.findPrescriptions(record.id());
+  }
+
+  /**
+   * Lists prescriptions for a completed consultation for any authenticated Doctor.
+   *
+   * @param actor authenticated Doctor session
+   * @param appointmentId appointment identifier
+   * @return immutable prescription list
+   * @throws AuthorizationException if the actor is not a Doctor or the consultation is not
+   *     completed
+   * @throws SQLException if the appointment or prescription query fails
+   * @throws ValidationException if the appointment or clinical record does not exist
+   */
+  public List<Prescription> prescriptionsForDoctorHistory(Session actor, long appointmentId)
+      throws SQLException {
+    Appointment appointment = terminalClinicalAppointment(actor, appointmentId);
+    ClinicalRecord record =
+        clinicalRecords
+            .findByAppointment(appointment.id())
+            .orElseThrow(() -> new ValidationException("Clinical record does not exist"));
+    return clinicalRecords.findPrescriptions(record.id());
+  }
+
+  private Appointment terminalClinicalAppointment(Session actor, long appointmentId)
+      throws SQLException {
+    Authorization.requireRole(actor, Role.DOCTOR);
+    Appointment appointment = appointment(appointmentId);
+    if (appointment.status() != AppointmentStatus.COMPLETED
+        && appointment.status() != AppointmentStatus.CHECKED_OUT) {
+      throw new AuthorizationException("Only completed consultations can be viewed in history");
+    }
+    return appointment;
   }
 
   private Appointment checkedInOrLater(long appointmentId) throws SQLException {

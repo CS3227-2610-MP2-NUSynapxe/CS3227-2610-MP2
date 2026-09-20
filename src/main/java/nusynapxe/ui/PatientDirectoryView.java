@@ -65,7 +65,8 @@ final class PatientDirectoryView {
       Session session,
       String prefix,
       Label workspaceFeedback,
-      LongConsumer onPatientChanged) {
+      LongConsumer onPatientChanged,
+      Runnable onClinicalHistoryRequested) {
     this.services = Objects.requireNonNull(services, "services");
     this.session = Objects.requireNonNull(session, "session");
     this.prefix = requirePrefix(prefix);
@@ -116,8 +117,16 @@ final class PatientDirectoryView {
     patientSearchBar.setId(prefix + "-patient-search-bar");
     patientSearchBar.getStyleClass().add("patient-directory-search-bar");
     Button openRegistration = button("Register new patient", prefix + "-patient-open-register");
-    directoryContent =
-        new VBox(10, patientSearchBar, patientTable, UiComponents.actionBar(openRegistration));
+    HBox directoryActions;
+    if (onClinicalHistoryRequested == null) {
+      directoryActions = UiComponents.actionBar(openRegistration);
+    } else {
+      Button openClinicalHistory =
+          button("Consultation history", prefix + "-patient-clinical-history");
+      openClinicalHistory.setOnAction(event -> onClinicalHistoryRequested.run());
+      directoryActions = UiComponents.actionBar(openRegistration, openClinicalHistory);
+    }
+    directoryContent = new VBox(10, patientSearchBar, patientTable, directoryActions);
     directoryContent.setId(prefix + "-patient-directory-view");
     directoryContent.setMaxHeight(Double.MAX_VALUE);
     VBox.setVgrow(patientTable, Priority.ALWAYS);
@@ -172,8 +181,25 @@ final class PatientDirectoryView {
       String prefix,
       Label workspaceFeedback,
       LongConsumer onPatientChanged) {
+    return create(services, session, prefix, workspaceFeedback, onPatientChanged, null);
+  }
+
+  /** Creates a directory with an optional Doctor clinical-history action. */
+  static PatientDirectoryView create(
+      ClinicServices services,
+      Session session,
+      String prefix,
+      Label workspaceFeedback,
+      LongConsumer onPatientChanged,
+      Runnable onClinicalHistoryRequested) {
     PatientDirectoryView view =
-        new PatientDirectoryView(services, session, prefix, workspaceFeedback, onPatientChanged);
+        new PatientDirectoryView(
+            services,
+            session,
+            prefix,
+            workspaceFeedback,
+            onPatientChanged,
+            onClinicalHistoryRequested);
     view.refresh();
     return view;
   }
