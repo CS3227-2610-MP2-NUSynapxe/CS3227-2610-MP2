@@ -231,6 +231,8 @@ def jpackageVersion = { String type ->
     return type == 'dmg' && version.startsWith('0.') ? "1.${version.substring(2)}" : version
 }
 
+def executableJarMainClass = 'nusynapxe.NUSynapxeLauncher'
+
 tasks.register('fatJar', Jar) {
     group = 'distribution'
     description = 'Builds a platform-specific executable JAR containing the application runtime dependencies.'
@@ -250,7 +252,7 @@ tasks.register('fatJar', Jar) {
     exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'META-INF/INDEX.LIST'
     manifest {
         attributes([
-            'Main-Class': application.mainClass.get(),
+            'Main-Class': executableJarMainClass,
             'Enable-Native-Access': 'ALL-UNNAMED'
         ])
     }
@@ -282,7 +284,7 @@ tasks.register('universalFatJar', Jar) {
     exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'META-INF/INDEX.LIST'
     manifest {
         attributes([
-            'Main-Class': application.mainClass.get(),
+            'Main-Class': executableJarMainClass,
             'Enable-Native-Access': 'ALL-UNNAMED'
         ])
     }
