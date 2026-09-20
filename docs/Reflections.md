@@ -10,4 +10,4 @@ during the development of NUSynapxe.
 Paul's completed reflection discusses how the agent was configured, detailed
 skill examples from implementation and testing, limitations encountered, and
 lessons learned from applying Agentic Software Engineering in a production-like
-Java desktop project. John's linked file is ready for his individual account.
+Java desktop project. John's reflection covers his Doctor and System Admin contributions and how OpenSpec, Superpowers, JavaFX verification, domain constraints, and quality gates shaped his use of Codex.
