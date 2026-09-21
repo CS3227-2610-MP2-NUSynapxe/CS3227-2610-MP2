@@ -265,6 +265,42 @@ The author checklist should be completed before requesting review. Reviewers
 should be able to distinguish what was verified locally from what still needs
 manual or remote confirmation.
 
+## Commit messages
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) for every
+commit:
+
+```text
+<type>(<optional scope>): <short imperative description>
+```
+
+Use a lowercase type and choose the type that best describes the change:
+
+- `feat`: add user-visible functionality;
+- `fix`: correct a defect;
+- `docs`: change documentation;
+- `test`: add or change tests;
+- `refactor`: change code structure without changing behaviour;
+- `perf`: improve performance;
+- `build`: change dependencies or build configuration;
+- `ci`: change continuous-integration workflows;
+- `chore`: make maintenance changes; or
+- `revert`: revert an earlier commit.
+
+Keep the subject concise and imperative, and use the optional scope for the
+affected area, such as `doctor`, `receptionist`, `calendar`, `persistence`, or
+`docs`. Add a blank-line-separated body when the motivation or trade-offs need
+more explanation. Mark breaking changes with `!` after the type or scope and
+describe the impact in a `BREAKING CHANGE:` footer.
+
+Examples:
+
+```text
+fix(calendar): stabilize midnight-sensitive dashboard tests
+docs: document Conventional Commit requirements
+feat(receptionist): support patient booking suggestions
+```
+
 ## Security and privacy requirements
 
 Never commit:
