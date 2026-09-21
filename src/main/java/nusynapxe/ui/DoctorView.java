@@ -1,9 +1,11 @@
 package nusynapxe.ui;
 
 import java.sql.SQLException;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
@@ -57,6 +59,12 @@ public final class DoctorView {
    * @throws NullPointerException if an argument is {@code null}
    */
   public static Parent create(ClinicServices services, Session session, Runnable onLogout) {
+    return create(services, session, onLogout, Clock.system(CalendarService.CLINIC_ZONE));
+  }
+
+  static Parent create(ClinicServices services, Session session, Runnable onLogout, Clock clock) {
+    Clock clinicClock =
+        Objects.requireNonNull(clock, "clock").withZone(CalendarService.CLINIC_ZONE);
     SelectionState selection = new SelectionState();
 
     Button accept = UiComponents.primaryButton("Accept", "doctor-accept");
@@ -339,7 +347,7 @@ public final class DoctorView {
             prescriptions,
             viewPatientHistory);
     nodesHolder[0] = nodes;
-    updateSelectionState(selection, nodes, null, null);
+    updateSelectionState(selection, nodes, null, null, clinicClock);
 
     dashboardHolder[0] =
         new DoctorDashboardDayView(
@@ -348,7 +356,14 @@ public final class DoctorView {
             feedback,
             calendarAppointment ->
                 selectDashboardAppointment(
-                    services, session, calendarAppointment, selection, nodes, feedback));
+                    services,
+                    session,
+                    calendarAppointment,
+                    selection,
+                    nodes,
+                    feedback,
+                    clinicClock),
+            clinicClock);
     VBox scheduleCard =
         UiComponents.card(
             "doctor-schedule-card",
@@ -485,7 +500,11 @@ public final class DoctorView {
   }
 
   private static void updateSelectionState(
-      SelectionState selection, SelectionNodes nodes, Appointment appointment, Patient patient) {
+      SelectionState selection,
+      SelectionNodes nodes,
+      Appointment appointment,
+      Patient patient,
+      Clock clock) {
     boolean selected = appointment != null && patient != null && selection.appointmentId != 0;
     nodes.summary().setVisible(selected);
     nodes.summary().setManaged(selected);
@@ -559,8 +578,7 @@ public final class DoctorView {
         nodes.accept().setManaged(false);
         nodes.decline().setDisable(false);
         nodes.reschedule().setDisable(false);
-        boolean checkInEligible =
-            !LocalDateTime.now(CalendarService.CLINIC_ZONE).isBefore(appointment.startsAt());
+        boolean checkInEligible = !LocalDateTime.now(clock).isBefore(appointment.startsAt());
         nodes.checkIn().setDisable(!checkInEligible);
         nodes
             .appointmentActionsCard()
@@ -654,7 +672,8 @@ public final class DoctorView {
       CalendarAppointment calendarAppointment,
       SelectionState selection,
       SelectionNodes nodes,
-      Label feedback) {
+      Label feedback,
+      Clock clock) {
     Optional<Appointment> resolvedAppointment = Optional.empty();
     Optional<Patient> resolvedPatient = Optional.empty();
     try {
@@ -677,7 +696,7 @@ public final class DoctorView {
     Patient patient = resolvedPatient.orElse(null);
     selection.appointmentId = appointment == null || patient == null ? 0 : appointment.id();
     selection.patientId = patient == null ? 0 : patient.id();
-    updateSelectionState(selection, nodes, appointment, patient);
+    updateSelectionState(selection, nodes, appointment, patient, clock);
     boolean clinicalLoaded =
         loadClinical(
             services,

@@ -11,6 +11,8 @@ import static org.testfx.matcher.control.LabeledMatchers.hasText;
 import java.nio.file.Path;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -55,6 +57,8 @@ import org.testfx.framework.junit5.ApplicationTest;
 import org.testfx.util.WaitForAsyncUtils;
 
 final class DoctorViewTest extends ApplicationTest {
+  private static final Clock TEST_CLOCK =
+      Clock.fixed(Instant.parse("2026-09-20T14:50:00Z"), ZoneId.of("Asia/Singapore"));
   @TempDir private Path temporaryDirectory;
   private SqliteDatabase database;
   private ClinicServices services;
@@ -90,8 +94,7 @@ final class DoctorViewTest extends ApplicationTest {
     Patient geometryPatient =
         new PatientRepository(database)
             .create(new Patient(0, "Alex", "Tan", "", "555-0101", "", ""));
-    LocalDateTime start =
-        LocalDateTime.now(ZoneId.of("Asia/Singapore")).minusMinutes(10).withSecond(0).withNano(0);
+    LocalDateTime start = LocalDateTime.now(TEST_CLOCK).minusMinutes(10).withSecond(0).withNano(0);
     AppointmentRepository appointments = new AppointmentRepository(database);
     appointments.create(
         patient.id(), doctor.id(), start, start.plusMinutes(30), AppointmentStatus.CHECKED_IN);
@@ -103,8 +106,19 @@ final class DoctorViewTest extends ApplicationTest {
         oneHourStart.plusHours(1),
         AppointmentStatus.ACCEPTED);
     appointmentDate = start.toLocalDate();
-    new ApplicationRouter(stage, database).showInitial();
+    new ApplicationRouter(stage, database, TEST_CLOCK).showInitial();
     stage.show();
+  }
+
+  @Test
+  void dashboardUsesTheFixtureClockForItsInitialDay() {
+    setText("#login-username", "doctor");
+    setText("#login-password", "doctor-pass");
+    fire("#login-submit");
+    waitForNode("#doctor-workspace");
+
+    assertEquals(
+        appointmentDate, lookup("#doctor-dashboard-date").queryAs(DatePicker.class).getValue());
   }
 
   @AfterEach
