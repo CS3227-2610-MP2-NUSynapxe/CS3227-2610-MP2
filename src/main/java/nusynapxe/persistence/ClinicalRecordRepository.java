@@ -6,7 +6,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,7 +19,6 @@ import nusynapxe.domain.Prescription;
 
 /** Persists clinical records and prescriptions without exposing them to administrative queries. */
 public final class ClinicalRecordRepository {
-  private static final int PRESCRIPTION_BATCH_SIZE = 500;
   private static final String RECORD_COLUMNS =
       "id, patient_id, appointment_id, doctor_id, diagnosis, consultation_notes, follow_up_notes";
   private static final String PRESCRIPTION_COLUMNS =
@@ -123,8 +121,14 @@ public final class ClinicalRecordRepository {
    * @throws SQLException if the query fails
    */
   public List<Prescription> findPrescriptions(long clinicalRecordId) throws SQLException {
-    return findPrescriptionsByClinicalRecordIds(List.of(clinicalRecordId))
-        .getOrDefault(clinicalRecordId, List.of());
+    String sql =
+        "SELECT "
+            + PRESCRIPTION_COLUMNS
+            + " FROM prescriptions WHERE clinical_record_id = ? ORDER BY id";
+    try (PreparedStatement statement = database.connection().prepareStatement(sql)) {
+      statement.setLong(1, clinicalRecordId);
+      return SqliteQueries.readAll(statement, ClinicalRecordRepository::readPrescription);
+    }
   }
 
   /**
@@ -161,9 +165,7 @@ public final class ClinicalRecordRepository {
                   resultSet.getString("doctor_name"),
                   readHistoryRecord(resultSet)));
         }
-        Map<Long, List<Prescription>> prescriptionsByRecord =
-            findPrescriptionsByClinicalRecordIds(
-                projections.stream().map(projection -> projection.record().id()).toList());
+        Map<Long, List<Prescription>> prescriptionsByRecord = findPrescriptionsByPatient(patientId);
         List<ClinicalHistoryEntry> history = new ArrayList<>(projections.size());
         for (HistoryProjection projection : projections) {
           history.add(
@@ -178,33 +180,24 @@ public final class ClinicalRecordRepository {
     }
   }
 
-  private Map<Long, List<Prescription>> findPrescriptionsByClinicalRecordIds(
-      List<Long> clinicalRecordIds) throws SQLException {
-    if (clinicalRecordIds.isEmpty()) {
-      return Map.of();
-    }
+  private Map<Long, List<Prescription>> findPrescriptionsByPatient(long patientId)
+      throws SQLException {
+    String sql =
+        "SELECT p.id, p.clinical_record_id, p.medication, p.dosage, p.frequency, p.duration, "
+            + "p.instructions FROM prescriptions p "
+            + "JOIN clinical_records c ON c.id = p.clinical_record_id "
+            + "JOIN appointments a ON a.id = c.appointment_id "
+            + "WHERE c.patient_id = ? AND a.status IN ('COMPLETED', 'CHECKED_OUT') "
+            + "ORDER BY p.clinical_record_id, p.id";
     Map<Long, List<Prescription>> prescriptionsByRecord = new HashMap<>();
-    for (int offset = 0; offset < clinicalRecordIds.size(); offset += PRESCRIPTION_BATCH_SIZE) {
-      int end = Math.min(offset + PRESCRIPTION_BATCH_SIZE, clinicalRecordIds.size());
-      List<Long> batch = clinicalRecordIds.subList(offset, end);
-      String placeholders = String.join(", ", Collections.nCopies(batch.size(), "?"));
-      String sql =
-          "SELECT "
-              + PRESCRIPTION_COLUMNS
-              + " FROM prescriptions WHERE clinical_record_id IN ("
-              + placeholders
-              + ") ORDER BY clinical_record_id, id";
-      try (PreparedStatement statement = database.connection().prepareStatement(sql)) {
-        for (int index = 0; index < batch.size(); index++) {
-          statement.setLong(index + 1, batch.get(index));
-        }
-        try (ResultSet resultSet = statement.executeQuery()) {
-          while (resultSet.next()) {
-            Prescription prescription = readPrescription(resultSet);
-            prescriptionsByRecord
-                .computeIfAbsent(prescription.clinicalRecordId(), ignored -> new ArrayList<>())
-                .add(prescription);
-          }
+    try (PreparedStatement statement = database.connection().prepareStatement(sql)) {
+      statement.setLong(1, patientId);
+      try (ResultSet resultSet = statement.executeQuery()) {
+        while (resultSet.next()) {
+          Prescription prescription = readPrescription(resultSet);
+          prescriptionsByRecord
+              .computeIfAbsent(prescription.clinicalRecordId(), ignored -> new ArrayList<>())
+              .add(prescription);
         }
       }
     }
@@ -214,7 +207,7 @@ public final class ClinicalRecordRepository {
 
   private record HistoryProjection(
       Appointment appointment, String doctorName, ClinicalRecord record) {
-    // Groups the joined history row before batched prescription enrichment.
+    // Groups the joined history row before prescription enrichment.
   }
 
   private static ClinicalRecord insertRecord(java.sql.Connection connection, ClinicalRecord record)
