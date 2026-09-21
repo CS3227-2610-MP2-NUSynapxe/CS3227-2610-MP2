@@ -385,7 +385,10 @@ public final class DoctorView {
             session,
             "doctor",
             feedback,
-            ignoredPatientId -> dashboardHolder[0].refresh(),
+            ignoredPatientId -> {
+              dashboardHolder[0].refresh();
+              clinicalHistoryView.refreshPatients();
+            },
             () -> showHistoryHolder[0].run());
     setVisibleManaged(clinicalHistoryView.view(), false);
     StackPane patientPages = new StackPane(patientDirectory.view(), clinicalHistoryView.view());

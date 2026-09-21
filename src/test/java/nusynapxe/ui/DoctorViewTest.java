@@ -494,6 +494,8 @@ final class DoctorViewTest extends ApplicationTest {
 
     verifyThat("#doctor-patients-page", isVisible());
     verifyThat("#doctor-clinical-history-view", isVisible());
+    assertEquals(1, lookup("#doctor-history-patient").queryAll().size());
+    assertEquals(1, lookup("#doctor-history-patient-field").queryAll().size());
     verifyThat("#doctor-history-list", isVisible());
     assertEquals(
         1,
@@ -562,6 +564,30 @@ final class DoctorViewTest extends ApplicationTest {
             .getItems()
             .isEmpty());
     verifyThat("#doctor-history-detail-empty", isVisible());
+  }
+
+  @Test
+  void patientRegistrationRefreshesClinicalHistorySelector() {
+    loginAsDoctor();
+    fire("#doctor-nav-patients");
+    fire("#doctor-patient-open-register");
+    selectCombo("#doctor-register-identity-type", IdentityType.NRIC);
+    selectCombo("#doctor-register-sex", Sex.FEMALE);
+    setText("#doctor-register-identity-number", "S7654321A");
+    setText("#doctor-register-first-name", "History");
+    setText("#doctor-register-last-name", "Refresh");
+    setDate("#doctor-register-date-of-birth", LocalDate.of(1991, 2, 3));
+    setText("#doctor-register-phone-number", "5550111");
+    setText("#doctor-register-email", "history.refresh@example.test");
+    setText("#doctor-register-address", "History address");
+    fire("#doctor-patient-register");
+    verifyThat("#doctor-feedback", hasText("Patient registered"));
+
+    fire("#doctor-patient-clinical-history");
+    verifyThat("#doctor-clinical-history-view", isVisible());
+    assertTrue(
+        historySelector().getItems().stream()
+            .anyMatch(patient -> patient.email().equals("history.refresh@example.test")));
   }
 
   @Test
@@ -795,7 +821,7 @@ final class DoctorViewTest extends ApplicationTest {
 
   @SuppressWarnings("unchecked")
   private SearchSuggestionField<Patient> historySelector() {
-    return (SearchSuggestionField<Patient>) lookup("#doctor-history-patient").query();
+    return (SearchSuggestionField<Patient>) lookup("#doctor-history-patient-field").query();
   }
 
   @SuppressWarnings("unchecked")

@@ -297,7 +297,7 @@ final class SchemaInitializer {
         }
       }
       executeAll(connection, SCHEMA_STATEMENTS);
-      if (existingVersion != null && existingVersion < CURRENT_VERSION) {
+      if (existingVersion != null && existingVersion < FIFTH_VERSION) {
         executeAll(connection, VERSION_FIVE_DEFAULTS);
       }
       writeVersion(connection, CURRENT_VERSION);

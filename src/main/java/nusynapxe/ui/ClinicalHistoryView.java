@@ -48,7 +48,7 @@ final class ClinicalHistoryView {
     patientSelector = PatientDirectoryView.patientSearchField("doctor-history-patient");
     patientSelector.setAccessibleRoleDescription("Patient selector");
     patientSelector.setMaxWidth(Double.MAX_VALUE);
-    patientSelector.setId("doctor-history-patient");
+    patientSelector.setId("doctor-history-patient-field");
     state = UiComponents.emptyState("doctor-history-state", "Select a patient to view history.");
     state.setAccessibleRoleDescription("Clinical history status");
     javafx.scene.control.Button load =
