@@ -6,7 +6,10 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import nusynapxe.domain.Appointment;
@@ -17,6 +20,7 @@ import nusynapxe.domain.Prescription;
 
 /** Persists clinical records and prescriptions without exposing them to administrative queries. */
 public final class ClinicalRecordRepository {
+  private static final int PRESCRIPTION_BATCH_SIZE = 500;
   private static final String RECORD_COLUMNS =
       "id, patient_id, appointment_id, doctor_id, diagnosis, consultation_notes, follow_up_notes";
   private static final String PRESCRIPTION_COLUMNS =
@@ -119,16 +123,8 @@ public final class ClinicalRecordRepository {
    * @throws SQLException if the query fails
    */
   public List<Prescription> findPrescriptions(long clinicalRecordId) throws SQLException {
-    try (PreparedStatement statement =
-        database
-            .connection()
-            .prepareStatement(
-                "SELECT "
-                    + PRESCRIPTION_COLUMNS
-                    + " FROM prescriptions WHERE clinical_record_id = ? ORDER BY id")) {
-      statement.setLong(1, clinicalRecordId);
-      return SqliteQueries.readAll(statement, ClinicalRecordRepository::readPrescription);
-    }
+    return findPrescriptionsByClinicalRecordIds(List.of(clinicalRecordId))
+        .getOrDefault(clinicalRecordId, List.of());
   }
 
   /**
@@ -157,19 +153,68 @@ public final class ClinicalRecordRepository {
     try (PreparedStatement statement = database.connection().prepareStatement(sql)) {
       statement.setLong(1, patientId);
       try (ResultSet resultSet = statement.executeQuery()) {
-        List<ClinicalHistoryEntry> history = new ArrayList<>();
+        List<HistoryProjection> projections = new ArrayList<>();
         while (resultSet.next()) {
-          ClinicalRecord record = readHistoryRecord(resultSet);
-          history.add(
-              new ClinicalHistoryEntry(
+          projections.add(
+              new HistoryProjection(
                   readHistoryAppointment(resultSet),
                   resultSet.getString("doctor_name"),
-                  record,
-                  findPrescriptions(record.id())));
+                  readHistoryRecord(resultSet)));
+        }
+        Map<Long, List<Prescription>> prescriptionsByRecord =
+            findPrescriptionsByClinicalRecordIds(
+                projections.stream().map(projection -> projection.record().id()).toList());
+        List<ClinicalHistoryEntry> history = new ArrayList<>(projections.size());
+        for (HistoryProjection projection : projections) {
+          history.add(
+              new ClinicalHistoryEntry(
+                  projection.appointment(),
+                  projection.doctorName(),
+                  projection.record(),
+                  prescriptionsByRecord.getOrDefault(projection.record().id(), List.of())));
         }
         return List.copyOf(history);
       }
     }
+  }
+
+  private Map<Long, List<Prescription>> findPrescriptionsByClinicalRecordIds(
+      List<Long> clinicalRecordIds) throws SQLException {
+    if (clinicalRecordIds.isEmpty()) {
+      return Map.of();
+    }
+    Map<Long, List<Prescription>> prescriptionsByRecord = new HashMap<>();
+    for (int offset = 0; offset < clinicalRecordIds.size(); offset += PRESCRIPTION_BATCH_SIZE) {
+      int end = Math.min(offset + PRESCRIPTION_BATCH_SIZE, clinicalRecordIds.size());
+      List<Long> batch = clinicalRecordIds.subList(offset, end);
+      String placeholders = String.join(", ", Collections.nCopies(batch.size(), "?"));
+      String sql =
+          "SELECT "
+              + PRESCRIPTION_COLUMNS
+              + " FROM prescriptions WHERE clinical_record_id IN ("
+              + placeholders
+              + ") ORDER BY clinical_record_id, id";
+      try (PreparedStatement statement = database.connection().prepareStatement(sql)) {
+        for (int index = 0; index < batch.size(); index++) {
+          statement.setLong(index + 1, batch.get(index));
+        }
+        try (ResultSet resultSet = statement.executeQuery()) {
+          while (resultSet.next()) {
+            Prescription prescription = readPrescription(resultSet);
+            prescriptionsByRecord
+                .computeIfAbsent(prescription.clinicalRecordId(), ignored -> new ArrayList<>())
+                .add(prescription);
+          }
+        }
+      }
+    }
+    prescriptionsByRecord.replaceAll((ignored, prescriptions) -> List.copyOf(prescriptions));
+    return Map.copyOf(prescriptionsByRecord);
+  }
+
+  private record HistoryProjection(
+      Appointment appointment, String doctorName, ClinicalRecord record) {
+    // Groups the joined history row before batched prescription enrichment.
   }
 
   private static ClinicalRecord insertRecord(java.sql.Connection connection, ClinicalRecord record)

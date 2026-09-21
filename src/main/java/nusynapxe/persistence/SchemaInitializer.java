@@ -14,7 +14,8 @@ final class SchemaInitializer {
   private static final int FOURTH_VERSION = 4;
   private static final int FIFTH_VERSION = 5;
   private static final int SIXTH_VERSION = 6;
-  static final int CURRENT_VERSION = SIXTH_VERSION;
+  private static final int SEVENTH_VERSION = 7;
+  static final int CURRENT_VERSION = SEVENTH_VERSION;
 
   private static final String SCHEMA_VERSION_KEY = "schema_version";
   private static final String CREATE_METADATA =
@@ -47,6 +48,9 @@ final class SchemaInitializer {
           PRIMARY KEY (doctor_id, day_of_week, start_minute)
       )
       """;
+  private static final String CREATE_PRESCRIPTION_INDEX =
+      "CREATE INDEX IF NOT EXISTS idx_prescriptions_clinical_record_id "
+          + "ON prescriptions(clinical_record_id, id)";
   private static final String CREATE_APPOINTMENTS =
       """
       CREATE TABLE IF NOT EXISTS appointments (
@@ -178,7 +182,8 @@ final class SchemaInitializer {
           CREATE_DOCTOR_CALENDAR_SETTINGS,
           CREATE_DOCTOR_WORKING_INTERVALS,
           "CREATE INDEX IF NOT EXISTS idx_calendar_intervals_doctor_day "
-              + "ON doctor_working_intervals(doctor_id, day_of_week, start_minute)");
+              + "ON doctor_working_intervals(doctor_id, day_of_week, start_minute)",
+          CREATE_PRESCRIPTION_INDEX);
   private static final List<String> VERSION_TWO_MIGRATION =
       List.of(
           "ALTER TABLE patients ADD COLUMN identity_type TEXT COLLATE NOCASE "

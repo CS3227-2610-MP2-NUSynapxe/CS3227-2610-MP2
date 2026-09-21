@@ -30,7 +30,7 @@ final class SchemaMigrationTest {
     try (SqliteDatabase database = new SqliteDatabase(path)) {
       database.open();
 
-      assertEquals("6", scalar(database.connection(), "SELECT value FROM app_metadata"));
+      assertEquals("7", scalar(database.connection(), "SELECT value FROM app_metadata"));
       assertEquals("1", scalar(database.connection(), "SELECT id FROM patients"));
       assertEquals("1", scalar(database.connection(), "SELECT patient_id FROM appointments"));
       assertEquals("1", scalar(database.connection(), "SELECT patient_id FROM clinical_records"));
@@ -94,7 +94,7 @@ final class SchemaMigrationTest {
 
     try (SqliteDatabase database = new SqliteDatabase(path)) {
       database.open();
-      assertEquals("6", scalar(database.connection(), "SELECT value FROM app_metadata"));
+      assertEquals("7", scalar(database.connection(), "SELECT value FROM app_metadata"));
       assertNull(scalar(database.connection(), "SELECT sex FROM patients WHERE id = 1"));
       assertFalse(columnNames(database.connection(), "patients").contains("billing_information"));
       assertEquals("123", scalar(database.connection(), "SELECT phone_number FROM patients"));
@@ -129,7 +129,7 @@ final class SchemaMigrationTest {
 
     try (SqliteDatabase database = new SqliteDatabase(path)) {
       database.open();
-      assertEquals("6", scalar(database.connection(), "SELECT value FROM app_metadata"));
+      assertEquals("7", scalar(database.connection(), "SELECT value FROM app_metadata"));
       assertEquals("+441234", scalar(database.connection(), "SELECT phone_number FROM patients"));
       assertNull(scalar(database.connection(), "SELECT phone_country_code FROM patients"));
       assertFalse(columnNames(database.connection(), "patients").contains("phone"));
@@ -219,7 +219,7 @@ final class SchemaMigrationTest {
 
     try (SqliteDatabase database = new SqliteDatabase(path)) {
       database.open();
-      assertEquals("6", scalar(database.connection(), "SELECT value FROM app_metadata"));
+      assertEquals("7", scalar(database.connection(), "SELECT value FROM app_metadata"));
       Appointment declined =
           new AppointmentRepository(database).updateStatus(1, AppointmentStatus.DECLINED);
       assertEquals(AppointmentStatus.DECLINED, declined.status());
