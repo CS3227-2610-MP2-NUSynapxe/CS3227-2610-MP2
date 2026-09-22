@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.RejectedExecutionException;
@@ -169,7 +170,8 @@ final class ReceptionistDataLoader {
   }
 
   void refreshDoctors(SearchSuggestionField<Account> doctor, Label feedback) {
-    long generation = ++doctorGeneration;
+    doctorGeneration++;
+    long generation = doctorGeneration;
     submit(
         () -> services.accountService().listDoctors(session),
         doctors -> {
@@ -194,7 +196,8 @@ final class ReceptionistDataLoader {
       String patientQuery,
       Long doctorId,
       LocalDate date) {
-    long generation = ++checkoutGeneration;
+    checkoutGeneration++;
+    long generation = checkoutGeneration;
     submit(
         () ->
             services
@@ -231,7 +234,8 @@ final class ReceptionistDataLoader {
       Long doctorId,
       LocalDate date,
       Label feedback) {
-    long generation = ++receiptGeneration;
+    receiptGeneration++;
+    long generation = receiptGeneration;
     submit(
         () -> services.billingService().receiptHistory(session, patientQuery, doctorId, date),
         receipts -> {
@@ -268,7 +272,8 @@ final class ReceptionistDataLoader {
       String patientQuery,
       String status,
       Label summary) {
-    long generation = ++scheduleGeneration;
+    scheduleGeneration++;
+    long generation = scheduleGeneration;
     submit(
         () ->
             services
@@ -313,7 +318,8 @@ final class ReceptionistDataLoader {
       String patientQuery,
       String status,
       Label summary) {
-    long generation = ++queueGeneration;
+    queueGeneration++;
+    long generation = queueGeneration;
     submit(
         () -> {
           List<AppointmentListRow> appointments = new ArrayList<>();
@@ -402,13 +408,19 @@ final class ReceptionistDataLoader {
     }
   }
 
-  record AppointmentDetails(Appointment appointment, Patient patient, String doctorName) {}
+  record AppointmentDetails(Appointment appointment, Patient patient, String doctorName) {
+    AppointmentDetails {
+      Objects.requireNonNull(appointment, "appointment");
+      Objects.requireNonNull(patient, "patient");
+      Objects.requireNonNull(doctorName, "doctorName");
+    }
+  }
 
   private static AppointmentStatus selectedAppointmentStatus(String value) {
     if (value == null || ALL_STATUSES.equals(value)) {
       return null;
     }
-    return AppointmentStatus.valueOf(value.toUpperCase().replace(' ', '_'));
+    return AppointmentStatus.valueOf(value.toUpperCase(Locale.ROOT).replace(' ', '_'));
   }
 
   private static String scheduleSummary(List<AppointmentListRow> appointments) {

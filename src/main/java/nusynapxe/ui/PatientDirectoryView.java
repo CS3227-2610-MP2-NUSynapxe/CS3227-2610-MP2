@@ -332,7 +332,8 @@ final class PatientDirectoryView {
     if (disposed) {
       return;
     }
-    long generation = ++refreshGeneration;
+    refreshGeneration++;
+    long generation = refreshGeneration;
     String query = patientSearch.getText();
     taskRunner.submit(
         () -> services.patientService().searchAdministrative(session, query),

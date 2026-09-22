@@ -1,7 +1,10 @@
 package nusynapxe.ui;
 
 import java.sql.SQLException;
+import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 import javafx.collections.FXCollections;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
@@ -68,5 +71,64 @@ final class DoctorConsultationView {
     consultationNotes.clear();
     followUpNotes.clear();
     prescriptions.setItems(FXCollections.observableArrayList());
+  }
+
+  static void loadClinicalAsync(
+      ClinicServices services,
+      Session session,
+      Appointment appointment,
+      TextField diagnosis,
+      TextArea consultationNotes,
+      TextArea followUpNotes,
+      ListView<Prescription> prescriptions,
+      Label feedback,
+      ClinicTaskRunner taskRunner,
+      Consumer<Boolean> onComplete) {
+    if (appointment == null) {
+      clearClinical(diagnosis, consultationNotes, followUpNotes, prescriptions);
+      onComplete.accept(true);
+      return;
+    }
+    taskRunner.submit(
+        () -> {
+          Optional<ClinicalRecord> record =
+              services.clinicalService().findForDoctor(session, appointment.id());
+          List<Prescription> values =
+              record.isEmpty()
+                  ? List.of()
+                  : services.clinicalService().prescriptionsForDoctor(session, appointment.id());
+          return new ClinicalProjection(record, values);
+        },
+        projection -> {
+          clearClinical(diagnosis, consultationNotes, followUpNotes, prescriptions);
+          projection
+              .record()
+              .ifPresent(
+                  value -> {
+                    diagnosis.setText(value.diagnosis());
+                    consultationNotes.setText(value.consultationNotes());
+                    followUpNotes.setText(value.followUpNotes());
+                    prescriptions.setItems(
+                        FXCollections.observableArrayList(projection.prescriptions()));
+                  });
+          onComplete.accept(true);
+        },
+        failure -> {
+          clearClinical(diagnosis, consultationNotes, followUpNotes, prescriptions);
+          UiComponents.showError(
+              feedback,
+              failure.getMessage() == null
+                  ? "Clinical information is temporarily unavailable"
+                  : failure.getMessage());
+          onComplete.accept(false);
+        });
+  }
+
+  private record ClinicalProjection(
+      Optional<ClinicalRecord> record, List<Prescription> prescriptions) {
+    private ClinicalProjection {
+      Objects.requireNonNull(record, "record");
+      Objects.requireNonNull(prescriptions, "prescriptions");
+    }
   }
 }

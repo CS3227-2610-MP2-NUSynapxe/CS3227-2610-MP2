@@ -1,12 +1,10 @@
 package nusynapxe.ui;
 
-import java.sql.SQLException;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.Optional;
 import javafx.geometry.Insets;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
@@ -148,37 +146,64 @@ final class DoctorWorkspace {
     SelectionNodes[] nodesHolder = new SelectionNodes[1];
 
     accept.setOnAction(
-        event ->
+        event -> {
+          try {
+            requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
             run(
                 feedback,
+                taskRunner,
                 () -> {
-                  requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
                   services.appointmentService().accept(session, selection.appointmentId);
+                  return null;
+                },
+                ignored -> {
                   feedback.setText("Appointment accepted");
                   dashboardHolder[0].refresh();
-                }));
+                });
+          } catch (ValidationException exception) {
+            UiComponents.showError(feedback, exception.getMessage());
+          }
+        });
 
     decline.setOnAction(
-        event ->
+        event -> {
+          try {
+            requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
             run(
                 feedback,
+                taskRunner,
                 () -> {
-                  requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
                   services.appointmentService().decline(session, selection.appointmentId);
+                  return null;
+                },
+                ignored -> {
                   feedback.setText("Appointment declined");
                   dashboardHolder[0].refresh();
-                }));
+                });
+          } catch (ValidationException exception) {
+            UiComponents.showError(feedback, exception.getMessage());
+          }
+        });
 
     checkIn.setOnAction(
-        event ->
+        event -> {
+          try {
+            requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
             run(
                 feedback,
+                taskRunner,
                 () -> {
-                  requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
                   services.appointmentService().checkIn(session, selection.appointmentId);
+                  return null;
+                },
+                ignored -> {
                   feedback.setText("Patient checked in");
                   dashboardHolder[0].refresh();
-                }));
+                });
+          } catch (ValidationException exception) {
+            UiComponents.showError(feedback, exception.getMessage());
+          }
+        });
 
     reschedule.setOnAction(
         event -> {
@@ -187,82 +212,124 @@ final class DoctorWorkspace {
             return;
           }
           AppointmentDialog.showDoctorEdit(
-              services, session, selection.appointmentId, feedback, dashboardHolder[0]::refresh);
+              services,
+              session,
+              selection.appointmentId,
+              feedback,
+              dashboardHolder[0]::refresh,
+              taskRunner);
         });
 
     saveConsultation.setOnAction(
-        event ->
+        event -> {
+          try {
+            requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
+            long appointmentId = selection.appointmentId;
+            String diagnosisValue = diagnosis.getText();
+            String consultationValue = consultationNotes.getText();
+            String followUpValue = followUpNotes.getText();
             run(
                 feedback,
+                taskRunner,
                 () -> {
-                  requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
                   services
                       .clinicalService()
                       .saveConsultation(
-                          session,
-                          selection.appointmentId,
-                          diagnosis.getText(),
-                          consultationNotes.getText(),
-                          followUpNotes.getText());
+                          session, appointmentId, diagnosisValue, consultationValue, followUpValue);
+                  return services.appointmentService().get(appointmentId);
+                },
+                appointment -> {
                   feedback.setText("Consultation saved");
-                  boolean clinicalLoaded =
-                      DoctorConsultationView.loadClinical(
-                          services,
-                          session,
-                          services.appointmentService().get(selection.appointmentId),
-                          diagnosis,
-                          consultationNotes,
-                          followUpNotes,
-                          prescriptions,
-                          feedback);
-                  if (!clinicalLoaded) {
-                    setClinicalEditable(nodesHolder[0], false);
-                  }
-                }));
+                  DoctorConsultationView.loadClinicalAsync(
+                      services,
+                      session,
+                      appointment,
+                      diagnosis,
+                      consultationNotes,
+                      followUpNotes,
+                      prescriptions,
+                      feedback,
+                      taskRunner,
+                      clinicalLoaded -> {
+                        if (!clinicalLoaded) {
+                          setClinicalEditable(nodesHolder[0], false);
+                        }
+                      });
+                });
+          } catch (ValidationException exception) {
+            UiComponents.showError(feedback, exception.getMessage());
+          }
+        });
 
     addPrescription.setOnAction(
-        event ->
+        event -> {
+          try {
+            requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
+            long appointmentId = selection.appointmentId;
+            String medicationValue = medication.getText();
+            String dosageValue = dosage.getText();
+            String frequencyValue = frequency.getText();
+            String durationValue = duration.getText();
+            String instructionsValue = instructions.getText();
             run(
                 feedback,
+                taskRunner,
                 () -> {
-                  requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
                   services
                       .clinicalService()
                       .addPrescription(
                           session,
-                          selection.appointmentId,
-                          medication.getText(),
-                          dosage.getText(),
-                          frequency.getText(),
-                          duration.getText(),
-                          instructions.getText());
+                          appointmentId,
+                          medicationValue,
+                          dosageValue,
+                          frequencyValue,
+                          durationValue,
+                          instructionsValue);
+                  return services.appointmentService().get(appointmentId);
+                },
+                appointment -> {
                   feedback.setText("Prescription added");
-                  boolean clinicalLoaded =
-                      DoctorConsultationView.loadClinical(
-                          services,
-                          session,
-                          services.appointmentService().get(selection.appointmentId),
-                          diagnosis,
-                          consultationNotes,
-                          followUpNotes,
-                          prescriptions,
-                          feedback);
-                  if (!clinicalLoaded) {
-                    setClinicalEditable(nodesHolder[0], false);
-                  }
                   clear(medication, dosage, frequency, duration, instructions);
-                }));
+                  DoctorConsultationView.loadClinicalAsync(
+                      services,
+                      session,
+                      appointment,
+                      diagnosis,
+                      consultationNotes,
+                      followUpNotes,
+                      prescriptions,
+                      feedback,
+                      taskRunner,
+                      clinicalLoaded -> {
+                        if (!clinicalLoaded) {
+                          setClinicalEditable(nodesHolder[0], false);
+                        }
+                      });
+                });
+          } catch (ValidationException exception) {
+            UiComponents.showError(feedback, exception.getMessage());
+          }
+        });
 
     complete.setOnAction(
-        event ->
+        event -> {
+          try {
+            requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
             run(
                 feedback,
+                taskRunner,
                 () -> {
-                  requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
                   services.appointmentService().complete(session, selection.appointmentId);
+                  return null;
+                },
+                ignored -> {
                   feedback.setText("Appointment marked completed");
                   dashboardHolder[0].refresh();
-                }));
+                });
+          } catch (ValidationException exception) {
+            UiComponents.showError(feedback, exception.getMessage());
+          }
+        });
 
     DoctorCalendarView[] calendarHolder = new DoctorCalendarView[1];
     PatientDirectoryView[] patientDirectoryHolder = new PatientDirectoryView[1];
@@ -378,7 +445,8 @@ final class DoctorWorkspace {
                     selection,
                     nodes,
                     feedback,
-                    clinicClock),
+                    clinicClock,
+                    taskRunner),
             clinicClock,
             taskRunner);
     VBox scheduleCard =
@@ -688,45 +756,95 @@ final class DoctorWorkspace {
       SelectionState selection,
       SelectionNodes nodes,
       Label feedback,
-      Clock clock) {
-    Optional<Appointment> resolvedAppointment = Optional.empty();
-    Optional<Patient> resolvedPatient = Optional.empty();
-    try {
-      if (calendarAppointment != null) {
-        Appointment appointment =
-            services.appointmentService().get(calendarAppointment.appointmentId());
-        if (appointment.doctorId() != session.accountId()) {
-          throw new AuthorizationException("You are not allowed to view this appointment");
-        }
-        resolvedAppointment = Optional.of(appointment);
-        resolvedPatient =
-            Optional.of(
-                services.patientService().getAdministrative(session, appointment.patientId()));
-      }
-    } catch (SQLException | AuthorizationException | ValidationException exception) {
-      UiComponents.showError(
-          feedback, userMessage(exception, "Appointment is temporarily unavailable"));
+      Clock clock,
+      ClinicTaskRunner taskRunner) {
+    selection.generation++;
+    long generation = selection.generation;
+    if (calendarAppointment == null) {
+      applyDashboardSelection(
+          services, session, selection, nodes, feedback, clock, taskRunner, generation, null, null);
+      return;
     }
-    Appointment appointment = resolvedAppointment.orElse(null);
-    Patient patient = resolvedPatient.orElse(null);
+    taskRunner.submit(
+        () -> {
+          Appointment appointment =
+              services.appointmentService().get(calendarAppointment.appointmentId());
+          if (appointment.doctorId() != session.accountId()) {
+            throw new AuthorizationException("You are not allowed to view this appointment");
+          }
+          Patient patient =
+              services.patientService().getAdministrative(session, appointment.patientId());
+          return new DashboardSelection(appointment, patient);
+        },
+        resolved -> {
+          if (generation == selection.generation) {
+            applyDashboardSelection(
+                services,
+                session,
+                selection,
+                nodes,
+                feedback,
+                clock,
+                taskRunner,
+                generation,
+                resolved.appointment(),
+                resolved.patient());
+          }
+        },
+        failure -> {
+          if (generation != selection.generation) {
+            return;
+          }
+          UiComponents.showError(
+              feedback, userMessage(failure, "Appointment is temporarily unavailable"));
+          applyDashboardSelection(
+              services,
+              session,
+              selection,
+              nodes,
+              feedback,
+              clock,
+              taskRunner,
+              generation,
+              null,
+              null);
+        });
+  }
+
+  private static void applyDashboardSelection(
+      ClinicServices services,
+      Session session,
+      SelectionState selection,
+      SelectionNodes nodes,
+      Label feedback,
+      Clock clock,
+      ClinicTaskRunner taskRunner,
+      long generation,
+      Appointment appointment,
+      Patient patient) {
+    if (generation != selection.generation) {
+      return;
+    }
     selection.appointmentId = appointment == null || patient == null ? 0 : appointment.id();
     selection.patientId = patient == null ? 0 : patient.id();
     updateSelectionState(selection, nodes, appointment, patient, clock);
-    boolean clinicalLoaded =
-        DoctorConsultationView.loadClinical(
-            services,
-            session,
-            appointment,
-            nodes.diagnosis(),
-            nodes.consultationNotes(),
-            nodes.followUpNotes(),
-            nodes.prescriptions(),
-            feedback);
-    if (!clinicalLoaded
-        && appointment != null
-        && appointment.status() == AppointmentStatus.CHECKED_IN) {
-      setClinicalEditable(nodes, false);
-    }
+    DoctorConsultationView.loadClinicalAsync(
+        services,
+        session,
+        appointment,
+        nodes.diagnosis(),
+        nodes.consultationNotes(),
+        nodes.followUpNotes(),
+        nodes.prescriptions(),
+        feedback,
+        taskRunner,
+        clinicalLoaded -> {
+          if (!clinicalLoaded
+              && appointment != null
+              && appointment.status() == AppointmentStatus.CHECKED_IN) {
+            setClinicalEditable(nodes, false);
+          }
+        });
   }
 
   private static void requireSelection(long id, String message) {
@@ -741,23 +859,29 @@ final class DoctorWorkspace {
     }
   }
 
-  private static void run(Label feedback, UiOperation operation) {
+  private static <T> void run(
+      Label feedback,
+      ClinicTaskRunner taskRunner,
+      ClinicTaskRunner.ClinicTask<T> operation,
+      java.util.function.Consumer<T> onSuccess) {
     try {
-      operation.run();
-    } catch (ValidationException | AuthorizationException exception) {
-      UiComponents.showError(feedback, exception.getMessage());
-    } catch (SQLException exception) {
+      taskRunner.submit(
+          operation,
+          onSuccess,
+          failure ->
+              UiComponents.showError(
+                  feedback,
+                  failure instanceof ValidationException
+                          || failure instanceof AuthorizationException
+                      ? failure.getMessage()
+                      : "The requested operation is temporarily unavailable"));
+    } catch (java.util.concurrent.RejectedExecutionException exception) {
       UiComponents.showError(feedback, "The requested operation is temporarily unavailable");
     }
   }
 
-  private static String userMessage(Exception exception, String fallback) {
+  private static String userMessage(Throwable exception, String fallback) {
     return exception.getMessage() == null ? fallback : exception.getMessage();
-  }
-
-  @FunctionalInterface
-  private interface UiOperation {
-    void run() throws SQLException;
   }
 
   private record SelectionNodes(
@@ -794,5 +918,13 @@ final class DoctorWorkspace {
   private static final class SelectionState {
     private long appointmentId;
     private long patientId;
+    private long generation;
+  }
+
+  private record DashboardSelection(Appointment appointment, Patient patient) {
+    private DashboardSelection {
+      Objects.requireNonNull(appointment, "appointment");
+      Objects.requireNonNull(patient, "patient");
+    }
   }
 }

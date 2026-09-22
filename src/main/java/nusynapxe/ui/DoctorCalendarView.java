@@ -1,6 +1,5 @@
 package nusynapxe.ui;
 
-import java.sql.SQLException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -26,7 +25,6 @@ import javafx.util.Duration;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.CalendarAppointment;
 import nusynapxe.domain.Session;
-import nusynapxe.service.AuthorizationException;
 import nusynapxe.service.CalendarScheduleCalculations;
 import nusynapxe.service.CalendarService;
 import nusynapxe.service.ClinicServices;
@@ -433,7 +431,7 @@ public final class DoctorCalendarView {
 
   private void openCreateAppointment(LocalDateTime initialStart) {
     AppointmentDialog.showCreate(
-        services, session, session.accountId(), initialStart, feedback, this::refresh);
+        services, session, session.accountId(), initialStart, feedback, this::refresh, taskRunner);
   }
 
   private void openCreateTimeOff() {
@@ -454,39 +452,46 @@ public final class DoctorCalendarView {
         minute = 0;
       }
       TimeOffDialog.showCreate(
-          services, session, date.atTime(hour, minute), feedback, this::refresh);
+          services, session, date.atTime(hour, minute), feedback, this::refresh, taskRunner);
     } catch (ValidationException | IllegalArgumentException exception) {
       UiComponents.showError(feedback, userMessage(exception, "Select a valid calendar range"));
     }
   }
 
   private void openTimeOff(nusynapxe.domain.DoctorTimeOff timeOff) {
-    TimeOffDialog.showDetails(services, session, timeOff, feedback, this::refresh);
+    TimeOffDialog.showDetails(services, session, timeOff, feedback, this::refresh, taskRunner);
   }
 
   private void openAppointment(CalendarAppointment appointment) {
     if (appointment.status() == AppointmentStatus.PENDING
         || appointment.status() == AppointmentStatus.ACCEPTED) {
       AppointmentDialog.showDoctorEdit(
-          services, session, appointment.appointmentId(), feedback, this::refresh);
+          services, session, appointment.appointmentId(), feedback, this::refresh, taskRunner);
     }
   }
 
   private void changeDecision(CalendarAppointment appointment, AppointmentStatus decision) {
-    try {
-      if (decision == AppointmentStatus.ACCEPTED) {
-        services.appointmentService().accept(session, appointment.appointmentId());
-        feedback.setText("Appointment accepted");
-      } else if (decision == AppointmentStatus.DECLINED) {
-        services.appointmentService().decline(session, appointment.appointmentId());
-        feedback.setText("Appointment declined");
-      }
-      refresh();
-    } catch (SQLException | AuthorizationException | ValidationException exception) {
-      UiComponents.showError(
-          feedback, userMessage(exception, "Appointment decision is temporarily unavailable"));
-      refresh();
-    }
+    submit(
+        () -> {
+          if (decision == AppointmentStatus.ACCEPTED) {
+            services.appointmentService().accept(session, appointment.appointmentId());
+          } else if (decision == AppointmentStatus.DECLINED) {
+            services.appointmentService().decline(session, appointment.appointmentId());
+          }
+          return null;
+        },
+        ignored -> {
+          feedback.setText(
+              decision == AppointmentStatus.ACCEPTED
+                  ? "Appointment accepted"
+                  : "Appointment declined");
+          refresh();
+        },
+        failure -> {
+          UiComponents.showError(
+              feedback, userMessage(failure, "Appointment decision is temporarily unavailable"));
+          refresh();
+        });
   }
 
   private static String userMessage(Throwable exception, String fallback) {

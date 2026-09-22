@@ -1,9 +1,9 @@
 package nusynapxe.ui;
 
-import java.sql.SQLException;
 import java.time.DateTimeException;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import javafx.geometry.Insets;
@@ -45,6 +45,24 @@ final class AppointmentDialog {
       LocalDateTime initialStart,
       Label workspaceFeedback,
       Runnable onUpdated) {
+    showCreate(
+        services,
+        session,
+        doctorId,
+        initialStart,
+        workspaceFeedback,
+        onUpdated,
+        ClinicTaskRunner.immediate());
+  }
+
+  static void showCreate(
+      ClinicServices services,
+      Session session,
+      long doctorId,
+      LocalDateTime initialStart,
+      Label workspaceFeedback,
+      Runnable onUpdated,
+      ClinicTaskRunner taskRunner) {
     LocalDateTime start =
         initialStart == null
             ? ClinicClock.now(ClinicClock.system()).withSecond(0).withNano(0)
@@ -61,7 +79,8 @@ final class AppointmentDialog {
         "Create appointment",
         false,
         workspaceFeedback,
-        onUpdated);
+        onUpdated,
+        taskRunner);
   }
 
   /** Opens a Receptionist booking dialog for a Doctor and optional Calendar slot. */
@@ -72,6 +91,24 @@ final class AppointmentDialog {
       LocalDateTime initialStart,
       Label workspaceFeedback,
       Runnable onUpdated) {
+    showReceptionistCreate(
+        services,
+        session,
+        doctorId,
+        initialStart,
+        workspaceFeedback,
+        onUpdated,
+        ClinicTaskRunner.immediate());
+  }
+
+  static void showReceptionistCreate(
+      ClinicServices services,
+      Session session,
+      long doctorId,
+      LocalDateTime initialStart,
+      Label workspaceFeedback,
+      Runnable onUpdated,
+      ClinicTaskRunner taskRunner) {
     LocalDateTime start = nearestHalfHour(initialStart);
     showEditor(
         services,
@@ -84,7 +121,8 @@ final class AppointmentDialog {
         "Book appointment",
         false,
         workspaceFeedback,
-        onUpdated);
+        onUpdated,
+        taskRunner);
   }
 
   /** Opens a shared appointment editor for a Doctor-owned appointment. */
@@ -94,6 +132,22 @@ final class AppointmentDialog {
       long appointmentId,
       Label workspaceFeedback,
       Runnable onUpdated) {
+    showDoctorEdit(
+        services,
+        session,
+        appointmentId,
+        workspaceFeedback,
+        onUpdated,
+        ClinicTaskRunner.immediate());
+  }
+
+  static void showDoctorEdit(
+      ClinicServices services,
+      Session session,
+      long appointmentId,
+      Label workspaceFeedback,
+      Runnable onUpdated,
+      ClinicTaskRunner taskRunner) {
     showEdit(
         services,
         session,
@@ -102,7 +156,8 @@ final class AppointmentDialog {
         "Appointment details",
         true,
         workspaceFeedback,
-        onUpdated);
+        onUpdated,
+        taskRunner);
   }
 
   /** Opens the shared receptionist rescheduling and cancellation dialog. */
@@ -112,6 +167,22 @@ final class AppointmentDialog {
       long appointmentId,
       Label workspaceFeedback,
       Runnable onUpdated) {
+    showReceptionistEdit(
+        services,
+        session,
+        appointmentId,
+        workspaceFeedback,
+        onUpdated,
+        ClinicTaskRunner.immediate());
+  }
+
+  static void showReceptionistEdit(
+      ClinicServices services,
+      Session session,
+      long appointmentId,
+      Label workspaceFeedback,
+      Runnable onUpdated,
+      ClinicTaskRunner taskRunner) {
     showEdit(
         services,
         session,
@@ -120,7 +191,8 @@ final class AppointmentDialog {
         "Reschedule appointment",
         false,
         workspaceFeedback,
-        onUpdated);
+        onUpdated,
+        taskRunner);
   }
 
   /** Creates the half-hour time controls used by inline receptionist booking. */
@@ -180,24 +252,25 @@ final class AppointmentDialog {
       String title,
       boolean doctorActions,
       Label workspaceFeedback,
-      Runnable onUpdated) {
-    try {
-      Appointment appointment = services.appointmentService().get(appointmentId);
-      showEditor(
-          services,
-          session,
-          appointment,
-          appointment.doctorId(),
-          appointment.startsAt(),
-          prefix,
-          title,
-          "Reschedule appointment",
-          doctorActions,
-          workspaceFeedback,
-          onUpdated);
-    } catch (SQLException | ValidationException | AuthorizationException exception) {
-      workspaceFeedback.setText(message(exception));
-    }
+      Runnable onUpdated,
+      ClinicTaskRunner taskRunner) {
+    taskRunner.submit(
+        () -> services.appointmentService().get(appointmentId),
+        appointment ->
+            showEditor(
+                services,
+                session,
+                appointment,
+                appointment.doctorId(),
+                appointment.startsAt(),
+                prefix,
+                title,
+                "Reschedule appointment",
+                doctorActions,
+                workspaceFeedback,
+                onUpdated,
+                taskRunner),
+        failure -> workspaceFeedback.setText(message(failure)));
   }
 
   private static void showEditor(
@@ -211,161 +284,213 @@ final class AppointmentDialog {
       String submitText,
       boolean doctorActions,
       Label workspaceFeedback,
-      Runnable onUpdated) {
+      Runnable onUpdated,
+      ClinicTaskRunner taskRunner) {
     Objects.requireNonNull(services, "services");
     Objects.requireNonNull(session, "session");
     Objects.requireNonNull(workspaceFeedback, "workspaceFeedback");
     Objects.requireNonNull(onUpdated, "onUpdated");
-    try {
-      Patient currentPatient =
-          appointment == null
-              ? null
-              : services.patientService().getAdministrative(session, appointment.patientId());
-      SearchSuggestionField<Patient> patients =
-          PatientDirectoryView.patientSearchField(prefix + "-patient");
-      patients.setItems(
-          services.patientService().searchAdministrative(session, "").stream()
-              .filter(
-                  patient ->
-                      patient.active()
-                          || currentPatient != null && patient.id() == currentPatient.id())
-              .toList());
-      if (currentPatient != null) {
-        patients.select(currentPatient);
-      } else if (!patients.getItems().isEmpty()) {
-        patients.select(patients.getItems().getFirst());
-      }
-      patients.setDisable(appointment != null);
+    taskRunner.submit(
+        () -> {
+          Patient currentPatient =
+              appointment == null
+                  ? null
+                  : services.patientService().getAdministrative(session, appointment.patientId());
+          List<Patient> availablePatients =
+              services.patientService().searchAdministrative(session, "").stream()
+                  .filter(
+                      patient ->
+                          patient.active()
+                              || currentPatient != null && patient.id() == currentPatient.id())
+                  .toList();
+          String doctorName =
+              session.accountId() == doctorId && session.role() == nusynapxe.domain.Role.DOCTOR
+                  ? session.username()
+                  : services.accountService().listDoctors(session).stream()
+                      .filter(doctor -> doctor.id() == doctorId)
+                      .map(nusynapxe.domain.Account::displayName)
+                      .findFirst()
+                      .orElse("Assigned doctor");
+          return new EditorData(appointment, currentPatient, availablePatients, doctorName);
+        },
+        loaded ->
+            renderEditor(
+                services,
+                session,
+                initialStart,
+                doctorId,
+                prefix,
+                title,
+                submitText,
+                doctorActions,
+                workspaceFeedback,
+                onUpdated,
+                taskRunner,
+                loaded),
+        failure -> workspaceFeedback.setText(message(failure)));
+  }
 
-      DatePicker date = UiComponents.compactDatePicker(initialStart.toLocalDate());
-      date.setId(prefix + "-date");
-      TimeFields start = timeSelector(prefix + "-start");
-      TimeFields end = timeSelector(prefix + "-end");
-      selectTime(start, initialStart.toLocalTime());
-      LocalDateTime initialEnd =
-          appointment == null ? initialStart.plusMinutes(30) : appointment.endsAt();
-      selectDateAndTime(date, end, initialEnd);
-
-      Label patientDetails = patientDetails(prefix, currentPatient);
-      Label assignedDoctor = new Label("Doctor: " + doctorDisplayName(services, session, doctorId));
-      assignedDoctor.setId(prefix + "-doctor");
-      Label status =
-          appointment == null
-              ? new Label(
-                  session.role() == nusynapxe.domain.Role.DOCTOR
-                      ? "New appointments created by a Doctor are accepted immediately."
-                      : "New appointments await the assigned Doctor's acceptance.")
-              : UiComponents.statusBadge(appointment.status().name());
-      status.setId(prefix + "-status");
-      status.setWrapText(true);
-
-      Label feedback = UiComponents.feedback(prefix + "-feedback");
-      Button submit = UiComponents.primaryButton(submitText, prefix + "-submit");
-      Button cancel =
-          appointment == null
-              ? UiComponents.secondaryButton("Close", prefix + "-cancel")
-              : UiComponents.dangerButton("Cancel appointment", prefix + "-cancel");
-      Button accept = UiComponents.primaryButton("Accept", prefix + "-accept");
-      Button decline = UiComponents.dangerButton("Decline", prefix + "-decline");
-      boolean decisionVisible =
-          doctorActions
-              && appointment != null
-              && (appointment.status() == AppointmentStatus.PENDING
-                  || appointment.status() == AppointmentStatus.ACCEPTED);
-      accept.setVisible(decisionVisible);
-      accept.setManaged(decisionVisible);
-      accept.setDisable(appointment != null && appointment.status() == AppointmentStatus.ACCEPTED);
-      decline.setVisible(decisionVisible);
-      decline.setManaged(decisionVisible);
-      Stage dialog = new Stage();
-      submit.setOnAction(
-          event ->
-              save(
-                  services,
-                  session,
-                  appointment,
-                  doctorId,
-                  patients,
-                  date,
-                  start,
-                  end,
-                  workspaceFeedback,
-                  feedback,
-                  onUpdated,
-                  dialog));
-      cancel.setOnAction(
-          event -> {
-            if (appointment == null) {
-              dialog.close();
-            } else {
-              cancel(
-                  services, session, appointment, workspaceFeedback, feedback, onUpdated, dialog);
-            }
-          });
-      accept.setOnAction(
-          event ->
-              decide(
-                  services,
-                  session,
-                  appointment,
-                  AppointmentStatus.ACCEPTED,
-                  workspaceFeedback,
-                  feedback,
-                  onUpdated,
-                  dialog));
-      decline.setOnAction(
-          event ->
-              decide(
-                  services,
-                  session,
-                  appointment,
-                  AppointmentStatus.DECLINED,
-                  workspaceFeedback,
-                  feedback,
-                  onUpdated,
-                  dialog));
-
-      GridPane interval = new GridPane();
-      interval.setHgap(8);
-      interval.setVgap(8);
-      interval.addRow(0, UiComponents.fieldGroup("Date", date));
-      interval.addRow(1, UiComponents.fieldGroup("Start", start.view()));
-      interval.addRow(2, UiComponents.fieldGroup("End", end.view()));
-      HBox actions = new HBox(8, submit, cancel);
-      actions.setAlignment(Pos.CENTER_RIGHT);
-      VBox content =
-          new VBox(
-              12,
-              UiComponents.sectionHeading(title),
-              UiComponents.fieldGroup(PATIENT_LABEL, patients),
-              patientDetails,
-              assignedDoctor,
-              status,
-              interval,
-              new VBox(8, new HBox(8, accept, decline), actions));
-      content.setId(prefix + "-content");
-      content.setPadding(new Insets(18));
-      ScrollPane scroll = new ScrollPane(content);
-      scroll.setId(prefix + "-scroll");
-      scroll.setFitToWidth(true);
-      scroll.setPannable(true);
-      Window owner = ownerFor(workspaceFeedback);
-      if (owner != null) {
-        dialog.initOwner(owner);
-        dialog.initModality(Modality.WINDOW_MODAL);
-      }
-      dialog.setTitle(title);
-      Scene scene =
-          new Scene(
-              UiComponents.notificationOverlay(scroll, feedback),
-              520,
-              appointment == null ? 490 : 540);
-      UiComponents.applyStylesheet(scene);
-      dialog.setScene(scene);
-      dialog.show();
-    } catch (SQLException | ValidationException | AuthorizationException exception) {
-      workspaceFeedback.setText(message(exception));
+  private static void renderEditor(
+      ClinicServices services,
+      Session session,
+      LocalDateTime initialStart,
+      long doctorId,
+      String prefix,
+      String title,
+      String submitText,
+      boolean doctorActions,
+      Label workspaceFeedback,
+      Runnable onUpdated,
+      ClinicTaskRunner taskRunner,
+      EditorData loaded) {
+    Appointment appointment = loaded.appointment();
+    Patient currentPatient = loaded.currentPatient();
+    SearchSuggestionField<Patient> patients =
+        PatientDirectoryView.patientSearchField(prefix + "-patient");
+    patients.setItems(loaded.availablePatients());
+    if (currentPatient != null) {
+      patients.select(currentPatient);
+    } else if (!patients.getItems().isEmpty()) {
+      patients.select(patients.getItems().getFirst());
     }
+    patients.setDisable(appointment != null);
+
+    DatePicker date = UiComponents.compactDatePicker(initialStart.toLocalDate());
+    date.setId(prefix + "-date");
+    TimeFields start = timeSelector(prefix + "-start");
+    TimeFields end = timeSelector(prefix + "-end");
+    selectTime(start, initialStart.toLocalTime());
+    LocalDateTime initialEnd =
+        appointment == null ? initialStart.plusMinutes(30) : appointment.endsAt();
+    selectDateAndTime(date, end, initialEnd);
+
+    Label patientDetails = patientDetails(prefix, currentPatient);
+    Label assignedDoctor = new Label("Doctor: " + loaded.doctorName());
+    assignedDoctor.setId(prefix + "-doctor");
+    Label status =
+        appointment == null
+            ? new Label(
+                session.role() == nusynapxe.domain.Role.DOCTOR
+                    ? "New appointments created by a Doctor are accepted immediately."
+                    : "New appointments await the assigned Doctor's acceptance.")
+            : UiComponents.statusBadge(appointment.status().name());
+    status.setId(prefix + "-status");
+    status.setWrapText(true);
+
+    Label feedback = UiComponents.feedback(prefix + "-feedback");
+    Button submit = UiComponents.primaryButton(submitText, prefix + "-submit");
+    Button cancel =
+        appointment == null
+            ? UiComponents.secondaryButton("Close", prefix + "-cancel")
+            : UiComponents.dangerButton("Cancel appointment", prefix + "-cancel");
+    Button accept = UiComponents.primaryButton("Accept", prefix + "-accept");
+    Button decline = UiComponents.dangerButton("Decline", prefix + "-decline");
+    boolean decisionVisible =
+        doctorActions
+            && appointment != null
+            && (appointment.status() == AppointmentStatus.PENDING
+                || appointment.status() == AppointmentStatus.ACCEPTED);
+    accept.setVisible(decisionVisible);
+    accept.setManaged(decisionVisible);
+    accept.setDisable(appointment != null && appointment.status() == AppointmentStatus.ACCEPTED);
+    decline.setVisible(decisionVisible);
+    decline.setManaged(decisionVisible);
+    Stage dialog = new Stage();
+    submit.setOnAction(
+        event ->
+            save(
+                services,
+                session,
+                appointment,
+                doctorId,
+                patients,
+                date,
+                start,
+                end,
+                workspaceFeedback,
+                feedback,
+                onUpdated,
+                dialog,
+                taskRunner));
+    cancel.setOnAction(
+        event -> {
+          if (appointment == null) {
+            dialog.close();
+          } else {
+            cancel(
+                services,
+                session,
+                appointment,
+                workspaceFeedback,
+                feedback,
+                onUpdated,
+                dialog,
+                taskRunner);
+          }
+        });
+    accept.setOnAction(
+        event ->
+            decide(
+                services,
+                session,
+                appointment,
+                AppointmentStatus.ACCEPTED,
+                workspaceFeedback,
+                feedback,
+                onUpdated,
+                dialog,
+                taskRunner));
+    decline.setOnAction(
+        event ->
+            decide(
+                services,
+                session,
+                appointment,
+                AppointmentStatus.DECLINED,
+                workspaceFeedback,
+                feedback,
+                onUpdated,
+                dialog,
+                taskRunner));
+
+    GridPane interval = new GridPane();
+    interval.setHgap(8);
+    interval.setVgap(8);
+    interval.addRow(0, UiComponents.fieldGroup("Date", date));
+    interval.addRow(1, UiComponents.fieldGroup("Start", start.view()));
+    interval.addRow(2, UiComponents.fieldGroup("End", end.view()));
+    HBox actions = new HBox(8, submit, cancel);
+    actions.setAlignment(Pos.CENTER_RIGHT);
+    VBox content =
+        new VBox(
+            12,
+            UiComponents.sectionHeading(title),
+            UiComponents.fieldGroup(PATIENT_LABEL, patients),
+            patientDetails,
+            assignedDoctor,
+            status,
+            interval,
+            new VBox(8, new HBox(8, accept, decline), actions));
+    content.setId(prefix + "-content");
+    content.setPadding(new Insets(18));
+    ScrollPane scroll = new ScrollPane(content);
+    scroll.setId(prefix + "-scroll");
+    scroll.setFitToWidth(true);
+    scroll.setPannable(true);
+    Window owner = ownerFor(workspaceFeedback);
+    if (owner != null) {
+      dialog.initOwner(owner);
+      dialog.initModality(Modality.WINDOW_MODAL);
+    }
+    dialog.setTitle(title);
+    Scene scene =
+        new Scene(
+            UiComponents.notificationOverlay(scroll, feedback),
+            520,
+            appointment == null ? 490 : 540);
+    UiComponents.applyStylesheet(scene);
+    dialog.setScene(scene);
+    dialog.show();
   }
 
   private static void save(
@@ -380,7 +505,8 @@ final class AppointmentDialog {
       Label workspaceFeedback,
       Label feedback,
       Runnable onUpdated,
-      Stage dialog) {
+      Stage dialog,
+      ClinicTaskRunner taskRunner) {
     try {
       Patient patient = patients.getValue();
       if (patient == null) {
@@ -388,42 +514,33 @@ final class AppointmentDialog {
       }
       LocalDateTime startsAt = parseDateTime(date, start, "Start time");
       LocalDateTime endsAt = parseDateTime(date, end, "End time");
-      if (appointment == null) {
-        services.appointmentService().book(session, patient.id(), doctorId, startsAt, endsAt);
-        UiComponents.showMessage(
-            workspaceFeedback,
-            session.role() == nusynapxe.domain.Role.DOCTOR
-                ? "Appointment created and accepted"
-                : "Appointment booked and awaiting Doctor acceptance");
-      } else {
-        services.appointmentService().reschedule(session, appointment.id(), startsAt, endsAt);
-        workspaceFeedback.setText("Appointment rescheduled");
-      }
-      onUpdated.run();
-      dialog.close();
-    } catch (ValidationException | AuthorizationException exception) {
-      UiComponents.showError(feedback, message(exception));
-      feedback.setVisible(true);
-      feedback.setManaged(true);
-    } catch (SQLException exception) {
-      UiComponents.showError(feedback, "Appointment changes are temporarily unavailable");
-      feedback.setVisible(true);
-      feedback.setManaged(true);
-    }
-  }
-
-  private static String doctorDisplayName(ClinicServices services, Session session, long doctorId) {
-    if (session.accountId() == doctorId && session.role() == nusynapxe.domain.Role.DOCTOR) {
-      return session.username();
-    }
-    try {
-      return services.accountService().listDoctors(session).stream()
-          .filter(doctor -> doctor.id() == doctorId)
-          .map(nusynapxe.domain.Account::displayName)
-          .findFirst()
-          .orElse("Assigned doctor");
-    } catch (SQLException | AuthorizationException exception) {
-      return "Assigned doctor";
+      taskRunner.submit(
+          () -> {
+            if (appointment == null) {
+              services.appointmentService().book(session, patient.id(), doctorId, startsAt, endsAt);
+            } else {
+              services.appointmentService().reschedule(session, appointment.id(), startsAt, endsAt);
+            }
+            return null;
+          },
+          ignored -> {
+            if (appointment == null) {
+              UiComponents.showMessage(
+                  workspaceFeedback,
+                  session.role() == nusynapxe.domain.Role.DOCTOR
+                      ? "Appointment created and accepted"
+                      : "Appointment booked and awaiting Doctor acceptance");
+            } else {
+              workspaceFeedback.setText("Appointment rescheduled");
+            }
+            onUpdated.run();
+            dialog.close();
+          },
+          failure ->
+              showOperationError(
+                  feedback, failure, "Appointment changes are temporarily unavailable"));
+    } catch (ValidationException exception) {
+      showOperationError(feedback, exception, "Appointment changes are temporarily unavailable");
     }
   }
 
@@ -434,21 +551,21 @@ final class AppointmentDialog {
       Label workspaceFeedback,
       Label feedback,
       Runnable onUpdated,
-      Stage dialog) {
-    try {
-      services.appointmentService().cancel(session, appointment.id());
-      workspaceFeedback.setText("Appointment cancelled");
-      onUpdated.run();
-      dialog.close();
-    } catch (ValidationException | AuthorizationException exception) {
-      UiComponents.showError(feedback, message(exception));
-      feedback.setVisible(true);
-      feedback.setManaged(true);
-    } catch (SQLException exception) {
-      UiComponents.showError(feedback, "Appointment cancellation is temporarily unavailable");
-      feedback.setVisible(true);
-      feedback.setManaged(true);
-    }
+      Stage dialog,
+      ClinicTaskRunner taskRunner) {
+    taskRunner.submit(
+        () -> {
+          services.appointmentService().cancel(session, appointment.id());
+          return null;
+        },
+        ignored -> {
+          workspaceFeedback.setText("Appointment cancelled");
+          onUpdated.run();
+          dialog.close();
+        },
+        failure ->
+            showOperationError(
+                feedback, failure, "Appointment cancellation is temporarily unavailable"));
   }
 
   private static void decide(
@@ -459,26 +576,38 @@ final class AppointmentDialog {
       Label workspaceFeedback,
       Label feedback,
       Runnable onUpdated,
-      Stage dialog) {
-    try {
-      if (decision == AppointmentStatus.ACCEPTED) {
-        services.appointmentService().accept(session, appointment.id());
-        workspaceFeedback.setText("Appointment accepted");
-      } else {
-        services.appointmentService().decline(session, appointment.id());
-        workspaceFeedback.setText("Appointment declined");
-      }
-      onUpdated.run();
-      dialog.close();
-    } catch (ValidationException | AuthorizationException exception) {
-      UiComponents.showError(feedback, message(exception));
-      feedback.setVisible(true);
-      feedback.setManaged(true);
-    } catch (SQLException exception) {
-      UiComponents.showError(feedback, "Appointment decision is temporarily unavailable");
-      feedback.setVisible(true);
-      feedback.setManaged(true);
-    }
+      Stage dialog,
+      ClinicTaskRunner taskRunner) {
+    taskRunner.submit(
+        () -> {
+          if (decision == AppointmentStatus.ACCEPTED) {
+            services.appointmentService().accept(session, appointment.id());
+          } else {
+            services.appointmentService().decline(session, appointment.id());
+          }
+          return null;
+        },
+        ignored -> {
+          workspaceFeedback.setText(
+              decision == AppointmentStatus.ACCEPTED
+                  ? "Appointment accepted"
+                  : "Appointment declined");
+          onUpdated.run();
+          dialog.close();
+        },
+        failure ->
+            showOperationError(
+                feedback, failure, "Appointment decision is temporarily unavailable"));
+  }
+
+  private static void showOperationError(Label feedback, Throwable failure, String fallback) {
+    UiComponents.showError(
+        feedback,
+        failure instanceof ValidationException || failure instanceof AuthorizationException
+            ? failure.getMessage()
+            : fallback);
+    feedback.setVisible(true);
+    feedback.setManaged(true);
   }
 
   private static Label patientDetails(String prefix, Patient patient) {
@@ -516,10 +645,21 @@ final class AppointmentDialog {
     return value == null ? "" : value;
   }
 
-  private static String message(Exception exception) {
+  private static String message(Throwable exception) {
     return exception.getMessage() == null
         ? "The appointment operation could not be completed"
         : exception.getMessage();
+  }
+
+  private record EditorData(
+      Appointment appointment,
+      Patient currentPatient,
+      List<Patient> availablePatients,
+      String doctorName) {
+    private EditorData {
+      Objects.requireNonNull(availablePatients, "availablePatients");
+      Objects.requireNonNull(doctorName, "doctorName");
+    }
   }
 
   /** Shared half-hour controls for appointment forms. */

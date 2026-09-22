@@ -567,7 +567,8 @@ final class ReceptionistWorkspace {
                         scheduleDoctor.getValue() == null ? null : scheduleDoctor.getValue().id(),
                         schedulePatient.getText(),
                         scheduleStatus.getValue(),
-                        scheduleSummary));
+                        scheduleSummary),
+                taskRunner);
           } catch (ValidationException | AuthorizationException exception) {
             UiComponents.showError(feedback, exception.getMessage());
           }
@@ -902,7 +903,8 @@ final class ReceptionistWorkspace {
                           schedulePatient.getText(),
                           scheduleStatus.getValue(),
                           scheduleSummary);
-                    }),
+                    },
+                    taskRunner),
             selectedAppointment ->
                 AppointmentDialog.showReceptionistEdit(
                     services,
@@ -922,7 +924,8 @@ final class ReceptionistWorkspace {
                           schedulePatient.getText(),
                           scheduleStatus.getValue(),
                           scheduleSummary);
-                    }),
+                    },
+                    taskRunner),
             clinicClock,
             taskRunner);
     ReceptionistCalendarView receptionistCalendar = calendarHolder[0];
@@ -1212,13 +1215,6 @@ final class ReceptionistWorkspace {
     GridPane.setValignment(button, VPos.BOTTOM);
   }
 
-  private static AppointmentStatus selectedAppointmentStatus(String value) {
-    if (value == null || ALL_STATUSES.equals(value)) {
-      return null;
-    }
-    return AppointmentStatus.valueOf(value.toUpperCase(Locale.ROOT).replace(' ', '_'));
-  }
-
   private static PaymentMethod selectedPaymentMethod(String value) {
     if (value == null || ALL_METHODS.equals(value)) {
       return null;
@@ -1256,9 +1252,10 @@ final class ReceptionistWorkspace {
       Session session,
       long appointmentId,
       Label workspaceFeedback,
-      Runnable onUpdated) {
+      Runnable onUpdated,
+      ClinicTaskRunner taskRunner) {
     AppointmentDialog.showReceptionistEdit(
-        services, session, appointmentId, workspaceFeedback, onUpdated);
+        services, session, appointmentId, workspaceFeedback, onUpdated, taskRunner);
   }
 
   private static void showCheckInDetailsDialog(
@@ -1431,15 +1428,6 @@ final class ReceptionistWorkspace {
       UiComponents.showError(feedback, failure.getMessage());
     } else {
       UiComponents.showError(feedback, fallback);
-    }
-  }
-
-  private static void selectAppointment(TableView<AppointmentListRow> list, long id) {
-    for (int index = 0; index < list.getItems().size(); index++) {
-      if (list.getItems().get(index).appointment().id() == id) {
-        list.getSelectionModel().select(index);
-        return;
-      }
     }
   }
 
