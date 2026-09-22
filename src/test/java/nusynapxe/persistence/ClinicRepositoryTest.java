@@ -7,9 +7,11 @@ import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
+import nusynapxe.domain.ClinicalHistoryEntry;
 import nusynapxe.domain.ClinicalRecord;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.Payment;
@@ -77,6 +79,124 @@ final class ClinicRepositoryTest {
           prescription,
           new ClinicalRecordRepository(database).findPrescriptions(record.id()).get(0));
       assertEquals(receptionist.role(), Role.RECEPTIONIST);
+    }
+  }
+
+  @Test
+  void findsTerminalClinicalHistoryByPatientWithDoctorContextAndStableNewestFirstOrder()
+      throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      AccountRepository accounts = accountRepository(database);
+      Account doctor =
+          accounts.create("doctor", "Dr. Ada", Role.DOCTOR, new byte[] {1}, new byte[] {2});
+      Account otherDoctor =
+          accounts.create("other", "Dr. Babbage", Role.DOCTOR, new byte[] {3}, new byte[] {4});
+      PatientRepository patients = new PatientRepository(database);
+      Patient patient =
+          patients.create(
+              new Patient(
+                  0,
+                  "Grace",
+                  "Hopper",
+                  "1906-12-09",
+                  "555-0100",
+                  "grace@example.test",
+                  "1 Main Street"));
+      Patient otherPatient =
+          patients.create(
+              new Patient(
+                  0,
+                  "Katherine",
+                  "Johnson",
+                  "1918-08-26",
+                  "555-0101",
+                  "katherine@example.test",
+                  "2 Main Street"));
+      AppointmentRepository appointments = new AppointmentRepository(database);
+      Appointment older =
+          appointments.create(
+              patient.id(),
+              doctor.id(),
+              LocalDateTime.of(2026, 9, 1, 9, 0),
+              LocalDateTime.of(2026, 9, 1, 9, 30),
+              AppointmentStatus.COMPLETED);
+      Appointment newer =
+          appointments.create(
+              patient.id(),
+              otherDoctor.id(),
+              LocalDateTime.of(2026, 9, 2, 9, 0),
+              LocalDateTime.of(2026, 9, 2, 9, 30),
+              AppointmentStatus.CHECKED_OUT);
+      Appointment inProgress =
+          appointments.create(
+              patient.id(),
+              doctor.id(),
+              LocalDateTime.of(2026, 9, 3, 9, 0),
+              LocalDateTime.of(2026, 9, 3, 9, 30),
+              AppointmentStatus.CHECKED_IN);
+      Appointment unrelated =
+          appointments.create(
+              otherPatient.id(),
+              doctor.id(),
+              LocalDateTime.of(2026, 9, 4, 9, 0),
+              LocalDateTime.of(2026, 9, 4, 9, 30),
+              AppointmentStatus.COMPLETED);
+
+      ClinicalRecordRepository clinicalRecords = new ClinicalRecordRepository(database);
+      ClinicalRecord olderRecord =
+          clinicalRecords.save(
+              new ClinicalRecord(
+                  0,
+                  patient.id(),
+                  older.id(),
+                  doctor.id(),
+                  "Older diagnosis",
+                  "Older notes",
+                  "Older follow-up"));
+      ClinicalRecord newerRecord =
+          clinicalRecords.save(
+              new ClinicalRecord(
+                  0,
+                  patient.id(),
+                  newer.id(),
+                  otherDoctor.id(),
+                  "Newer diagnosis",
+                  "Newer notes",
+                  "Newer follow-up"));
+      clinicalRecords.save(
+          new ClinicalRecord(
+              0,
+              patient.id(),
+              inProgress.id(),
+              doctor.id(),
+              "Draft diagnosis",
+              "Draft notes",
+              "Draft follow-up"));
+      clinicalRecords.save(
+          new ClinicalRecord(
+              0,
+              otherPatient.id(),
+              unrelated.id(),
+              doctor.id(),
+              "Unrelated diagnosis",
+              "Unrelated notes",
+              "Unrelated follow-up"));
+      Prescription prescription =
+          clinicalRecords.addPrescription(
+              new Prescription(
+                  0, newerRecord.id(), "Medicine", "10 mg", "Daily", "7 days", "Take with food"));
+
+      List<ClinicalHistoryEntry> history = clinicalRecords.findHistoryByPatient(patient.id());
+
+      assertEquals(2, history.size());
+      assertEquals(newer.id(), history.get(0).appointment().id());
+      assertEquals("Dr. Babbage", history.get(0).doctorName());
+      assertEquals(newerRecord, history.get(0).clinicalRecord());
+      assertEquals(List.of(prescription), history.get(0).prescriptions());
+      assertEquals(older.id(), history.get(1).appointment().id());
+      assertEquals("Dr. Ada", history.get(1).doctorName());
+      assertEquals(olderRecord, history.get(1).clinicalRecord());
+      assertTrue(clinicalRecords.findHistoryByPatient(otherPatient.id()).size() == 1);
     }
   }
 

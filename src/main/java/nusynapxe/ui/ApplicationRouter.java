@@ -1,6 +1,7 @@
 package nusynapxe.ui;
 
 import java.sql.SQLException;
+import java.time.Clock;
 import java.util.Objects;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -12,6 +13,7 @@ import javafx.stage.Stage;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
 import nusynapxe.persistence.SqliteDatabase;
+import nusynapxe.service.CalendarService;
 import nusynapxe.service.ClinicServices;
 
 /** Routes the JavaFX stage between setup, authentication, and role workspaces. */
@@ -23,6 +25,7 @@ public final class ApplicationRouter {
 
   private final Stage stage;
   private final ClinicServices services;
+  private final Clock clock;
 
   /**
    * Creates a router for one opened database and JavaFX stage.
@@ -32,12 +35,24 @@ public final class ApplicationRouter {
    * @throws NullPointerException if either argument is {@code null}
    */
   public ApplicationRouter(Stage stage, SqliteDatabase database) {
-    this(stage, ClinicServices.forDatabase(Objects.requireNonNull(database, "database")));
+    this(
+        stage,
+        ClinicServices.forDatabase(Objects.requireNonNull(database, "database")),
+        Clock.system(CalendarService.CLINIC_ZONE));
   }
 
   ApplicationRouter(Stage stage, ClinicServices services) {
+    this(stage, services, Clock.system(CalendarService.CLINIC_ZONE));
+  }
+
+  ApplicationRouter(Stage stage, SqliteDatabase database, Clock clock) {
+    this(stage, ClinicServices.forDatabase(Objects.requireNonNull(database, "database")), clock);
+  }
+
+  ApplicationRouter(Stage stage, ClinicServices services, Clock clock) {
     this.stage = Objects.requireNonNull(stage, "stage");
     this.services = Objects.requireNonNull(services, "services");
+    this.clock = Objects.requireNonNull(clock, "clock").withZone(CalendarService.CLINIC_ZONE);
   }
 
   /**
@@ -86,7 +101,7 @@ public final class ApplicationRouter {
       return;
     }
     if (session.role() == Role.DOCTOR) {
-      setContent(DoctorView.create(services, session, this::showLogin));
+      setContent(DoctorView.create(services, session, this::showLogin, clock));
       return;
     }
     Button logout = new Button("Log out");

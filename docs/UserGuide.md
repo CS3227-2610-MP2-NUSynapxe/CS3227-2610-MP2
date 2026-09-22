@@ -19,7 +19,8 @@ left-hand navigation rail to switch between **Directory**, **Appointments**,
 **Calendar**, **Check in**, **Checkout**, and **Revenue Reports**. Navigation
 labels remain horizontal, and the separate **Navigation** heading is not a
 selectable destination. Doctors use the same rail pattern for **Dashboard**,
-**Patients**, and **Calendar**. The selected destination is highlighted.
+**Patients**, and **Calendar**. The selected destination is highlighted;
+**Patients** also contains a separate consultation-history state.
 Short operation notices appear below the header and close automatically after
 six seconds.
 
@@ -298,7 +299,12 @@ opening a feature tab reloads information that another workflow may have changed
    includes inactive patients and contains no diagnosis, consultation,
    follow-up, prescription, or other clinical controls. Return to **Dashboard**
    to resume appointment and clinical work. The results card fills the page and
-   its table expands to use the available vertical space.
+   its table expands to use the available vertical space. Select
+   **Consultation history** in the directory actions to switch to the separate
+   clinical-history state. Choose a patient to see completed or checked-out
+   consultations newest first, including the assigned Doctor and prescriptions.
+   The history detail is read-only and explicitly reports loading, empty, and
+   unavailable states.
 3. Select **Calendar** to open the full time-grid view of your assigned
    appointments and explicitly blocked time. Use **Today** or the inclusive
    **From** and **To** date pickers to change the displayed range. The refresh
@@ -351,9 +357,12 @@ opening a feature tab reloads information that another workflow may have changed
 11. Select **Mark consultation completed**. This makes the visit available for
    Receptionist checkout.
 
-Only the assigned Doctor can read or change the clinical record and
-prescriptions for an appointment. A Doctor cannot manage another Doctor's
-schedule or time-off.
+Only the assigned Doctor can create or change the clinical record and
+prescriptions for an appointment, including an in-progress consultation. Any
+authenticated Doctor can view the read-only history after the appointment is
+completed or checked out, including consultations recorded by other Doctors.
+In-progress consultations are not included in that history. A Doctor cannot
+manage another Doctor's schedule or time-off.
 
 ## Appointment states
 

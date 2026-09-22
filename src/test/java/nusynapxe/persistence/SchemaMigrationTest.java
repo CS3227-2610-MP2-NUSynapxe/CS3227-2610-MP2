@@ -30,7 +30,7 @@ final class SchemaMigrationTest {
     try (SqliteDatabase database = new SqliteDatabase(path)) {
       database.open();
 
-      assertEquals("6", scalar(database.connection(), "SELECT value FROM app_metadata"));
+      assertEquals("7", scalar(database.connection(), "SELECT value FROM app_metadata"));
       assertEquals("1", scalar(database.connection(), "SELECT id FROM patients"));
       assertEquals("1", scalar(database.connection(), "SELECT patient_id FROM appointments"));
       assertEquals("1", scalar(database.connection(), "SELECT patient_id FROM clinical_records"));
@@ -94,7 +94,7 @@ final class SchemaMigrationTest {
 
     try (SqliteDatabase database = new SqliteDatabase(path)) {
       database.open();
-      assertEquals("6", scalar(database.connection(), "SELECT value FROM app_metadata"));
+      assertEquals("7", scalar(database.connection(), "SELECT value FROM app_metadata"));
       assertNull(scalar(database.connection(), "SELECT sex FROM patients WHERE id = 1"));
       assertFalse(columnNames(database.connection(), "patients").contains("billing_information"));
       assertEquals("123", scalar(database.connection(), "SELECT phone_number FROM patients"));
@@ -129,7 +129,7 @@ final class SchemaMigrationTest {
 
     try (SqliteDatabase database = new SqliteDatabase(path)) {
       database.open();
-      assertEquals("6", scalar(database.connection(), "SELECT value FROM app_metadata"));
+      assertEquals("7", scalar(database.connection(), "SELECT value FROM app_metadata"));
       assertEquals("+441234", scalar(database.connection(), "SELECT phone_number FROM patients"));
       assertNull(scalar(database.connection(), "SELECT phone_country_code FROM patients"));
       assertFalse(columnNames(database.connection(), "patients").contains("phone"));
@@ -219,7 +219,7 @@ final class SchemaMigrationTest {
 
     try (SqliteDatabase database = new SqliteDatabase(path)) {
       database.open();
-      assertEquals("6", scalar(database.connection(), "SELECT value FROM app_metadata"));
+      assertEquals("7", scalar(database.connection(), "SELECT value FROM app_metadata"));
       Appointment declined =
           new AppointmentRepository(database).updateStatus(1, AppointmentStatus.DECLINED);
       assertEquals(AppointmentStatus.DECLINED, declined.status());
@@ -227,6 +227,52 @@ final class SchemaMigrationTest {
           "1", scalar(database.connection(), "SELECT appointment_id FROM clinical_records"));
       assertEquals(
           "1", scalar(database.connection(), "SELECT patient_id FROM appointments WHERE id = 1"));
+    }
+  }
+
+  @Test
+  void preservesCustomizedCalendarIntervalsWhenMigratingVersionSix() throws SQLException {
+    Path path = temporaryDirectory.resolve("version-six-calendar.db");
+    try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + path);
+        Statement statement = connection.createStatement()) {
+      statement.executeUpdate(
+          "CREATE TABLE app_metadata(key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)");
+      statement.executeUpdate("INSERT INTO app_metadata VALUES ('schema_version', '6')");
+      statement.executeUpdate("CREATE TABLE users (id INTEGER PRIMARY KEY, role TEXT NOT NULL)");
+      statement.executeUpdate("INSERT INTO users VALUES (1, 'DOCTOR')");
+      statement.executeUpdate(
+          "CREATE TABLE doctor_calendar_settings ("
+              + "doctor_id INTEGER PRIMARY KEY NOT NULL, "
+              + "first_day_of_week TEXT NOT NULL)");
+      statement.executeUpdate("INSERT INTO doctor_calendar_settings VALUES (1, 'MONDAY')");
+      statement.executeUpdate(
+          "CREATE TABLE doctor_working_intervals ("
+              + "doctor_id INTEGER NOT NULL, day_of_week TEXT NOT NULL, "
+              + "start_minute INTEGER NOT NULL, end_minute INTEGER NOT NULL, "
+              + "PRIMARY KEY (doctor_id, day_of_week, start_minute))");
+      statement.executeUpdate(
+          "INSERT INTO doctor_working_intervals VALUES (1, 'MONDAY', 540, 1020)");
+    }
+
+    try (SqliteDatabase database = new SqliteDatabase(path)) {
+      database.open();
+
+      assertEquals("7", scalar(database.connection(), "SELECT value FROM app_metadata"));
+      assertEquals(
+          "1",
+          scalar(
+              database.connection(),
+              "SELECT COUNT(*) FROM doctor_working_intervals WHERE doctor_id = 1"));
+      assertEquals(
+          "540",
+          scalar(
+              database.connection(),
+              "SELECT start_minute FROM doctor_working_intervals WHERE doctor_id = 1"));
+      assertEquals(
+          "1020",
+          scalar(
+              database.connection(),
+              "SELECT end_minute FROM doctor_working_intervals WHERE doctor_id = 1"));
     }
   }
 

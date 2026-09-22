@@ -228,7 +228,11 @@ relationship. `PatientDeletionBlockedException` carries only the patient ID
 and category counts to the UI.
 
 New schema changes should remain ordered, versioned, and transactional. Keep
-basic administrative and clinical columns in separate repository projections. All
+basic administrative and clinical columns in separate repository projections.
+`ClinicalRecordRepository.findHistoryByPatient` is a terminal-only clinical
+projection: it joins the consultation, appointment, and assigned Doctor display
+name, filters by patient and `COMPLETED`/`CHECKED_OUT` status, and orders by
+appointment timestamp then appointment ID descending. All
 appointment and time-off interval writes use transactions and reject overlap;
 the overlap rule is `existing_start < new_end` and `existing_end > new_start`,
 so adjacent intervals are valid.
@@ -248,8 +252,11 @@ patient registration, search, retrieval, update, activation, deactivation,
 deletion preflight, and deletion. `PatientRepository` selects an explicit
 basic-data projection and never joins clinical tables;
 the `Patient` record cannot contain diagnoses, notes, or prescriptions.
-`ClinicalService` requires the assigned Doctor and a checked-in or later
-appointment. System Admin is limited to account administration.
+`ClinicalService` requires the assigned Doctor for clinical writes and for the
+assigned-Doctor consultation workspace. Its history read path requires only a
+Doctor role and terminal appointment status, so all Doctors can read completed
+or checked-out records while in-progress records remain unavailable to other
+Doctors. System Admin is limited to account administration.
 
 Treat document numbers as private data: do not include complete values in
 exceptions, logs, screenshots, fixtures, or generated reports. Duplicate
@@ -346,6 +353,13 @@ date, Singapore clock, Today and previous/next navigation, date picker, refresh,
 useful initial scrolling, minute ticker, and selection reconciliation.
 `DoctorView` resolves an authorized Calendar selection through
 `AppointmentService` before loading clinical data in the detail pane.
+`ClinicalHistoryView` is a separate Doctor-only read-only state reachable from
+the Patients directory and from a selected Dashboard patient. Its stable UI
+markers are `doctor-clinical-history-view`, `doctor-history-patient`,
+`doctor-history-list`, `doctor-history-state`, `doctor-history-detail`,
+`doctor-history-diagnosis`, `doctor-history-consultation-notes`,
+`doctor-history-follow-up`, and `doctor-history-prescription-list`; it exposes
+no clinical save, edit, prescription, or completion action.
 
 ## UI and TestFX conventions
 
@@ -439,7 +453,9 @@ represented without changing appointment scheduling.
 `PatientDirectoryView` is the shared administrative directory embedded by the
 Receptionist and Doctor workspaces. It receives the authenticated session,
 services, an ID prefix, a feedback label, and a callback for refreshing
-dependent selectors. Receptionist IDs retain the `reception-*` prefix; Doctor
+dependent selectors. The Doctor instance may additionally receive a callback
+that switches to `ClinicalHistoryView`; the Receptionist instance does not
+expose that action. Receptionist IDs retain the `reception-*` prefix; Doctor
 IDs use `doctor-*`. The table's explicit View action is backed by the row's
 `Patient` cell value, so JavaFX cell reuse cannot detach an action after a
 search refresh. It replaces the directory with a read-only administrative
@@ -473,7 +489,12 @@ field rather than placing a separate adjacent button. New layout markers include
 `doctor-calendar-time-off-remove-confirmation`,
 `doctor-selected-appointment`, `doctor-selected-content`,
 `doctor-patient-details-card`, `doctor-patient-details`, `doctor-decline`,
-`doctor-status-message`, and `doctor-clinical-read-only`,
+`doctor-status-message`, `doctor-clinical-read-only`,
+`doctor-view-patient-history`, `doctor-patient-clinical-history`,
+`doctor-clinical-history-view`, `doctor-history-patient`,
+`doctor-history-load`, `doctor-history-clear`, `doctor-history-list`,
+`doctor-history-state`, `doctor-history-detail`,
+`doctor-history-prescription-list`, and
 `admin-account-form-card`, and `admin-account-list-card`.
 
 Operational results use dedicated JavaFX tables. Patient rows show name,

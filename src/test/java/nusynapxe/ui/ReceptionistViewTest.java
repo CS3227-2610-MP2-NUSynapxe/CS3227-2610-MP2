@@ -18,10 +18,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import javafx.event.EventType;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
+import javafx.scene.control.ListView;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
@@ -340,8 +342,9 @@ final class ReceptionistViewTest extends ApplicationTest {
 
     TextField patientSearch = textField("#reception-appointment-patient");
     interact(patientSearch::clear);
-    clickOn(patientSearch);
-    write("Pat Lee");
+    interact(patientSearch::requestFocus);
+    interact(() -> patientSearch.setText("Pat Lee"));
+    WaitForAsyncUtils.waitForFxEvents();
     SearchSuggestionField<?> patientSuggestions =
         (SearchSuggestionField<?>) patientSearch.getParent();
     interact(
@@ -356,9 +359,16 @@ final class ReceptionistViewTest extends ApplicationTest {
                     false,
                     false,
                     false)));
-    clickOn(patientSuggestions.suggestionList());
+    interact(
+        () -> {
+          ListView<?> suggestions = patientSuggestions.suggestionList();
+          suggestions.getSelectionModel().selectFirst();
+          suggestions.fireEvent(mouseEvent(MouseEvent.MOUSE_PRESSED));
+          suggestions.fireEvent(mouseEvent(MouseEvent.MOUSE_RELEASED));
+        });
 
-    assertTrue(patientSearch.getText().contains("Pat Lee"));
+    assertTrue(
+        patientSearch.getText().contains("Pat Lee"), "Mouse selection did not update the editor");
   }
 
   @Test
@@ -1076,8 +1086,12 @@ final class ReceptionistViewTest extends ApplicationTest {
   }
 
   private static MouseEvent primaryClick() {
+    return mouseEvent(MouseEvent.MOUSE_CLICKED);
+  }
+
+  private static MouseEvent mouseEvent(EventType<MouseEvent> eventType) {
     return new MouseEvent(
-        MouseEvent.MOUSE_CLICKED,
+        eventType,
         5,
         5,
         5,

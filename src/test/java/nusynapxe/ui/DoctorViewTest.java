@@ -11,6 +11,8 @@ import static org.testfx.matcher.control.LabeledMatchers.hasText;
 import java.nio.file.Path;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -55,6 +57,8 @@ import org.testfx.framework.junit5.ApplicationTest;
 import org.testfx.util.WaitForAsyncUtils;
 
 final class DoctorViewTest extends ApplicationTest {
+  private static final Clock TEST_CLOCK =
+      Clock.fixed(Instant.parse("2026-09-20T14:50:00Z"), ZoneId.of("Asia/Singapore"));
   @TempDir private Path temporaryDirectory;
   private SqliteDatabase database;
   private ClinicServices services;
@@ -90,8 +94,7 @@ final class DoctorViewTest extends ApplicationTest {
     Patient geometryPatient =
         new PatientRepository(database)
             .create(new Patient(0, "Alex", "Tan", "", "555-0101", "", ""));
-    LocalDateTime start =
-        LocalDateTime.now(ZoneId.of("Asia/Singapore")).minusMinutes(10).withSecond(0).withNano(0);
+    LocalDateTime start = LocalDateTime.now(TEST_CLOCK).minusMinutes(10).withSecond(0).withNano(0);
     AppointmentRepository appointments = new AppointmentRepository(database);
     appointments.create(
         patient.id(), doctor.id(), start, start.plusMinutes(30), AppointmentStatus.CHECKED_IN);
@@ -103,8 +106,19 @@ final class DoctorViewTest extends ApplicationTest {
         oneHourStart.plusHours(1),
         AppointmentStatus.ACCEPTED);
     appointmentDate = start.toLocalDate();
-    new ApplicationRouter(stage, database).showInitial();
+    new ApplicationRouter(stage, database, TEST_CLOCK).showInitial();
     stage.show();
+  }
+
+  @Test
+  void dashboardUsesTheFixtureClockForItsInitialDay() {
+    setText("#login-username", "doctor");
+    setText("#login-password", "doctor-pass");
+    fire("#login-submit");
+    waitForNode("#doctor-workspace");
+
+    assertEquals(
+        appointmentDate, lookup("#doctor-dashboard-date").queryAs(DatePicker.class).getValue());
   }
 
   @AfterEach
@@ -470,6 +484,113 @@ final class DoctorViewTest extends ApplicationTest {
   }
 
   @Test
+  void doctorOpensReadOnlyClinicalHistoryFromPatientsAndDashboard() throws SQLException {
+    addPatientHistory();
+
+    loginAsDoctor();
+    selectDashboardAppointment(1);
+    verifyThat("#doctor-view-patient-history", isVisible());
+    fire("#doctor-view-patient-history");
+
+    verifyThat("#doctor-patients-page", isVisible());
+    verifyThat("#doctor-clinical-history-view", isVisible());
+    assertEquals(1, lookup("#doctor-history-patient").queryAll().size());
+    assertEquals(1, lookup("#doctor-history-patient-field").queryAll().size());
+    verifyThat("#doctor-history-list", isVisible());
+    assertEquals(
+        1,
+        lookup("#doctor-history-list")
+            .queryAs(javafx.scene.control.ListView.class)
+            .getItems()
+            .size());
+    assertTrue(
+        lookup("#doctor-history-list").queryAs(javafx.scene.control.ListView.class).getHeight()
+            >= 180.0,
+        "Consultation history list should have enough height to show multiple records");
+    verifyThat("#doctor-history-diagnosis", isVisible());
+    assertFalse(lookup("#doctor-history-diagnosis").queryAs(TextInputControl.class).isEditable());
+    assertTrue(
+        lookup("#doctor-history-diagnosis").queryAs(TextInputControl.class).getHeight() >= 72.0,
+        "Diagnosis field should show several lines of text");
+    assertFalse(
+        lookup("#doctor-history-consultation-notes").queryAs(TextInputControl.class).isEditable());
+    assertTrue(
+        lookup("#doctor-history-consultation-notes").queryAs(TextInputControl.class).getHeight()
+            >= 72.0,
+        "Consultation notes field should show several lines of text");
+    assertFalse(lookup("#doctor-history-follow-up").queryAs(TextInputControl.class).isEditable());
+    assertTrue(
+        lookup("#doctor-history-follow-up").queryAs(TextInputControl.class).getHeight() >= 72.0,
+        "Follow-up notes field should show several lines of text");
+    assertEquals(
+        1,
+        lookup("#doctor-history-prescription-list")
+            .queryAs(javafx.scene.control.ListView.class)
+            .getItems()
+            .size());
+    assertTrue(
+        lookup("#doctor-history-prescription-list")
+                .queryAs(javafx.scene.control.ListView.class)
+                .getHeight()
+            >= 96.0,
+        "Prescription list should have enough height to show its rows");
+    assertTrue(lookup("#doctor-history-save").tryQuery().isEmpty());
+    assertTrue(lookup("#doctor-history-edit").tryQuery().isEmpty());
+
+    fire("#doctor-nav-patients");
+    verifyThat("#doctor-patient-directory-view", isVisible());
+    fire("#doctor-patient-clinical-history");
+    verifyThat("#doctor-clinical-history-view", isVisible());
+  }
+
+  @Test
+  void clinicalHistoryShowsAnExplicitEmptyStateForPatientsWithoutCompletedConsultations()
+      throws SQLException {
+    loginAsDoctor();
+    fire("#doctor-nav-patients");
+    fire("#doctor-patient-clinical-history");
+
+    SearchSuggestionField<Patient> selector = historySelector();
+    Patient patientWithoutHistory = services.patientService().getAdministrative(doctorSession(), 2);
+    interact(() -> selector.select(patientWithoutHistory));
+    fire("#doctor-history-load");
+
+    assertEquals(
+        "No completed consultations found for this patient.",
+        lookup("#doctor-history-state").queryAs(Label.class).getText());
+    assertTrue(
+        lookup("#doctor-history-list")
+            .queryAs(javafx.scene.control.ListView.class)
+            .getItems()
+            .isEmpty());
+    verifyThat("#doctor-history-detail-empty", isVisible());
+  }
+
+  @Test
+  void patientRegistrationRefreshesClinicalHistorySelector() {
+    loginAsDoctor();
+    fire("#doctor-nav-patients");
+    fire("#doctor-patient-open-register");
+    selectCombo("#doctor-register-identity-type", IdentityType.NRIC);
+    selectCombo("#doctor-register-sex", Sex.FEMALE);
+    setText("#doctor-register-identity-number", "S7654321A");
+    setText("#doctor-register-first-name", "History");
+    setText("#doctor-register-last-name", "Refresh");
+    setDate("#doctor-register-date-of-birth", LocalDate.of(1991, 2, 3));
+    setText("#doctor-register-phone-number", "5550111");
+    setText("#doctor-register-email", "history.refresh@example.test");
+    setText("#doctor-register-address", "History address");
+    fire("#doctor-patient-register");
+    verifyThat("#doctor-feedback", hasText("Patient registered"));
+
+    fire("#doctor-patient-clinical-history");
+    verifyThat("#doctor-clinical-history-view", isVisible());
+    assertTrue(
+        historySelector().getItems().stream()
+            .anyMatch(patient -> patient.email().equals("history.refresh@example.test")));
+  }
+
+  @Test
   void pendingRescheduleOpensTheCalendarAppointmentEditor() throws SQLException {
     Appointment pending = createAvailableAppointment("Reschedule", "Patient");
 
@@ -696,6 +817,11 @@ final class DoctorViewTest extends ApplicationTest {
 
   private void setText(String selector, String value) {
     interact(() -> lookup(selector).queryAs(TextInputControl.class).setText(value));
+  }
+
+  @SuppressWarnings("unchecked")
+  private SearchSuggestionField<Patient> historySelector() {
+    return (SearchSuggestionField<Patient>) lookup("#doctor-history-patient-field").query();
   }
 
   @SuppressWarnings("unchecked")
