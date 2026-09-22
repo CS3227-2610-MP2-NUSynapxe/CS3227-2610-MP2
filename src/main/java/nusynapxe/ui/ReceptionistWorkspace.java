@@ -6,7 +6,6 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Function;
@@ -28,7 +27,6 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.ColumnConstraints;
-import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -43,7 +41,6 @@ import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.PaymentMethod;
 import nusynapxe.domain.Receipt;
-import nusynapxe.domain.RevenueReport;
 import nusynapxe.domain.Session;
 import nusynapxe.service.AuthorizationException;
 import nusynapxe.service.ClinicServices;
@@ -58,7 +55,6 @@ final class ReceptionistWorkspace {
   private static final String QUEUE_CHECKED_IN = "Checked in";
   private static final String QUEUE_ALL = "All";
   private static final String ALL_DOCTORS = "All Doctors";
-  private static final String ALL_METHODS = "All methods";
   private static final String ALL_STATUSES = "All statuses";
   private static final String PATIENT_NAME_ID = "Name, NRIC/FIN, phone, or email";
   private static final String PATIENT_LABEL = "Patient";
@@ -158,33 +154,10 @@ final class ReceptionistWorkspace {
     Button receiptSearch = button("Search receipts", "reception-receipt-search");
     Label receiptPreview = new Label();
     receiptPreview.setId("reception-receipt-preview");
-    DatePicker reportFromDate = UiComponents.compactDatePicker(LocalDate.now(clinicClock));
-    reportFromDate.setId("reception-revenue-report-from");
-    DatePicker reportToDate = UiComponents.compactDatePicker(LocalDate.now(clinicClock));
-    reportToDate.setId("reception-revenue-report-to");
-    TextField reportPatient = field("reception-revenue-report-patient", "Patient name or ID");
-    SearchSuggestionField<Account> reportDoctor =
-        doctorSelector("reception-revenue-report-doctor", ALL_DOCTORS);
-    ComboBox<String> reportMethod = UiComponents.compactSelector();
-    reportMethod.getItems().add(ALL_METHODS);
-    for (PaymentMethod method : PaymentMethod.values()) {
-      reportMethod.getItems().add(displayStatus(method));
-    }
-    reportMethod.setId("reception-revenue-report-method");
-    reportMethod.getSelectionModel().select(ALL_METHODS);
-    Button reportButton = button("Generate report", "reception-revenue-report");
-    Label reportSummary = new Label();
-    reportSummary.setId("reception-revenue-report-summary");
-    TableView<Receipt> reportRows = receiptTable("reception-revenue-report-list");
-    RevenueReport[] currentReport = {new RevenueReport(List.of())};
-    Button exportCsv = button("Export CSV", "reception-revenue-export-csv");
-    Button exportJson = button("Export JSON", "reception-revenue-export-json");
-    TextField legacyRevenueDate = field("reception-revenue-date", "yyyy-MM-dd");
-    Button legacyRevenueButton = button("Show revenue", "reception-revenue-submit");
-    Label legacyRevenue = new Label();
-    legacyRevenue.setId("reception-revenue");
     Label feedback = UiComponents.feedback("reception-feedback");
     ReceptionistDataLoader dataLoader = new ReceptionistDataLoader(services, session, taskRunner);
+    ReceptionistRevenuePanel revenuePanel =
+        new ReceptionistRevenuePanel(dataLoader, feedback, clinicClock);
     SelectionState selection = new SelectionState();
     PatientDirectoryView patientDirectory =
         PatientDirectoryView.create(
@@ -644,56 +617,6 @@ final class ReceptionistWorkspace {
           }
         });
 
-    reportButton.setOnAction(
-        event -> {
-          try {
-            LocalDate from = reportFromDate.getValue();
-            LocalDate to = reportToDate.getValue();
-            dataLoader.revenueReport(
-                from,
-                to,
-                reportPatient.getText(),
-                reportDoctor.getValue() == null ? null : reportDoctor.getValue().id(),
-                selectedPaymentMethod(reportMethod.getValue()),
-                report -> {
-                  String summary = ReceptionistRevenueView.formatSummary(report);
-                  currentReport[0] = report;
-                  reportRows.setItems(FXCollections.observableArrayList(report.receipts()));
-                  reportSummary.setText(summary);
-                  UiComponents.showMessage(feedback, "Revenue report generated");
-                },
-                failure ->
-                    showTaskError(feedback, failure, "Revenue report is temporarily unavailable"));
-          } catch (ValidationException exception) {
-            UiComponents.showError(feedback, exception.getMessage());
-          } catch (ArithmeticException exception) {
-            UiComponents.showError(feedback, "Revenue total exceeds the supported range");
-          }
-        });
-    legacyRevenueButton.setOnAction(
-        event -> {
-          try {
-            dataLoader.dailyRevenue(
-                LocalDate.parse(legacyRevenueDate.getText()),
-                summary ->
-                    legacyRevenue.setText(
-                        summary.transactionCount()
-                            + " successful payment(s), total "
-                            + formatMinor(summary.totalMinor())),
-                failure -> showTaskError(feedback, failure, "Revenue is temporarily unavailable"));
-          } catch (DateTimeParseException exception) {
-            UiComponents.showError(feedback, "Revenue is temporarily unavailable");
-          } catch (ValidationException exception) {
-            UiComponents.showError(feedback, exception.getMessage());
-          }
-        });
-
-    exportCsv.setOnAction(
-        event ->
-            exportReport(currentReport[0], reportRows.getScene().getWindow(), false, feedback));
-    exportJson.setOnAction(
-        event -> exportReport(currentReport[0], reportRows.getScene().getWindow(), true, feedback));
-
     ReceptionistCalendarView[] calendarHolder = new ReceptionistCalendarView[1];
     Button logout = button("Log out", "logout-button");
     logout.setOnAction(
@@ -839,43 +762,7 @@ final class ReceptionistWorkspace {
             UiComponents.supportingText(
                 "Complete payments for finished visits or review previously issued receipts."),
             checkoutTabs);
-    FlowPane reportDates = new FlowPane();
-    reportDates.setId("reception-revenue-filter-grid");
-    reportDates.getStyleClass().add("uniform-filter-grid");
-    reportDates.getStyleClass().add("single-line-filter-grid");
-    reportDates.setHgap(12);
-    reportDates.setVgap(10);
-    reportDates.setRowValignment(VPos.BOTTOM);
-    reportDates
-        .getChildren()
-        .addAll(
-            UiComponents.fieldGroup("From", reportFromDate),
-            UiComponents.fieldGroup("To", reportToDate),
-            UiComponents.fieldGroup(PATIENT_LABEL, reportPatient),
-            UiComponents.fieldGroup(DOCTOR_LABEL, reportDoctor),
-            UiComponents.fieldGroup("Payment method", reportMethod),
-            reportButton);
-    alignFilterAction(reportButton);
-    VBox revenueCard =
-        UiComponents.card(
-            "reception-revenue-card",
-            UiComponents.sectionHeading("Revenue results"),
-            reportDates,
-            new HBox(8, exportCsv, exportJson),
-            reportSummary,
-            reportRows);
-    VBox revenueContent =
-        new VBox(
-            12,
-            UiComponents.pageTitle("Revenue Reports"),
-            UiComponents.supportingText(
-                "Filter successful payments and export the resulting report."),
-            revenueCard);
-    VBox legacyRevenueCompatibility =
-        new VBox(legacyRevenueDate, legacyRevenueButton, legacyRevenue);
-    legacyRevenueCompatibility.setOpacity(0);
-    legacyRevenueCompatibility.setManaged(false);
-    revenueContent.getChildren().add(legacyRevenueCompatibility);
+    VBox revenueContent = revenuePanel.view();
     Tab patientFeature = featureTab("Directory", patientContent);
     Tab appointmentFeature = featureTab("Appointments", appointmentContent);
     calendarHolder[0] =
@@ -1007,7 +894,8 @@ final class ReceptionistWorkspace {
                     session,
                     appointmentPatient,
                     feedback,
-                    patientDirectory.selectedPatientId());
+                    patientDirectory.selectedPatientId(),
+                    taskRunner);
                 dataLoader.refreshDoctors(services, session, scheduleDoctor, feedback);
                 scheduleDoctor.clearSelection();
                 dataLoader.refreshSchedule(
@@ -1060,8 +948,7 @@ final class ReceptionistWorkspace {
                     receiptDate.getValue(),
                     feedback);
               } else if (selected == revenueFeature) {
-                dataLoader.refreshDoctors(services, session, reportDoctor, feedback);
-                reportDoctor.clearSelection();
+                revenuePanel.refreshDoctors();
               }
             });
     BorderPane root = new BorderPane(workspaceTabs);
@@ -1072,10 +959,10 @@ final class ReceptionistWorkspace {
     root.setLeft(navigation);
     BorderPane.setMargin(navigation, new Insets(0, 16, 0, 0));
     dataLoader.refreshDoctors(services, session, doctor, feedback);
-    dataLoader.refreshDoctors(services, session, reportDoctor, feedback);
+    revenuePanel.refreshDoctors();
     patientDirectory.refresh();
     PatientDirectoryView.refreshAppointmentPatients(
-        services, session, appointmentPatient, feedback, 0);
+        services, session, appointmentPatient, feedback, 0, taskRunner);
     dataLoader.refreshSchedule(
         services,
         session,
@@ -1143,7 +1030,7 @@ final class ReceptionistWorkspace {
     return button;
   }
 
-  private static TableView<Receipt> receiptTable(String id) {
+  static TableView<Receipt> receiptTable(String id) {
     TableView<Receipt> table = new TableView<>();
     table.setId(id);
     table.setPrefHeight(360);
@@ -1215,13 +1102,6 @@ final class ReceptionistWorkspace {
     GridPane.setValignment(button, VPos.BOTTOM);
   }
 
-  private static PaymentMethod selectedPaymentMethod(String value) {
-    if (value == null || ALL_METHODS.equals(value)) {
-      return null;
-    }
-    return PaymentMethod.valueOf(value.toUpperCase(Locale.ROOT).replace(' ', '_'));
-  }
-
   private static SearchSuggestionField<Account> doctorSelector(String id, String prompt) {
     return new SearchSuggestionField<>(
         id,
@@ -1232,19 +1112,6 @@ final class ReceptionistWorkspace {
 
   private static String doctorLabel(Account account) {
     return account == null ? "" : account.displayName() + " (" + account.username() + ")";
-  }
-
-  private static void exportReport(
-      RevenueReport report, javafx.stage.Window owner, boolean json, Label feedback) {
-    ReportExporter.export(report, owner, json, feedback);
-  }
-
-  static String reportCsv(RevenueReport report) {
-    return ReportExporter.toCsv(report);
-  }
-
-  static String reportJson(RevenueReport report) {
-    return ReportExporter.toJson(report);
   }
 
   private static void showRescheduleDialog(
