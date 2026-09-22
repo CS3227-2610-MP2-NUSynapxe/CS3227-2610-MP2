@@ -101,6 +101,43 @@ final class ClinicTaskRunnerTest {
     }
   }
 
+  @SuppressWarnings("try")
+  @Test
+  void closeWaitsForSubmittedWorkBeforeReturning() throws Exception {
+    CountDownLatch started = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    CountDownLatch closeStarted = new CountDownLatch(1);
+    CountDownLatch closed = new CountDownLatch(1);
+    try (ClinicTaskRunner runner = new SerializedClinicTaskRunner()) {
+      runner.submit(
+          () -> {
+            started.countDown();
+            release.await();
+            return null;
+          },
+          ignored -> {
+            // The test only observes executor shutdown.
+          },
+          failure -> {
+            // The task is released normally.
+          });
+      assertTrue(started.await(5, TimeUnit.SECONDS));
+
+      Thread closing =
+          new Thread(
+              () -> {
+                closeStarted.countDown();
+                runner.close();
+                closed.countDown();
+              });
+      closing.start();
+      assertTrue(closeStarted.await(5, TimeUnit.SECONDS));
+      assertFalse(closed.await(100, TimeUnit.MILLISECONDS));
+      release.countDown();
+      assertTrue(closed.await(5, TimeUnit.SECONDS));
+    }
+  }
+
   @Test
   void immediateRunnerAppliesOnlyTheLatestGeneration() {
     List<Integer> applied = new CopyOnWriteArrayList<>();

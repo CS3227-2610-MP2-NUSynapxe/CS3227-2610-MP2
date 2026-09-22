@@ -696,8 +696,16 @@ final class ReceptionistWorkspace {
     exportJson.setOnAction(
         event -> exportReport(currentReport[0], reportRows.getScene().getWindow(), true, feedback));
 
+    ReceptionistCalendarView[] calendarHolder = new ReceptionistCalendarView[1];
     Button logout = button("Log out", "logout-button");
-    logout.setOnAction(event -> onLogout.run());
+    logout.setOnAction(
+        event -> {
+          patientDirectory.dispose();
+          if (calendarHolder[0] != null) {
+            calendarHolder[0].dispose();
+          }
+          onLogout.run();
+        });
     HBox header =
         UiComponents.workspaceHeader("RECEPTIONIST workspace", session.username(), logout);
 
@@ -871,7 +879,6 @@ final class ReceptionistWorkspace {
     revenueContent.getChildren().add(legacyRevenueCompatibility);
     Tab patientFeature = featureTab("Directory", patientContent);
     Tab appointmentFeature = featureTab("Appointments", appointmentContent);
-    ReceptionistCalendarView[] calendarHolder = new ReceptionistCalendarView[1];
     calendarHolder[0] =
         new ReceptionistCalendarView(
             services,
@@ -918,6 +925,7 @@ final class ReceptionistWorkspace {
                           scheduleStatus.getValue(),
                           scheduleSummary);
                     }),
+            clinicClock,
             taskRunner);
     ReceptionistCalendarView receptionistCalendar = calendarHolder[0];
     Tab calendarFeature = new Tab("Calendar", receptionistCalendar.view());

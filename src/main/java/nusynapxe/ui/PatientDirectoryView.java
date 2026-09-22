@@ -60,6 +60,7 @@ final class PatientDirectoryView {
   private final VBox editingContent;
   private final VBox root;
   private long preferredPatientId;
+  private boolean disposed;
 
   private PatientDirectoryView(
       ClinicServices services,
@@ -233,6 +234,11 @@ final class PatientDirectoryView {
     return root;
   }
 
+  /** Prevents further directory work after the owning workspace is discarded. */
+  void dispose() {
+    disposed = true;
+  }
+
   private void showDirectory() {
     pageTitle.setText("Patient Directory");
     directoryContent.setManaged(true);
@@ -283,6 +289,9 @@ final class PatientDirectoryView {
 
   /** Reloads directory results using the current search query. */
   void refresh() {
+    if (disposed) {
+      return;
+    }
     try {
       patientTable.setItems(
           FXCollections.observableArrayList(

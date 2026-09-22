@@ -20,11 +20,11 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.CalendarAppointment;
 import nusynapxe.domain.Session;
 import nusynapxe.service.CalendarScheduleCalculations;
-import nusynapxe.service.CalendarService;
 import nusynapxe.service.ClinicServices;
 import nusynapxe.service.ValidationException;
 
@@ -41,7 +41,7 @@ final class ReceptionistCalendarView {
   private final ClinicTaskRunner taskRunner;
   private final BiConsumer<Account, LocalDateTime> onSlotSelected;
   private final Consumer<CalendarAppointment> onAppointmentSelected;
-  private final Clock clock = Clock.system(CalendarService.CLINIC_ZONE);
+  private final Clock clock;
   private final SearchSuggestionField<Account> doctor;
   private final DatePicker from;
   private final DatePicker to;
@@ -55,6 +55,7 @@ final class ReceptionistCalendarView {
   private LocalDate scheduleAnchor;
   private CalendarScheduleList scheduleList;
   private long refreshGeneration;
+  private boolean disposed;
 
   ReceptionistCalendarView(
       ClinicServices services,
@@ -68,6 +69,7 @@ final class ReceptionistCalendarView {
         feedback,
         onSlotSelected,
         onAppointmentSelected,
+        ClinicClock.system(),
         ClinicTaskRunner.immediate());
   }
 
@@ -77,6 +79,7 @@ final class ReceptionistCalendarView {
       Label feedback,
       BiConsumer<Account, LocalDateTime> onSlotSelected,
       Consumer<CalendarAppointment> onAppointmentSelected,
+      Clock clock,
       ClinicTaskRunner taskRunner) {
     this.services = Objects.requireNonNull(services, "services");
     this.session = Objects.requireNonNull(session, "session");
@@ -84,6 +87,7 @@ final class ReceptionistCalendarView {
     this.onSlotSelected = Objects.requireNonNull(onSlotSelected, "onSlotSelected");
     this.onAppointmentSelected =
         Objects.requireNonNull(onAppointmentSelected, "onAppointmentSelected");
+    this.clock = ClinicClock.withClinicZone(clock);
     this.taskRunner = Objects.requireNonNull(taskRunner, "taskRunner");
     doctor =
         new SearchSuggestionField<>(
@@ -129,10 +133,16 @@ final class ReceptionistCalendarView {
   }
 
   void refreshDoctors() {
+    if (disposed) {
+      return;
+    }
     Account previousDoctor = doctor.getValue();
     submit(
         () -> services.accountService().listDoctors(session),
         doctors -> {
+          if (disposed) {
+            return;
+          }
           doctor.setItems(doctors);
           if (previousDoctor != null) {
             doctor.getItems().stream()
@@ -147,6 +157,9 @@ final class ReceptionistCalendarView {
   }
 
   void refresh() {
+    if (disposed) {
+      return;
+    }
     refreshGeneration++;
     long generation = refreshGeneration;
     Account selected = doctor.getValue();
@@ -178,7 +191,7 @@ final class ReceptionistCalendarView {
                     .calendarService()
                     .getReceptionistRange(session, selected.id(), from.getValue(), to.getValue()),
             data -> {
-              if (generation != refreshGeneration) {
+              if (disposed || generation != refreshGeneration) {
                 return;
               }
               CalendarTimeGrid grid =
@@ -195,7 +208,7 @@ final class ReceptionistCalendarView {
               root.setCenter(grid);
             },
             failure -> {
-              if (generation == refreshGeneration) {
+              if (!disposed && generation == refreshGeneration) {
                 UiComponents.showError(
                     feedback,
                     failure.getMessage() == null
@@ -211,6 +224,13 @@ final class ReceptionistCalendarView {
               ? "Calendar is temporarily unavailable"
               : exception.getMessage());
     }
+  }
+
+  /** Invalidates pending loads and releases the current schedule page. */
+  void dispose() {
+    disposed = true;
+    refreshGeneration++;
+    disposeScheduleList();
   }
 
   private <T> void submit(

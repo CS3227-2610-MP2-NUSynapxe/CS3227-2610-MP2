@@ -265,10 +265,15 @@ final class DoctorWorkspace {
                 }));
 
     DoctorCalendarView[] calendarHolder = new DoctorCalendarView[1];
+    PatientDirectoryView[] patientDirectoryHolder = new PatientDirectoryView[1];
     Button logout = new Button("Log out");
     logout.setId("logout-button");
     logout.setOnAction(
         event -> {
+          clinicalHistoryView.dispose();
+          if (patientDirectoryHolder[0] != null) {
+            patientDirectoryHolder[0].dispose();
+          }
           if (calendarHolder[0] != null) {
             calendarHolder[0].dispose();
           }
@@ -403,6 +408,7 @@ final class DoctorWorkspace {
             },
             () -> showHistoryHolder[0].run(),
             clinicClock);
+    patientDirectoryHolder[0] = patientDirectory;
     setVisibleManaged(clinicalHistoryView.view(), false);
     StackPane patientPages = new StackPane(patientDirectory.view(), clinicalHistoryView.view());
     patientPages.setId("doctor-patient-pages");

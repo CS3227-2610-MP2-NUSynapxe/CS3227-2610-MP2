@@ -219,6 +219,7 @@ public final class DoctorCalendarView {
   /** Stops all page-owned resources when the Doctor workspace is discarded. */
   public void dispose() {
     shown = false;
+    refreshGeneration++;
     currentTimeTicker.stop();
     disposeScheduleList();
   }

@@ -4,6 +4,7 @@ import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import javafx.application.Platform;
@@ -49,7 +50,16 @@ public final class SerializedClinicTaskRunner implements ClinicTaskRunner {
   @Override
   public void close() {
     if (closed.compareAndSet(false, true)) {
-      executor.shutdownNow();
+      executor.shutdown();
+      try {
+        if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+          executor.shutdownNow();
+          executor.awaitTermination(1, TimeUnit.SECONDS);
+        }
+      } catch (InterruptedException interrupted) {
+        executor.shutdownNow();
+        Thread.currentThread().interrupt();
+      }
     }
   }
 
