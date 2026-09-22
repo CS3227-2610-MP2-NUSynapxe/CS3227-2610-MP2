@@ -158,7 +158,8 @@ final class ClinicalHistoryView {
 
   /** Reloads the patient selector without changing the selected history entry. */
   void refreshPatients() {
-    long generation = ++patientGeneration;
+    patientGeneration++;
+    long generation = patientGeneration;
     submit(
         () -> services.patientService().searchAdministrative(session, ""),
         patients -> {
@@ -205,7 +206,8 @@ final class ClinicalHistoryView {
   }
 
   private void loadHistory(Patient patient) {
-    long generation = ++historyGeneration;
+    historyGeneration++;
+    long generation = historyGeneration;
     state.setText("Loading consultation history...");
     clearHistory();
     submit(

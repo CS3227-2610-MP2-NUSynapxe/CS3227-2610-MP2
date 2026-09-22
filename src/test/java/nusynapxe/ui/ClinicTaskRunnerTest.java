@@ -16,10 +16,16 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 final class ClinicTaskRunnerTest {
+  private static final long SECOND_GENERATION = 2;
+  private static final long LATEST_GENERATION = 2;
+
   @BeforeAll
   static void startJavaFx() throws InterruptedException {
     try {
-      Platform.startup(() -> {});
+      Platform.startup(
+          () -> {
+            // JavaFX toolkit startup requires a callback.
+          });
     } catch (IllegalStateException ignored) {
       // The TestFX suite may already have initialized the toolkit.
     }
@@ -72,40 +78,56 @@ final class ClinicTaskRunnerTest {
     assertEquals("broken load", failure.get().getMessage());
   }
 
+  @SuppressWarnings("PMD.UseTryWithResources")
   @Test
   void closeRejectsNewWork() {
     ClinicTaskRunner runner = new SerializedClinicTaskRunner();
-    runner.close();
+    try {
+      runner.close();
 
-    assertThrows(
-        java.util.concurrent.RejectedExecutionException.class,
-        () -> runner.submit(() -> 1, ignored -> {}, failure -> {}));
+      assertThrows(
+          java.util.concurrent.RejectedExecutionException.class,
+          () ->
+              runner.submit(
+                  () -> 1,
+                  ignored -> {
+                    // No success callback is expected.
+                  },
+                  failure -> {
+                    // The rejection happens before a failure callback is registered.
+                  }));
+    } finally {
+      runner.close();
+    }
   }
 
   @Test
   void immediateRunnerAppliesOnlyTheLatestGeneration() {
     List<Integer> applied = new CopyOnWriteArrayList<>();
-    ClinicTaskRunner runner = ClinicTaskRunner.immediate();
-    long firstGeneration = 1;
-    long latestGeneration = 2;
+    try (ClinicTaskRunner runner = ClinicTaskRunner.immediate()) {
+      long firstGeneration = 1;
 
-    runner.submit(
-        () -> 1,
-        value -> {
-          if (firstGeneration == latestGeneration) {
-            applied.add(value);
-          }
-        },
-        failure -> {});
-    runner.submit(
-        () -> 2,
-        value -> {
-          if (latestGeneration == 2) {
-            applied.add(value);
-          }
-        },
-        failure -> {});
-    runner.close();
+      runner.submit(
+          () -> 1,
+          value -> {
+            if (firstGeneration == LATEST_GENERATION) {
+              applied.add(value);
+            }
+          },
+          failure -> {
+            // The immediate task does not fail.
+          });
+      runner.submit(
+          () -> 2,
+          value -> {
+            if (LATEST_GENERATION == SECOND_GENERATION) {
+              applied.add(value);
+            }
+          },
+          failure -> {
+            // The immediate task does not fail.
+          });
+    }
 
     assertEquals(List.of(2), applied);
     assertFalse(applied.contains(1));

@@ -2,6 +2,8 @@ package nusynapxe.architecture;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
@@ -101,9 +103,22 @@ final class ArchitectureTest {
     assertLineLimit("src/main/java/nusynapxe/ui/DoctorView.java", 450);
   }
 
+  @Test
+  void appointmentTableCellFactoriesRenderPreloadedRowsOnly() throws Exception {
+    String source =
+        Files.readString(Path.of("src/main/java/nusynapxe/ui/ReceptionistAppointmentView.java"));
+    assertTrue(source.contains("appointmentTable"));
+    for (String forbiddenCall :
+        new String[] {"getAdministrative(", "listDoctors(", "receiptHistory("}) {
+      assertFalse(
+          source.contains(forbiddenCall),
+          () -> "Appointment table must not perform " + forbiddenCall + " from a cell factory");
+    }
+  }
+
   private static void assertLineLimit(String file, int maximumLines) throws Exception {
-    long lineCount = Files.lines(Path.of(file)).count();
-    org.junit.jupiter.api.Assertions.assertTrue(
+    long lineCount = Files.readAllLines(Path.of(file)).size();
+    assertTrue(
         lineCount <= maximumLines,
         () -> file + " has " + lineCount + " lines; expected at most " + maximumLines);
   }

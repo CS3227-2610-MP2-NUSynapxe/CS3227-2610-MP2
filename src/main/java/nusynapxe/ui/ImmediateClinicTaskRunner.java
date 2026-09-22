@@ -9,6 +9,7 @@ final class ImmediateClinicTaskRunner implements ClinicTaskRunner {
   private final AtomicBoolean closed = new AtomicBoolean();
 
   @Override
+  @SuppressWarnings("PMD.AvoidCatchingGenericException")
   public <T> void submit(ClinicTask<T> task, Consumer<T> onSuccess, Consumer<Throwable> onFailure) {
     ClinicTaskRunner.requireCallbacks(task, onSuccess, onFailure);
     if (closed.get()) {
@@ -16,7 +17,7 @@ final class ImmediateClinicTaskRunner implements ClinicTaskRunner {
     }
     try {
       onSuccess.accept(task.run());
-    } catch (Throwable failure) {
+    } catch (Exception failure) {
       onFailure.accept(failure);
     }
   }

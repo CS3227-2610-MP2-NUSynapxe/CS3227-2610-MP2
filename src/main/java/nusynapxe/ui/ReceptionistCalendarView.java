@@ -147,7 +147,8 @@ final class ReceptionistCalendarView {
   }
 
   void refresh() {
-    long generation = ++refreshGeneration;
+    refreshGeneration++;
+    long generation = refreshGeneration;
     Account selected = doctor.getValue();
     if (selected == null) {
       disposeScheduleList();

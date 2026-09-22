@@ -25,6 +25,7 @@ public final class SerializedClinicTaskRunner implements ClinicTaskRunner {
   }
 
   @Override
+  @SuppressWarnings("PMD.AvoidCatchingGenericException")
   public <T> void submit(ClinicTask<T> task, Consumer<T> onSuccess, Consumer<Throwable> onFailure) {
     ClinicTaskRunner.requireCallbacks(task, onSuccess, onFailure);
     if (closed.get()) {
@@ -36,7 +37,7 @@ public final class SerializedClinicTaskRunner implements ClinicTaskRunner {
             try {
               T result = task.run();
               dispatch(() -> onSuccess.accept(result));
-            } catch (Throwable failure) {
+            } catch (Exception failure) {
               dispatch(() -> onFailure.accept(failure));
             }
           });

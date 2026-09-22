@@ -1560,16 +1560,6 @@ final class ReceptionistWorkspace {
     return AppointmentDialog.parseDateTime(date, time, fieldName);
   }
 
-  private static String patientDisplayName(
-      ClinicServices services, Session session, long patientId) {
-    try {
-      Patient details = services.patientService().getAdministrative(session, patientId);
-      return (valueOrEmpty(details.firstName()) + " " + valueOrEmpty(details.lastName())).trim();
-    } catch (SQLException | ValidationException | AuthorizationException ignored) {
-      return "Patient unavailable";
-    }
-  }
-
   private static String doctorDisplayName(ClinicServices services, Session session, long doctorId) {
     try {
       return services.accountService().listDoctors(session).stream()

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -262,8 +263,13 @@ final class PatientDirectoryRepositoryTest {
             "CREATE TABLE patient_flags ("
                 + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                 + "patient_id INTEGER NOT NULL REFERENCES patients(id))");
-        statement.executeUpdate(
-            "INSERT INTO patient_flags(patient_id) VALUES (" + patient.id() + ")");
+        try (PreparedStatement insert =
+            database
+                .connection()
+                .prepareStatement("INSERT INTO patient_flags(patient_id) VALUES (?)")) {
+          insert.setLong(1, patient.id());
+          insert.executeUpdate();
+        }
       }
 
       PatientDeletionBlockers blockers = patients.findDeletionBlockers(patient.id()).orElseThrow();

@@ -43,4 +43,37 @@
         <Method name="view"/>
         <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
+    <!-- The prescription batch query creates only JDBC placeholders from the record-id count; values remain bound parameters. -->
+    <Match>
+        <Class name="nusynapxe.persistence.ClinicalRecordRepository"/>
+        <Method name="findPrescriptionsByRecordIds"/>
+        <Bug pattern="SQL_INJECTION_JDBC"/>
+    </Match>
+    <!-- SQLite PRAGMA does not accept bound parameters for identifiers; these test helpers receive fixed internal table names. -->
+    <Match>
+        <Class name="nusynapxe.persistence.SchemaMigrationTest"/>
+        <Method name="columnNames"/>
+        <Bug pattern="SQL_INJECTION_JDBC"/>
+    </Match>
+    <Match>
+        <Class name="nusynapxe.persistence.SqliteDatabaseTest"/>
+        <Method name="columnNames"/>
+        <Bug pattern="SQL_INJECTION_JDBC"/>
+    </Match>
+    <Match>
+        <Class name="nusynapxe.persistence.SqliteDatabaseTest"/>
+        <Method name="foreignKeyDeleteActions"/>
+        <Bug pattern="SQL_INJECTION_JDBC"/>
+    </Match>
+    <!-- TestFX owns these mutable fields and invokes start on the JavaFX application thread. -->
+    <Match>
+        <Class name="nusynapxe.ui.ApplicationRouterTest"/>
+        <Method name="start"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="nusynapxe.ui.DoctorCalendarViewTest"/>
+        <Method name="start"/>
+        <Bug pattern="AT_NONATOMIC_64BIT_PRIMITIVE"/>
+    </Match>
 </FindBugsFilter>

@@ -139,7 +139,8 @@ public final class DoctorCalendarView {
   /** Refreshes the active Calendar mode and its saved display settings. */
   @SuppressWarnings("PMD.NullAssignment")
   public void refresh() {
-    long generation = ++refreshGeneration;
+    refreshGeneration++;
+    long generation = refreshGeneration;
     try {
       if (isCalendarMode()) {
         disposeScheduleList();

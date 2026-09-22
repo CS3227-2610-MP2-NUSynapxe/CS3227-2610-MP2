@@ -128,7 +128,8 @@ final class DoctorDashboardDayView {
       UiComponents.showError(feedback, "Select a Dashboard date");
       return;
     }
-    long generation = ++refreshGeneration;
+    refreshGeneration++;
+    long generation = refreshGeneration;
     submit(
         () -> services.calendarService().getRange(session, selectedDate, selectedDate),
         data -> {
