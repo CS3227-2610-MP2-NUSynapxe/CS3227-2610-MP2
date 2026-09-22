@@ -1728,10 +1728,9 @@ public final class ReceptionistView {
                   .billingService()
                   .checkout(
                       session, appointmentId, parseMinor(charge.getText()), method.getValue());
-              services.billingService().receiptHistory(session, "", null, null).stream()
-                  .filter(receipt -> receipt.appointmentId() == appointmentId)
-                  .findFirst()
-                  .ifPresent(receipt -> receiptPreview.setText(formatReceipt(receipt)));
+              Receipt receipt =
+                  services.billingService().receiptForAppointment(session, appointmentId);
+              receiptPreview.setText(formatReceipt(receipt));
               UiComponents.showMessage(workspaceFeedback, "Checkout completed");
               onUpdated.run();
               dialog.close();

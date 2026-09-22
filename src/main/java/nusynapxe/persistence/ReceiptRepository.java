@@ -15,6 +15,8 @@ public final class ReceiptRepository {
   private static final String RECEIPT_QUERY =
       "SELECT r.id, r.payment_id, r.appointment_id, r.patient_id, p.first_name || ' ' || p.last_name patient_name, u.display_name doctor_name, r.amount_minor, r.method, r.receipt_date, r.sequence_number, r.recorded_at FROM receipts r JOIN patients p ON p.id = r.patient_id JOIN appointments a ON a.id = r.appointment_id JOIN users u ON u.id = a.doctor_id";
   private static final String FIND_BY_ID_QUERY = RECEIPT_QUERY + " WHERE r.id = ?";
+  private static final String FIND_BY_APPOINTMENT_QUERY =
+      RECEIPT_QUERY + " WHERE r.appointment_id = ? ORDER BY r.id DESC LIMIT 1";
   private static final String FIND_ALL_QUERY =
       RECEIPT_QUERY
           + " WHERE (? IS NULL OR ? = '' OR CAST(p.id AS TEXT) LIKE lower(?) OR lower(p.first_name || ' ' || p.last_name) LIKE lower(?) OR lower(p.email) LIKE lower(?)) AND (? IS NULL OR a.doctor_id = ?) AND (? IS NULL OR r.receipt_date = ?) ORDER BY r.receipt_date DESC, r.sequence_number DESC";
@@ -113,6 +115,26 @@ public final class ReceiptRepository {
   public Receipt findById(long id) throws SQLException {
     try (PreparedStatement statement = database.connection().prepareStatement(FIND_BY_ID_QUERY)) {
       statement.setLong(1, id);
+      try (ResultSet result = statement.executeQuery()) {
+        if (!result.next()) {
+          throw new SQLException("Receipt does not exist");
+        }
+        return read(result);
+      }
+    }
+  }
+
+  /**
+   * Finds the receipt associated with one appointment.
+   *
+   * @param appointmentId appointment identifier
+   * @return the matching receipt
+   * @throws SQLException if the receipt does not exist or the query fails
+   */
+  public Receipt findByAppointment(long appointmentId) throws SQLException {
+    try (PreparedStatement statement =
+        database.connection().prepareStatement(FIND_BY_APPOINTMENT_QUERY)) {
+      statement.setLong(1, appointmentId);
       try (ResultSet result = statement.executeQuery()) {
         if (!result.next()) {
           throw new SQLException("Receipt does not exist");

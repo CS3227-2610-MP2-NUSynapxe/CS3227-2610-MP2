@@ -168,4 +168,18 @@ public final class BillingService {
     Authorization.requireRole(actor, Role.RECEPTIONIST);
     return receipts.findById(receiptId);
   }
+
+  /**
+   * Returns the receipt directly associated with an appointment.
+   *
+   * @param actor authenticated Receptionist session
+   * @param appointmentId appointment identifier
+   * @return the matching receipt
+   * @throws AuthorizationException if the actor is not a Receptionist
+   * @throws SQLException if the receipt does not exist or the query fails
+   */
+  public Receipt receiptForAppointment(Session actor, long appointmentId) throws SQLException {
+    Authorization.requireRole(actor, Role.RECEPTIONIST);
+    return receipts.findByAppointment(appointmentId);
+  }
 }
