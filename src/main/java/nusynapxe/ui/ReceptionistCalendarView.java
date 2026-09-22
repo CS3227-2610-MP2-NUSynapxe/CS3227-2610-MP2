@@ -184,12 +184,13 @@ final class ReceptionistCalendarView {
         root.setCenter(scheduleList);
       } else {
         disposeScheduleList();
-        List<LocalDate> dates = selectedDates();
+        CalendarRangeSnapshot range = selectedRange();
+        List<LocalDate> dates = selectedDates(range);
         submit(
             () ->
                 services
                     .calendarService()
-                    .getReceptionistRange(session, selected.id(), from.getValue(), to.getValue()),
+                    .getReceptionistRange(session, selected.id(), range.from(), range.to()),
             data -> {
               if (disposed || generation != refreshGeneration) {
                 return;
@@ -336,6 +337,20 @@ final class ReceptionistCalendarView {
   private List<LocalDate> selectedDates() {
     LocalDate start = from.getValue();
     LocalDate end = to.getValue();
+    return selectedDates(validateRange(start, end));
+  }
+
+  private List<LocalDate> selectedDates(CalendarRangeSnapshot range) {
+    LocalDate start = range.from();
+    LocalDate end = range.to();
+    return start.datesUntil(end.plusDays(1)).toList();
+  }
+
+  private CalendarRangeSnapshot selectedRange() {
+    return validateRange(from.getValue(), to.getValue());
+  }
+
+  private CalendarRangeSnapshot validateRange(LocalDate start, LocalDate end) {
     if (start == null || end == null) {
       throw new ValidationException("Select both From and To dates");
     }
@@ -346,7 +361,7 @@ final class ReceptionistCalendarView {
       throw new ValidationException(
           "Select a calendar range of " + MAX_RANGE_DAYS + " days or fewer");
     }
-    return start.datesUntil(end.plusDays(1)).toList();
+    return CalendarRangeSnapshot.capture(start, end);
   }
 
   private static String doctorLabel(Account account) {

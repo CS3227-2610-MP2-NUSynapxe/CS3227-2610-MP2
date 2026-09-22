@@ -129,9 +129,9 @@ final class ReceptionistCheckoutPanel {
   }
 
   void refreshDoctors() {
-    dataLoader.refreshDoctors(queueDoctor, workspaceFeedback);
-    dataLoader.refreshDoctors(checkoutDoctor, workspaceFeedback);
-    dataLoader.refreshDoctors(receiptDoctor, workspaceFeedback);
+    dataLoader.refreshDoctors(queueDoctor, workspaceFeedback, false);
+    dataLoader.refreshDoctors(checkoutDoctor, workspaceFeedback, false);
+    dataLoader.refreshDoctors(receiptDoctor, workspaceFeedback, false);
   }
 
   void refreshQueue() {

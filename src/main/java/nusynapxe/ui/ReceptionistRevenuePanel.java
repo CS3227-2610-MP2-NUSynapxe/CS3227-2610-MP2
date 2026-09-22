@@ -117,7 +117,7 @@ final class ReceptionistRevenuePanel {
   }
 
   void refreshDoctors() {
-    dataLoader.refreshDoctors(doctor, feedback);
+    dataLoader.refreshDoctors(doctor, feedback, false);
     doctor.clearSelection();
   }
 

@@ -1,0 +1,21 @@
+package nusynapxe.ui;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.time.LocalDate;
+import org.junit.jupiter.api.Test;
+
+final class CalendarRangeSnapshotTest {
+  @Test
+  void retainsDatesCapturedBeforeAQueuedTaskRuns() {
+    LocalDate from = LocalDate.of(2026, 9, 22);
+    LocalDate to = LocalDate.of(2026, 9, 28);
+
+    CalendarRangeSnapshot snapshot = CalendarRangeSnapshot.capture(from, to);
+    from = from.plusDays(14);
+    to = to.plusDays(14);
+
+    assertEquals(LocalDate.of(2026, 9, 22), snapshot.from());
+    assertEquals(LocalDate.of(2026, 9, 28), snapshot.to());
+  }
+}

@@ -39,7 +39,7 @@ final class ReceptionistDataLoader {
   private long queueGeneration;
   private long checkoutGeneration;
   private long receiptGeneration;
-  private long doctorGeneration;
+  private final SelectorLoadGeneration doctorGenerations = new SelectorLoadGeneration();
   private boolean disposed;
 
   ReceptionistDataLoader(ClinicServices services, Session session, ClinicTaskRunner taskRunner) {
@@ -54,7 +54,6 @@ final class ReceptionistDataLoader {
     queueGeneration++;
     checkoutGeneration++;
     receiptGeneration++;
-    doctorGeneration++;
   }
 
   void loadCheckInDetails(
@@ -166,25 +165,28 @@ final class ReceptionistDataLoader {
       Session ignoredSession,
       SearchSuggestionField<Account> doctor,
       Label feedback) {
-    refreshDoctors(doctor, feedback);
+    refreshDoctors(doctor, feedback, true);
   }
 
   void refreshDoctors(SearchSuggestionField<Account> doctor, Label feedback) {
-    doctorGeneration++;
-    long generation = doctorGeneration;
+    refreshDoctors(doctor, feedback, true);
+  }
+
+  void refreshDoctors(SearchSuggestionField<Account> doctor, Label feedback, boolean selectFirst) {
+    long generation = doctorGenerations.next(doctor);
     submit(
         () -> services.accountService().listDoctors(session),
         doctors -> {
-          if (generation != doctorGeneration) {
+          if (disposed || !doctorGenerations.isCurrent(doctor, generation)) {
             return;
           }
           doctor.setItems(doctors);
-          if (!doctor.getItems().isEmpty()) {
+          if (selectFirst && !doctor.getItems().isEmpty()) {
             doctor.select(doctor.getItems().getFirst());
           }
         },
         failure -> {
-          if (generation == doctorGeneration) {
+          if (!disposed && doctorGenerations.isCurrent(doctor, generation)) {
             UiComponents.showError(feedback, "Doctors are temporarily unavailable");
           }
         });

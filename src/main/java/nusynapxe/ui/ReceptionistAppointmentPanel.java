@@ -116,7 +116,7 @@ final class ReceptionistAppointmentPanel {
 
   void refreshDoctors() {
     dataLoader.refreshDoctors(doctor, feedback);
-    dataLoader.refreshDoctors(scheduleDoctor, feedback);
+    dataLoader.refreshDoctors(scheduleDoctor, feedback, false);
   }
 
   void refresh() {
