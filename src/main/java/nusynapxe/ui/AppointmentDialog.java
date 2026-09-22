@@ -20,12 +20,12 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.Window;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.Session;
 import nusynapxe.service.AuthorizationException;
-import nusynapxe.service.CalendarService;
 import nusynapxe.service.ClinicServices;
 import nusynapxe.service.ValidationException;
 
@@ -47,7 +47,7 @@ final class AppointmentDialog {
       Runnable onUpdated) {
     LocalDateTime start =
         initialStart == null
-            ? LocalDateTime.now(CalendarService.CLINIC_ZONE).withSecond(0).withNano(0)
+            ? ClinicClock.now(ClinicClock.system()).withSecond(0).withNano(0)
             : initialStart;
     start = nearestHalfHour(start);
     showEditor(
