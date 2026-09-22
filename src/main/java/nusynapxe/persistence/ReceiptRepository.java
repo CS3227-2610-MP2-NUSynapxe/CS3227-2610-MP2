@@ -128,18 +128,15 @@ public final class ReceiptRepository {
    * Finds the receipt associated with one appointment.
    *
    * @param appointmentId appointment identifier
-   * @return the matching receipt
-   * @throws SQLException if the receipt does not exist or the query fails
+   * @return the matching receipt, or empty when the appointment has no receipt
+   * @throws SQLException if the query fails
    */
-  public Receipt findByAppointment(long appointmentId) throws SQLException {
+  public java.util.Optional<Receipt> findByAppointment(long appointmentId) throws SQLException {
     try (PreparedStatement statement =
         database.connection().prepareStatement(FIND_BY_APPOINTMENT_QUERY)) {
       statement.setLong(1, appointmentId);
       try (ResultSet result = statement.executeQuery()) {
-        if (!result.next()) {
-          throw new SQLException("Receipt does not exist");
-        }
-        return read(result);
+        return result.next() ? java.util.Optional.of(read(result)) : java.util.Optional.empty();
       }
     }
   }

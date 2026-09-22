@@ -299,6 +299,7 @@ final class ClinicRepositoryTest {
                   PaymentMethod.CARD)
               .size());
       assertTrue(receipts.findAll("unknown", null, LocalDate.of(2026, 9, 1)).isEmpty());
+      assertTrue(receipts.findByAppointment(appointment.id() + 1).isEmpty());
     }
   }
 

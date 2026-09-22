@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import nusynapxe.ClinicClock;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
@@ -160,7 +161,7 @@ public final class BillingService {
    *
    * @param actor authenticated Receptionist session
    * @param receiptId receipt identifier
-   * @return the matching receipt
+   * @return the matching receipt, or empty when the appointment has no receipt
    * @throws AuthorizationException if the actor is not a Receptionist
    * @throws SQLException if the receipt does not exist or the query fails
    */
@@ -178,7 +179,8 @@ public final class BillingService {
    * @throws AuthorizationException if the actor is not a Receptionist
    * @throws SQLException if the receipt does not exist or the query fails
    */
-  public Receipt receiptForAppointment(Session actor, long appointmentId) throws SQLException {
+  public Optional<Receipt> receiptForAppointment(Session actor, long appointmentId)
+      throws SQLException {
     Authorization.requireRole(actor, Role.RECEPTIONIST);
     return receipts.findByAppointment(appointmentId);
   }

@@ -50,6 +50,7 @@ final class BillingServiceTest {
           fixture.appointment().id(),
           billing
               .receiptForAppointment(fixture.receptionistSession(), fixture.appointment().id())
+              .orElseThrow()
               .appointmentId());
       assertThrows(
           ValidationException.class,

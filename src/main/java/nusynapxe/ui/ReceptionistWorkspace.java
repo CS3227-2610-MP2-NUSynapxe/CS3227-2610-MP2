@@ -1530,9 +1530,12 @@ final class ReceptionistWorkspace {
                   .billingService()
                   .checkout(
                       session, appointmentId, parseMinor(charge.getText()), method.getValue());
-              Receipt receipt =
-                  services.billingService().receiptForAppointment(session, appointmentId);
-              receiptPreview.setText(ReceptionistCheckoutView.formatReceipt(receipt));
+              services
+                  .billingService()
+                  .receiptForAppointment(session, appointmentId)
+                  .ifPresent(
+                      receipt ->
+                          receiptPreview.setText(ReceptionistCheckoutView.formatReceipt(receipt)));
               UiComponents.showMessage(workspaceFeedback, "Checkout completed");
               onUpdated.run();
               dialog.close();
