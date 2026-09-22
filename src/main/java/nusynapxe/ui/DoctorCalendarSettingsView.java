@@ -1,6 +1,5 @@
 package nusynapxe.ui;
 
-import java.sql.SQLException;
 import java.time.DayOfWeek;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
@@ -26,7 +25,6 @@ import javafx.scene.layout.VBox;
 import nusynapxe.domain.DoctorCalendarSettings;
 import nusynapxe.domain.Session;
 import nusynapxe.domain.WorkingInterval;
-import nusynapxe.service.AuthorizationException;
 import nusynapxe.service.ClinicServices;
 import nusynapxe.service.ValidationException;
 
@@ -41,6 +39,7 @@ public final class DoctorCalendarSettingsView {
   private final Runnable onBack;
   private final Runnable onSaved;
   private final Label feedback;
+  private final ClinicTaskRunner taskRunner;
   private final Map<DayOfWeek, DayEditor> dayEditors = new EnumMap<>(DayOfWeek.class);
   private final BorderPane root;
   private Button saveButton;
@@ -59,11 +58,22 @@ public final class DoctorCalendarSettingsView {
    */
   public DoctorCalendarSettingsView(
       ClinicServices services, Session session, Runnable onBack, Runnable onSaved, Label feedback) {
+    this(services, session, onBack, onSaved, feedback, ClinicTaskRunner.immediate());
+  }
+
+  DoctorCalendarSettingsView(
+      ClinicServices services,
+      Session session,
+      Runnable onBack,
+      Runnable onSaved,
+      Label feedback,
+      ClinicTaskRunner taskRunner) {
     this.services = Objects.requireNonNull(services, "services");
     this.session = Objects.requireNonNull(session, "session");
     this.onBack = Objects.requireNonNull(onBack, "onBack");
     this.onSaved = Objects.requireNonNull(onSaved, "onSaved");
     this.feedback = Objects.requireNonNull(feedback, "feedback");
+    this.taskRunner = Objects.requireNonNull(taskRunner, "taskRunner");
     root = buildRoot();
     reload();
   }
@@ -79,19 +89,22 @@ public final class DoctorCalendarSettingsView {
 
   /** Reloads persisted settings into the editable draft. */
   public void reload() {
-    try {
-      populate(services.calendarService().getSettings(session));
-      settingsLoaded = true;
-      if (saveButton != null) {
-        saveButton.setDisable(false);
-      }
-    } catch (SQLException | AuthorizationException | ValidationException exception) {
-      settingsLoaded = false;
-      if (saveButton != null) {
-        saveButton.setDisable(true);
-      }
-      feedback.setText(userMessage(exception, "Calendar settings are temporarily unavailable"));
-    }
+    taskRunner.submit(
+        () -> services.calendarService().getSettings(session),
+        settings -> {
+          populate(settings);
+          settingsLoaded = true;
+          if (saveButton != null) {
+            saveButton.setDisable(false);
+          }
+        },
+        failure -> {
+          settingsLoaded = false;
+          if (saveButton != null) {
+            saveButton.setDisable(true);
+          }
+          feedback.setText(userMessage(failure, "Calendar settings are temporarily unavailable"));
+        });
   }
 
   private BorderPane buildRoot() {
@@ -169,13 +182,18 @@ public final class DoctorCalendarSettingsView {
       }
       DoctorCalendarSettings settings =
           new DoctorCalendarSettings(session.accountId(), firstDayOfWeek, intervals);
-      services.calendarService().saveSettings(session, settings);
-      feedback.setText("Calendar settings saved");
-      onSaved.run();
-    } catch (SQLException
-        | AuthorizationException
-        | ValidationException
-        | IllegalArgumentException exception) {
+      taskRunner.submit(
+          () -> {
+            services.calendarService().saveSettings(session, settings);
+            return null;
+          },
+          ignored -> {
+            feedback.setText("Calendar settings saved");
+            onSaved.run();
+          },
+          failure ->
+              feedback.setText(userMessage(failure, "Calendar settings could not be saved")));
+    } catch (ValidationException | IllegalArgumentException exception) {
       feedback.setText(userMessage(exception, "Calendar settings could not be saved"));
     }
   }
@@ -202,7 +220,7 @@ public final class DoctorCalendarSettingsView {
         : SETTINGS_ID_PREFIX + dayName + "-" + suffix;
   }
 
-  private static String userMessage(Exception exception, String fallback) {
+  private static String userMessage(Throwable exception, String fallback) {
     return exception.getMessage() == null ? fallback : exception.getMessage();
   }
 

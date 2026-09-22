@@ -542,7 +542,8 @@ final class DoctorWorkspace {
     calendarHolder[0] =
         new DoctorCalendarView(services, session, showSettings, feedback, clinicClock, taskRunner);
     settingsHolder[0] =
-        new DoctorCalendarSettingsView(services, session, showCalendar, showCalendar, feedback);
+        new DoctorCalendarSettingsView(
+            services, session, showCalendar, showCalendar, feedback, taskRunner);
     dashboardNavigation.setOnAction(
         event -> {
           calendarHolder[0].hide();
