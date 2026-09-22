@@ -72,6 +72,7 @@ final class DoctorWorkspace {
       ClinicTaskRunner taskRunner) {
     Clock clinicClock =
         Objects.requireNonNull(clock, "clock").withZone(CalendarService.CLINIC_ZONE);
+    WorkspaceLifecycle lifecycle = new WorkspaceLifecycle();
     SelectionState selection = new SelectionState();
     Label feedback = UiComponents.feedback("doctor-feedback");
 
@@ -208,7 +209,8 @@ final class DoctorWorkspace {
                   dashboardHolder[0].refresh();
                 }
               },
-              taskRunner);
+              taskRunner,
+              lifecycle::isActive);
         });
 
     complete.setOnAction(
@@ -241,6 +243,7 @@ final class DoctorWorkspace {
     logout.setId("logout-button");
     logout.setOnAction(
         event -> {
+          lifecycle.invalidate();
           clinicalHistoryView.dispose();
           if (patientDirectoryHolder[0] != null) {
             patientDirectoryHolder[0].dispose();
@@ -432,7 +435,14 @@ final class DoctorWorkspace {
           patientsNavigation.getStyleClass().remove(ACTIVE_NAVIGATION_STYLE);
         };
     calendarHolder[0] =
-        new DoctorCalendarView(services, session, showSettings, feedback, clinicClock, taskRunner);
+        new DoctorCalendarView(
+            services,
+            session,
+            showSettings,
+            feedback,
+            clinicClock,
+            taskRunner,
+            lifecycle::isActive);
     settingsHolder[0] =
         new DoctorCalendarSettingsView(
             services, session, showCalendar, showCalendar, feedback, taskRunner);

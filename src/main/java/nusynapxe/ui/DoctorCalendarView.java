@@ -7,6 +7,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.function.BooleanSupplier;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.geometry.Insets;
@@ -41,6 +42,7 @@ public final class DoctorCalendarView {
   private final Label feedback;
   private final Clock clock;
   private final ClinicTaskRunner taskRunner;
+  private final BooleanSupplier workspaceActive;
   private final BorderPane root;
   private final Button previous;
   private final Button next;
@@ -95,12 +97,24 @@ public final class DoctorCalendarView {
       Label feedback,
       Clock clock,
       ClinicTaskRunner taskRunner) {
+    this(services, session, onSettings, feedback, clock, taskRunner, () -> true);
+  }
+
+  DoctorCalendarView(
+      ClinicServices services,
+      Session session,
+      Runnable onSettings,
+      Label feedback,
+      Clock clock,
+      ClinicTaskRunner taskRunner,
+      BooleanSupplier workspaceActive) {
     this.services = Objects.requireNonNull(services, "services");
     this.session = Objects.requireNonNull(session, "session");
     this.onSettings = Objects.requireNonNull(onSettings, "onSettings");
     this.feedback = Objects.requireNonNull(feedback, "feedback");
     this.clock = Objects.requireNonNull(clock, "clock").withZone(CalendarService.CLINIC_ZONE);
     this.taskRunner = Objects.requireNonNull(taskRunner, "taskRunner");
+    this.workspaceActive = Objects.requireNonNull(workspaceActive, "workspaceActive");
     LocalDate today = LocalDate.now(this.clock);
     scheduleAnchor = CalendarScheduleCalculations.today(this.clock);
     previous = UiComponents.secondaryButton("‹", "doctor-calendar-previous");
@@ -453,7 +467,8 @@ public final class DoctorCalendarView {
         feedback,
         this::refresh,
         clock,
-        taskRunner);
+        taskRunner,
+        workspaceActive);
   }
 
   private void openCreateTimeOff() {
@@ -488,7 +503,13 @@ public final class DoctorCalendarView {
     if (appointment.status() == AppointmentStatus.PENDING
         || appointment.status() == AppointmentStatus.ACCEPTED) {
       AppointmentDialog.showDoctorEdit(
-          services, session, appointment.appointmentId(), feedback, this::refresh, taskRunner);
+          services,
+          session,
+          appointment.appointmentId(),
+          feedback,
+          this::refresh,
+          taskRunner,
+          workspaceActive);
     }
   }
 

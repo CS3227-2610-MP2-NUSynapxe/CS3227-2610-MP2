@@ -19,3 +19,5 @@ Task 1: complete (commit 73e22f6; tests: DoctorAppointmentTargetTest and DoctorV
 
 Task 2: Ruling: the independent-selector test initially compared numeric generations across different selector keys; corrected it to assert freshness per selector, because equal generation numbers are valid for independent keys. Cost if wrong: the test would reject a correct per-selector generation design.
 Task 2: complete (commit subject: fix: snapshot calendar and selector inputs; tests: CalendarRangeSnapshotTest, SelectorLoadGenerationTest, ReceptionistDataLoaderTest, DoctorCalendarViewTest, and ReceptionistViewTest -> passed)
+
+Task 3: complete (commit subject: fix: guard appointment dialogs after logout; tests: WorkspaceLifecycleTest, DoctorCalendarViewTest, DoctorViewTest, and ReceptionistViewTest -> passed)

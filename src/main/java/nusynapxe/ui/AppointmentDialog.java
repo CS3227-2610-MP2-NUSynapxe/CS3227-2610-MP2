@@ -58,7 +58,8 @@ final class AppointmentDialog {
         workspaceFeedback,
         onUpdated,
         ClinicClock.system(),
-        ClinicTaskRunner.immediate());
+        ClinicTaskRunner.immediate(),
+        () -> true);
   }
 
   static void showCreate(
@@ -77,7 +78,8 @@ final class AppointmentDialog {
         workspaceFeedback,
         onUpdated,
         ClinicClock.system(),
-        taskRunner);
+        taskRunner,
+        () -> true);
   }
 
   static void showCreate(
@@ -88,7 +90,8 @@ final class AppointmentDialog {
       Label workspaceFeedback,
       Runnable onUpdated,
       java.time.Clock clock,
-      ClinicTaskRunner taskRunner) {
+      ClinicTaskRunner taskRunner,
+      java.util.function.BooleanSupplier workspaceActive) {
     LocalDateTime start =
         initialStart == null ? ClinicClock.now(clock).withSecond(0).withNano(0) : initialStart;
     start = nearestHalfHour(start);
@@ -104,7 +107,29 @@ final class AppointmentDialog {
         false,
         workspaceFeedback,
         onUpdated,
-        taskRunner);
+        taskRunner,
+        workspaceActive);
+  }
+
+  static void showCreate(
+      ClinicServices services,
+      Session session,
+      long doctorId,
+      LocalDateTime initialStart,
+      Label workspaceFeedback,
+      Runnable onUpdated,
+      java.time.Clock clock,
+      ClinicTaskRunner taskRunner) {
+    showCreate(
+        services,
+        session,
+        doctorId,
+        initialStart,
+        workspaceFeedback,
+        onUpdated,
+        clock,
+        taskRunner,
+        () -> true);
   }
 
   /** Opens a Receptionist booking dialog for a Doctor and optional Calendar slot. */
@@ -133,6 +158,26 @@ final class AppointmentDialog {
       Label workspaceFeedback,
       Runnable onUpdated,
       ClinicTaskRunner taskRunner) {
+    showReceptionistCreate(
+        services,
+        session,
+        doctorId,
+        initialStart,
+        workspaceFeedback,
+        onUpdated,
+        taskRunner,
+        () -> true);
+  }
+
+  static void showReceptionistCreate(
+      ClinicServices services,
+      Session session,
+      long doctorId,
+      LocalDateTime initialStart,
+      Label workspaceFeedback,
+      Runnable onUpdated,
+      ClinicTaskRunner taskRunner,
+      java.util.function.BooleanSupplier workspaceActive) {
     LocalDateTime start = nearestHalfHour(initialStart);
     showEditor(
         services,
@@ -146,7 +191,8 @@ final class AppointmentDialog {
         false,
         workspaceFeedback,
         onUpdated,
-        taskRunner);
+        taskRunner,
+        workspaceActive);
   }
 
   /** Opens a shared appointment editor for a Doctor-owned appointment. */
@@ -172,6 +218,18 @@ final class AppointmentDialog {
       Label workspaceFeedback,
       Runnable onUpdated,
       ClinicTaskRunner taskRunner) {
+    showDoctorEdit(
+        services, session, appointmentId, workspaceFeedback, onUpdated, taskRunner, () -> true);
+  }
+
+  static void showDoctorEdit(
+      ClinicServices services,
+      Session session,
+      long appointmentId,
+      Label workspaceFeedback,
+      Runnable onUpdated,
+      ClinicTaskRunner taskRunner,
+      java.util.function.BooleanSupplier workspaceActive) {
     showEdit(
         services,
         session,
@@ -181,7 +239,8 @@ final class AppointmentDialog {
         true,
         workspaceFeedback,
         onUpdated,
-        taskRunner);
+        taskRunner,
+        workspaceActive);
   }
 
   /** Opens the shared receptionist rescheduling and cancellation dialog. */
@@ -207,6 +266,18 @@ final class AppointmentDialog {
       Label workspaceFeedback,
       Runnable onUpdated,
       ClinicTaskRunner taskRunner) {
+    showReceptionistEdit(
+        services, session, appointmentId, workspaceFeedback, onUpdated, taskRunner, () -> true);
+  }
+
+  static void showReceptionistEdit(
+      ClinicServices services,
+      Session session,
+      long appointmentId,
+      Label workspaceFeedback,
+      Runnable onUpdated,
+      ClinicTaskRunner taskRunner,
+      java.util.function.BooleanSupplier workspaceActive) {
     showEdit(
         services,
         session,
@@ -216,7 +287,8 @@ final class AppointmentDialog {
         false,
         workspaceFeedback,
         onUpdated,
-        taskRunner);
+        taskRunner,
+        workspaceActive);
   }
 
   /** Creates the half-hour time controls used by inline receptionist booking. */
@@ -277,12 +349,14 @@ final class AppointmentDialog {
       boolean doctorActions,
       Label workspaceFeedback,
       Runnable onUpdated,
-      ClinicTaskRunner taskRunner) {
+      ClinicTaskRunner taskRunner,
+      BooleanSupplier workspaceActive) {
+    Objects.requireNonNull(workspaceActive, "workspaceActive");
     long generation = nextGeneration(prefix);
     taskRunner.submit(
         () -> services.appointmentService().get(appointmentId),
         appointment -> {
-          if (isCurrent(prefix, generation)) {
+          if (workspaceActive.getAsBoolean() && isCurrent(prefix, generation)) {
             showEditor(
                 services,
                 session,
@@ -295,11 +369,12 @@ final class AppointmentDialog {
                 doctorActions,
                 workspaceFeedback,
                 onUpdated,
-                taskRunner);
+                taskRunner,
+                workspaceActive);
           }
         },
         failure -> {
-          if (isCurrent(prefix, generation)) {
+          if (workspaceActive.getAsBoolean() && isCurrent(prefix, generation)) {
             workspaceFeedback.setText(message(failure));
           }
         });
@@ -317,11 +392,13 @@ final class AppointmentDialog {
       boolean doctorActions,
       Label workspaceFeedback,
       Runnable onUpdated,
-      ClinicTaskRunner taskRunner) {
+      ClinicTaskRunner taskRunner,
+      BooleanSupplier workspaceActive) {
     Objects.requireNonNull(services, "services");
     Objects.requireNonNull(session, "session");
     Objects.requireNonNull(workspaceFeedback, "workspaceFeedback");
     Objects.requireNonNull(onUpdated, "onUpdated");
+    Objects.requireNonNull(workspaceActive, "workspaceActive");
     long generation = nextGeneration(prefix);
     taskRunner.submit(
         () -> {
@@ -347,7 +424,7 @@ final class AppointmentDialog {
           return new EditorData(appointment, currentPatient, availablePatients, doctorName);
         },
         loaded -> {
-          if (isCurrent(prefix, generation)) {
+          if (workspaceActive.getAsBoolean() && isCurrent(prefix, generation)) {
             renderEditor(
                 services,
                 session,
@@ -360,12 +437,13 @@ final class AppointmentDialog {
                 workspaceFeedback,
                 onUpdated,
                 taskRunner,
+                workspaceActive,
                 generation,
                 loaded);
           }
         },
         failure -> {
-          if (isCurrent(prefix, generation)) {
+          if (workspaceActive.getAsBoolean() && isCurrent(prefix, generation)) {
             workspaceFeedback.setText(message(failure));
           }
         });
@@ -383,6 +461,7 @@ final class AppointmentDialog {
       Label workspaceFeedback,
       Runnable onUpdated,
       ClinicTaskRunner taskRunner,
+      BooleanSupplier workspaceActive,
       long generation,
       EditorData loaded) {
     Appointment appointment = loaded.appointment();
@@ -438,7 +517,8 @@ final class AppointmentDialog {
     decline.setVisible(decisionVisible);
     decline.setManaged(decisionVisible);
     Stage dialog = new Stage();
-    BooleanSupplier isActive = () -> isCurrent(prefix, generation) && dialog.isShowing();
+    BooleanSupplier isActive =
+        () -> workspaceActive.getAsBoolean() && isCurrent(prefix, generation) && dialog.isShowing();
     submit.setOnAction(
         event ->
             save(

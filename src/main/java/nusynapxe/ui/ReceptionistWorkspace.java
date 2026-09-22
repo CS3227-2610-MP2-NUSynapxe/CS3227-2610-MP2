@@ -53,10 +53,12 @@ final class ReceptionistWorkspace {
       Clock clock,
       ClinicTaskRunner taskRunner) {
     Clock clinicClock = ClinicClock.withClinicZone(clock);
+    WorkspaceLifecycle lifecycle = new WorkspaceLifecycle();
     Label feedback = UiComponents.feedback("reception-feedback");
     ReceptionistDataLoader dataLoader = new ReceptionistDataLoader(services, session, taskRunner);
     ReceptionistAppointmentPanel appointmentPanel =
-        new ReceptionistAppointmentPanel(services, session, dataLoader, feedback, taskRunner);
+        new ReceptionistAppointmentPanel(
+            services, session, dataLoader, feedback, taskRunner, lifecycle::isActive);
     ReceptionistCheckoutPanel checkoutPanel =
         new ReceptionistCheckoutPanel(dataLoader, feedback, clinicClock);
     appointmentPanel.setRefreshCheckout(checkoutPanel::refreshCheckout);
@@ -78,6 +80,7 @@ final class ReceptionistWorkspace {
     Button logout = navigationButton("Log out", "logout-button");
     logout.setOnAction(
         event -> {
+          lifecycle.invalidate();
           dataLoader.dispose();
           patientDirectory.dispose();
           if (calendarHolder[0] != null) {
@@ -107,7 +110,8 @@ final class ReceptionistWorkspace {
                       appointmentPanel.refresh();
                       checkoutPanel.refreshCheckout();
                     },
-                    taskRunner),
+                    taskRunner,
+                    lifecycle::isActive),
             selectedAppointment ->
                 AppointmentDialog.showReceptionistEdit(
                     services,
@@ -119,7 +123,8 @@ final class ReceptionistWorkspace {
                       appointmentPanel.refresh();
                       checkoutPanel.refreshCheckout();
                     },
-                    taskRunner),
+                    taskRunner,
+                    lifecycle::isActive),
             clinicClock,
             taskRunner);
     Tab calendarFeature = new Tab("Calendar", calendarHolder[0].view());

@@ -1,5 +1,6 @@
 package nusynapxe.ui;
 
+import java.util.function.BooleanSupplier;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
@@ -35,6 +36,7 @@ final class ReceptionistAppointmentPanel {
   private final ReceptionistDataLoader dataLoader;
   private final Label feedback;
   private final ClinicTaskRunner taskRunner;
+  private final BooleanSupplier workspaceActive;
   private final SearchSuggestionField<Patient> patientSearch;
   private final SearchSuggestionField<Account> doctor;
   private final SearchSuggestionField<Account> scheduleDoctor;
@@ -59,11 +61,22 @@ final class ReceptionistAppointmentPanel {
       ReceptionistDataLoader dataLoader,
       Label feedback,
       ClinicTaskRunner taskRunner) {
+    this(services, session, dataLoader, feedback, taskRunner, () -> true);
+  }
+
+  ReceptionistAppointmentPanel(
+      ClinicServices services,
+      Session session,
+      ReceptionistDataLoader dataLoader,
+      Label feedback,
+      ClinicTaskRunner taskRunner,
+      BooleanSupplier workspaceActive) {
     this.services = services;
     this.session = session;
     this.dataLoader = dataLoader;
     this.feedback = feedback;
     this.taskRunner = taskRunner;
+    this.workspaceActive = workspaceActive;
     patientSearch = PatientDirectoryView.patientSearchField("reception-appointment-patient");
     doctor = doctorSelector("reception-doctor", "Search doctors by name or username");
     startsAt = AppointmentDialog.timeSelector("reception-start");
@@ -195,7 +208,8 @@ final class ReceptionistAppointmentPanel {
                   refreshSchedule();
                   refreshCheckout.run();
                 },
-                taskRunner);
+                taskRunner,
+                workspaceActive);
           } catch (ValidationException | AuthorizationException exception) {
             UiComponents.showError(feedback, exception.getMessage());
           }
