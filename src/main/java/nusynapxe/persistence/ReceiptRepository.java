@@ -22,7 +22,7 @@ public final class ReceiptRepository {
           + " WHERE (? IS NULL OR ? = '' OR CAST(p.id AS TEXT) LIKE lower(?) OR lower(p.first_name || ' ' || p.last_name) LIKE lower(?) OR lower(p.email) LIKE lower(?)) AND (? IS NULL OR a.doctor_id = ?) AND (? IS NULL OR r.receipt_date = ?) ORDER BY r.receipt_date DESC, r.sequence_number DESC";
   private static final String FIND_RANGE_QUERY =
       RECEIPT_QUERY
-          + " WHERE r.receipt_date >= ? AND r.receipt_date <= ? AND (? IS NULL OR ? = '' OR CAST(p.id AS TEXT) LIKE lower(?) OR lower(p.first_name || ' ' || p.last_name) LIKE lower(?) OR lower(p.email) LIKE lower(?)) AND (? IS NULL OR a.doctor_id = ?) AND (? IS NULL OR r.method = ?) ORDER BY r.receipt_date DESC, r.sequence_number DESC";
+          + " WHERE r.receipt_date >= ? AND r.receipt_date <= ? AND (? IS NULL OR ? = '' OR CAST(p.id AS TEXT) LIKE lower(?) OR lower(p.first_name || ' ' || p.last_name) LIKE lower(?) OR lower(p.email) LIKE lower(?)) AND (? IS NULL OR a.doctor_id = ?) AND (? IS NULL OR r.method = ?) ORDER BY r.receipt_date ASC, r.sequence_number DESC";
   private final SqliteDatabase database;
 
   /**
@@ -147,7 +147,7 @@ public final class ReceiptRepository {
    * @param patientQuery optional patient search text
    * @param doctorId optional Doctor identifier
    * @param date optional Singapore-local receipt date
-   * @return matching receipts in reverse receipt-date and sequence order
+   * @return matching receipts in ascending receipt-date and descending sequence order
    * @throws SQLException if the query fails
    */
   public List<Receipt> findAll(String patientQuery, Long doctorId, LocalDate date)

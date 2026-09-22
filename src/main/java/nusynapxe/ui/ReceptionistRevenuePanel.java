@@ -2,7 +2,6 @@ package nusynapxe.ui;
 
 import java.time.Clock;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Locale;
 import javafx.collections.FXCollections;
 import javafx.geometry.VPos;
@@ -19,7 +18,6 @@ import nusynapxe.ClinicClock;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.PaymentMethod;
 import nusynapxe.domain.Receipt;
-import nusynapxe.domain.RevenueReport;
 import nusynapxe.domain.RevenueSummary;
 import nusynapxe.service.AuthorizationException;
 import nusynapxe.service.ValidationException;
@@ -42,7 +40,9 @@ final class ReceptionistRevenuePanel {
   private final TextField legacyDate;
   private final Label legacyRevenue;
   private final VBox root;
-  private RevenueReport currentReport = new RevenueReport(List.of());
+  private final Button exportCsv;
+  private final Button exportJson;
+  private final ReportExportState exportState = new ReportExportState();
 
   ReceptionistRevenuePanel(ReceptionistDataLoader dataLoader, Label feedback, Clock clock) {
     this.dataLoader = dataLoader;
@@ -63,8 +63,9 @@ final class ReceptionistRevenuePanel {
     summary = new Label();
     summary.setId("reception-revenue-report-summary");
     rows = ReceptionistWorkspace.receiptTable("reception-revenue-report-list");
-    Button exportCsv = button("Export CSV", "reception-revenue-export-csv");
-    Button exportJson = button("Export JSON", "reception-revenue-export-json");
+    exportCsv = button("Export CSV", "reception-revenue-export-csv");
+    exportJson = button("Export JSON", "reception-revenue-export-json");
+    setExportEnabled(false);
     legacyDate = field("reception-revenue-date", "yyyy-MM-dd");
     Button legacySubmit = button("Show revenue", "reception-revenue-submit");
     legacyRevenue = new Label();
@@ -122,6 +123,10 @@ final class ReceptionistRevenuePanel {
   }
 
   private void generateReport() {
+    exportState.begin();
+    setExportEnabled(false);
+    rows.getItems().clear();
+    summary.setText("Generating report…");
     try {
       dataLoader.revenueReport(
           fromDate.getValue(),
@@ -130,7 +135,8 @@ final class ReceptionistRevenuePanel {
           doctor.getValue() == null ? null : doctor.getValue().id(),
           selectedPaymentMethod(method.getValue()),
           report -> {
-            currentReport = report;
+            exportState.complete(report);
+            setExportEnabled(true);
             rows.setItems(FXCollections.observableArrayList(report.receipts()));
             summary.setText(ReceptionistRevenueView.formatSummary(report));
             UiComponents.showMessage(feedback, "Revenue report generated");
@@ -162,7 +168,19 @@ final class ReceptionistRevenuePanel {
   }
 
   private void export(boolean json) {
-    ReportExporter.export(currentReport, rows.getScene().getWindow(), json, feedback);
+    exportState
+        .current()
+        .ifPresent(
+            report -> {
+              javafx.stage.Window owner =
+                  rows.getScene() == null ? null : rows.getScene().getWindow();
+              ReportExporter.export(report, owner, json, feedback);
+            });
+  }
+
+  private void setExportEnabled(boolean enabled) {
+    exportCsv.setDisable(!enabled);
+    exportJson.setDisable(!enabled);
   }
 
   private void showTaskError(String fallback, Throwable failure) {

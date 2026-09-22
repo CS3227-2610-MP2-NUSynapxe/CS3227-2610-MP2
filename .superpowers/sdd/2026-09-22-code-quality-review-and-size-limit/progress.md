@@ -21,3 +21,5 @@ Task 2: Ruling: the independent-selector test initially compared numeric generat
 Task 2: complete (commit subject: fix: snapshot calendar and selector inputs; tests: CalendarRangeSnapshotTest, SelectorLoadGenerationTest, ReceptionistDataLoaderTest, DoctorCalendarViewTest, and ReceptionistViewTest -> passed)
 
 Task 3: complete (commit subject: fix: guard appointment dialogs after logout; tests: WorkspaceLifecycleTest, DoctorCalendarViewTest, DoctorViewTest, and ReceptionistViewTest -> passed)
+
+Task 4: complete (commit subject: fix: protect receipt ordering and pending exports; tests: ReceiptRepositoryTest and ReportExportStateTest -> passed)
