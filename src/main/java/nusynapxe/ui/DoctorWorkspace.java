@@ -123,15 +123,18 @@ final class DoctorWorkspace {
     accept.setOnAction(
         event -> {
           try {
-            requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
+            DoctorAppointmentTarget target = captureSelection(selection);
             run(
                 feedback,
                 taskRunner,
                 () -> {
-                  services.appointmentService().accept(session, selection.appointmentId);
+                  services.appointmentService().accept(session, target.appointmentId());
                   return null;
                 },
                 ignored -> {
+                  if (!target.isCurrent(selection.appointmentId, selection.generation)) {
+                    return;
+                  }
                   feedback.setText("Appointment accepted");
                   dashboardHolder[0].refresh();
                 });
@@ -143,15 +146,18 @@ final class DoctorWorkspace {
     decline.setOnAction(
         event -> {
           try {
-            requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
+            DoctorAppointmentTarget target = captureSelection(selection);
             run(
                 feedback,
                 taskRunner,
                 () -> {
-                  services.appointmentService().decline(session, selection.appointmentId);
+                  services.appointmentService().decline(session, target.appointmentId());
                   return null;
                 },
                 ignored -> {
+                  if (!target.isCurrent(selection.appointmentId, selection.generation)) {
+                    return;
+                  }
                   feedback.setText("Appointment declined");
                   dashboardHolder[0].refresh();
                 });
@@ -163,15 +169,18 @@ final class DoctorWorkspace {
     checkIn.setOnAction(
         event -> {
           try {
-            requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
+            DoctorAppointmentTarget target = captureSelection(selection);
             run(
                 feedback,
                 taskRunner,
                 () -> {
-                  services.appointmentService().checkIn(session, selection.appointmentId);
+                  services.appointmentService().checkIn(session, target.appointmentId());
                   return null;
                 },
                 ignored -> {
+                  if (!target.isCurrent(selection.appointmentId, selection.generation)) {
+                    return;
+                  }
                   feedback.setText("Patient checked in");
                   dashboardHolder[0].refresh();
                 });
@@ -182,31 +191,41 @@ final class DoctorWorkspace {
 
     reschedule.setOnAction(
         event -> {
-          if (selection.appointmentId == 0) {
+          DoctorAppointmentTarget target;
+          try {
+            target = captureSelection(selection);
+          } catch (ValidationException exception) {
             UiComponents.showError(feedback, APPOINTMENT_REQUIRED);
             return;
           }
           AppointmentDialog.showDoctorEdit(
               services,
               session,
-              selection.appointmentId,
+              target.appointmentId(),
               feedback,
-              dashboardHolder[0]::refresh,
+              () -> {
+                if (target.isCurrent(selection.appointmentId, selection.generation)) {
+                  dashboardHolder[0].refresh();
+                }
+              },
               taskRunner);
         });
 
     complete.setOnAction(
         event -> {
           try {
-            requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
+            DoctorAppointmentTarget target = captureSelection(selection);
             run(
                 feedback,
                 taskRunner,
                 () -> {
-                  services.appointmentService().complete(session, selection.appointmentId);
+                  services.appointmentService().complete(session, target.appointmentId());
                   return null;
                 },
                 ignored -> {
+                  if (!target.isCurrent(selection.appointmentId, selection.generation)) {
+                    return;
+                  }
                   feedback.setText("Appointment marked completed");
                   dashboardHolder[0].refresh();
                 });
@@ -620,6 +639,9 @@ final class DoctorWorkspace {
       ClinicTaskRunner taskRunner) {
     selection.generation++;
     long generation = selection.generation;
+    selection.appointmentId = 0;
+    selection.patientId = 0;
+    updateSelectionState(selection, nodes, null, null, clock);
     if (calendarAppointment == null) {
       applyDashboardSelection(selection, nodes, consultationPanel, clock, generation, null, null);
       return;
@@ -683,9 +705,11 @@ final class DoctorWorkspace {
     consultationPanel.load(appointment, generation);
   }
 
-  private static void requireSelection(long id, String message) {
-    if (id == 0) {
-      throw new ValidationException(message);
+  private static DoctorAppointmentTarget captureSelection(SelectionState selection) {
+    try {
+      return DoctorAppointmentTarget.capture(selection.appointmentId, selection.generation);
+    } catch (IllegalArgumentException exception) {
+      throw new ValidationException(APPOINTMENT_REQUIRED, exception);
     }
   }
 
