@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.RejectedExecutionException;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.geometry.Insets;
@@ -24,7 +25,6 @@ import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.CalendarAppointment;
-import nusynapxe.domain.DoctorCalendarWeek;
 import nusynapxe.domain.Session;
 import nusynapxe.service.AuthorizationException;
 import nusynapxe.service.CalendarScheduleCalculations;
@@ -42,6 +42,7 @@ public final class DoctorCalendarView {
   private final Runnable onSettings;
   private final Label feedback;
   private final Clock clock;
+  private final ClinicTaskRunner taskRunner;
   private final BorderPane root;
   private final Button previous;
   private final Button next;
@@ -62,6 +63,7 @@ public final class DoctorCalendarView {
   private CalendarTimeGrid grid;
   private CalendarScheduleList scheduleList;
   private boolean shown;
+  private long refreshGeneration;
 
   /**
    * Creates a Calendar page using the Singapore clinic system clock.
@@ -74,16 +76,33 @@ public final class DoctorCalendarView {
    */
   public DoctorCalendarView(
       ClinicServices services, Session session, Runnable onSettings, Label feedback) {
-    this(services, session, onSettings, feedback, Clock.system(CalendarService.CLINIC_ZONE));
+    this(
+        services,
+        session,
+        onSettings,
+        feedback,
+        Clock.system(CalendarService.CLINIC_ZONE),
+        ClinicTaskRunner.immediate());
   }
 
   DoctorCalendarView(
       ClinicServices services, Session session, Runnable onSettings, Label feedback, Clock clock) {
+    this(services, session, onSettings, feedback, clock, ClinicTaskRunner.immediate());
+  }
+
+  DoctorCalendarView(
+      ClinicServices services,
+      Session session,
+      Runnable onSettings,
+      Label feedback,
+      Clock clock,
+      ClinicTaskRunner taskRunner) {
     this.services = Objects.requireNonNull(services, "services");
     this.session = Objects.requireNonNull(session, "session");
     this.onSettings = Objects.requireNonNull(onSettings, "onSettings");
     this.feedback = Objects.requireNonNull(feedback, "feedback");
     this.clock = Objects.requireNonNull(clock, "clock").withZone(CalendarService.CLINIC_ZONE);
+    this.taskRunner = Objects.requireNonNull(taskRunner, "taskRunner");
     LocalDate today = LocalDate.now(this.clock);
     scheduleAnchor = CalendarScheduleCalculations.today(this.clock);
     previous = UiComponents.secondaryButton("‹", "doctor-calendar-previous");
@@ -120,38 +139,65 @@ public final class DoctorCalendarView {
   /** Refreshes the active Calendar mode and its saved display settings. */
   @SuppressWarnings("PMD.NullAssignment")
   public void refresh() {
+    long generation = ++refreshGeneration;
     try {
       if (isCalendarMode()) {
         disposeScheduleList();
         List<LocalDate> dates = selectedDates();
-        DoctorCalendarWeek data =
-            services.calendarService().getRange(session, from.getValue(), to.getValue());
-        grid =
-            new CalendarTimeGrid(
-                dates,
-                data,
-                clock,
-                new CalendarTimeGrid.InteractionHandlers(
-                    this::openAppointment,
-                    this::changeDecision,
-                    this::openCreateAppointment,
-                    this::openTimeOff));
-        root.setCenter(grid);
+        submit(
+            () -> services.calendarService().getRange(session, from.getValue(), to.getValue()),
+            data -> {
+              if (generation != refreshGeneration) {
+                return;
+              }
+              grid =
+                  new CalendarTimeGrid(
+                      dates,
+                      data,
+                      clock,
+                      new CalendarTimeGrid.InteractionHandlers(
+                          this::openAppointment,
+                          this::changeDecision,
+                          this::openCreateAppointment,
+                          this::openTimeOff));
+              root.setCenter(grid);
+              scheduleDate.setValue(scheduleAnchor);
+              if (shown) {
+                currentTimeTicker.play();
+              }
+            },
+            failure -> {
+              if (generation == refreshGeneration) {
+                UiComponents.showError(
+                    feedback, userMessage(failure, "Calendar is temporarily unavailable"));
+              }
+            });
       } else {
         grid = null;
         disposeScheduleList();
         scheduleList =
             new CalendarScheduleList(
-                services, session, scheduleAnchor, clock, this::openAppointment);
+                services, session, scheduleAnchor, clock, taskRunner, this::openAppointment);
         root.setCenter(scheduleList);
+        scheduleDate.setValue(scheduleAnchor);
+        if (shown) {
+          currentTimeTicker.play();
+        }
       }
-      scheduleDate.setValue(scheduleAnchor);
-      if (shown) {
-        currentTimeTicker.play();
-      }
-    } catch (SQLException | AuthorizationException | ValidationException exception) {
+    } catch (ValidationException exception) {
       UiComponents.showError(
           feedback, userMessage(exception, "Calendar is temporarily unavailable"));
+    }
+  }
+
+  private <T> void submit(
+      ClinicTaskRunner.ClinicTask<T> task,
+      java.util.function.Consumer<T> onSuccess,
+      java.util.function.Consumer<Throwable> onFailure) {
+    try {
+      taskRunner.submit(task, onSuccess, onFailure);
+    } catch (RejectedExecutionException exception) {
+      onFailure.accept(exception);
     }
   }
 
@@ -441,7 +487,7 @@ public final class DoctorCalendarView {
     }
   }
 
-  private static String userMessage(Exception exception, String fallback) {
+  private static String userMessage(Throwable exception, String fallback) {
     return exception.getMessage() == null ? fallback : exception.getMessage();
   }
 }

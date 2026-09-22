@@ -59,10 +59,24 @@ public final class DoctorView {
    * @throws NullPointerException if an argument is {@code null}
    */
   public static Parent create(ClinicServices services, Session session, Runnable onLogout) {
-    return create(services, session, onLogout, Clock.system(CalendarService.CLINIC_ZONE));
+    return create(
+        services,
+        session,
+        onLogout,
+        Clock.system(CalendarService.CLINIC_ZONE),
+        ClinicTaskRunner.immediate());
   }
 
   static Parent create(ClinicServices services, Session session, Runnable onLogout, Clock clock) {
+    return create(services, session, onLogout, clock, ClinicTaskRunner.immediate());
+  }
+
+  static Parent create(
+      ClinicServices services,
+      Session session,
+      Runnable onLogout,
+      Clock clock,
+      ClinicTaskRunner taskRunner) {
     Clock clinicClock =
         Objects.requireNonNull(clock, "clock").withZone(CalendarService.CLINIC_ZONE);
     SelectionState selection = new SelectionState();
@@ -116,7 +130,7 @@ public final class DoctorView {
     selectionSummary.getStyleClass().add("selection-summary");
     selectionSummary.setWrapText(true);
     ClinicalHistoryView clinicalHistoryView =
-        ClinicalHistoryView.create(services, session, feedback);
+        ClinicalHistoryView.create(services, session, feedback, taskRunner);
     Runnable[] showHistoryHolder = new Runnable[1];
     Button viewPatientHistory =
         UiComponents.secondaryButton("View consultation history", "doctor-view-patient-history");
@@ -363,7 +377,8 @@ public final class DoctorView {
                     nodes,
                     feedback,
                     clinicClock),
-            clinicClock);
+            clinicClock,
+            taskRunner);
     VBox scheduleCard =
         UiComponents.card(
             "doctor-schedule-card",
@@ -452,7 +467,8 @@ public final class DoctorView {
           dashboardNavigation.getStyleClass().remove(ACTIVE_NAVIGATION_STYLE);
           patientsNavigation.getStyleClass().remove(ACTIVE_NAVIGATION_STYLE);
         };
-    calendarHolder[0] = new DoctorCalendarView(services, session, showSettings, feedback);
+    calendarHolder[0] =
+        new DoctorCalendarView(services, session, showSettings, feedback, clinicClock, taskRunner);
     settingsHolder[0] =
         new DoctorCalendarSettingsView(services, session, showCalendar, showCalendar, feedback);
     dashboardNavigation.setOnAction(

@@ -92,10 +92,19 @@ public final class ReceptionistView {
    * @throws NullPointerException if an argument is {@code null}
    */
   public static Parent create(ClinicServices services, Session session, Runnable onLogout) {
-    return create(services, session, onLogout, ClinicClock.system());
+    return create(services, session, onLogout, ClinicClock.system(), ClinicTaskRunner.immediate());
   }
 
   static Parent create(ClinicServices services, Session session, Runnable onLogout, Clock clock) {
+    return create(services, session, onLogout, clock, ClinicTaskRunner.immediate());
+  }
+
+  static Parent create(
+      ClinicServices services,
+      Session session,
+      Runnable onLogout,
+      Clock clock,
+      ClinicTaskRunner taskRunner) {
     Clock clinicClock = ClinicClock.withClinicZone(clock);
     SearchSuggestionField<Account> doctor =
         doctorSelector("reception-doctor", "Search doctors by name or username");
@@ -913,7 +922,8 @@ public final class ReceptionistView {
                           schedulePatient.getText(),
                           scheduleStatus.getValue(),
                           scheduleSummary);
-                    }));
+                    }),
+            taskRunner);
     ReceptionistCalendarView receptionistCalendar = calendarHolder[0];
     Tab calendarFeature = new Tab("Calendar", receptionistCalendar.view());
     calendarFeature.setClosable(false);

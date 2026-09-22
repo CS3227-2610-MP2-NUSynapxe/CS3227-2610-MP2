@@ -27,6 +27,7 @@ public final class ApplicationRouter {
   private final Stage stage;
   private final ClinicServices services;
   private final Clock clock;
+  private final ClinicTaskRunner taskRunner;
 
   /**
    * Creates a router for one opened database and JavaFX stage.
@@ -44,16 +45,29 @@ public final class ApplicationRouter {
   }
 
   ApplicationRouter(Stage stage, SqliteDatabase database, Clock clock) {
+    this(stage, database, clock, ClinicTaskRunner.immediate());
+  }
+
+  /** Creates a router with an application-owned task runner. */
+  public ApplicationRouter(
+      Stage stage, SqliteDatabase database, Clock clock, ClinicTaskRunner taskRunner) {
     this(
         stage,
         ClinicServices.forDatabase(Objects.requireNonNull(database, "database"), clock),
-        clock);
+        clock,
+        taskRunner);
   }
 
   ApplicationRouter(Stage stage, ClinicServices services, Clock clock) {
+    this(stage, services, clock, ClinicTaskRunner.immediate());
+  }
+
+  ApplicationRouter(
+      Stage stage, ClinicServices services, Clock clock, ClinicTaskRunner taskRunner) {
     this.stage = Objects.requireNonNull(stage, "stage");
     this.services = Objects.requireNonNull(services, "services");
     this.clock = Objects.requireNonNull(clock, "clock").withZone(CalendarService.CLINIC_ZONE);
+    this.taskRunner = Objects.requireNonNull(taskRunner, "taskRunner");
   }
 
   /**
@@ -98,11 +112,11 @@ public final class ApplicationRouter {
       return;
     }
     if (session.role() == Role.RECEPTIONIST) {
-      setContent(ReceptionistView.create(services, session, this::showLogin, clock));
+      setContent(ReceptionistView.create(services, session, this::showLogin, clock, taskRunner));
       return;
     }
     if (session.role() == Role.DOCTOR) {
-      setContent(DoctorView.create(services, session, this::showLogin, clock));
+      setContent(DoctorView.create(services, session, this::showLogin, clock, taskRunner));
       return;
     }
     Button logout = new Button("Log out");

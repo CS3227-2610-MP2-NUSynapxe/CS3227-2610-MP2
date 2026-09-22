@@ -1,12 +1,12 @@
 package nusynapxe.ui;
 
-import java.sql.SQLException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import javafx.geometry.Insets;
@@ -22,9 +22,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.CalendarAppointment;
-import nusynapxe.domain.DoctorCalendarWeek;
 import nusynapxe.domain.Session;
-import nusynapxe.service.AuthorizationException;
 import nusynapxe.service.CalendarScheduleCalculations;
 import nusynapxe.service.CalendarService;
 import nusynapxe.service.ClinicServices;
@@ -40,6 +38,7 @@ final class ReceptionistCalendarView {
   private final ClinicServices services;
   private final Session session;
   private final Label feedback;
+  private final ClinicTaskRunner taskRunner;
   private final BiConsumer<Account, LocalDateTime> onSlotSelected;
   private final Consumer<CalendarAppointment> onAppointmentSelected;
   private final Clock clock = Clock.system(CalendarService.CLINIC_ZONE);
@@ -55,6 +54,7 @@ final class ReceptionistCalendarView {
   private final VBox page;
   private LocalDate scheduleAnchor;
   private CalendarScheduleList scheduleList;
+  private long refreshGeneration;
 
   ReceptionistCalendarView(
       ClinicServices services,
@@ -62,12 +62,29 @@ final class ReceptionistCalendarView {
       Label feedback,
       BiConsumer<Account, LocalDateTime> onSlotSelected,
       Consumer<CalendarAppointment> onAppointmentSelected) {
+    this(
+        services,
+        session,
+        feedback,
+        onSlotSelected,
+        onAppointmentSelected,
+        ClinicTaskRunner.immediate());
+  }
+
+  ReceptionistCalendarView(
+      ClinicServices services,
+      Session session,
+      Label feedback,
+      BiConsumer<Account, LocalDateTime> onSlotSelected,
+      Consumer<CalendarAppointment> onAppointmentSelected,
+      ClinicTaskRunner taskRunner) {
     this.services = Objects.requireNonNull(services, "services");
     this.session = Objects.requireNonNull(session, "session");
     this.feedback = Objects.requireNonNull(feedback, "feedback");
     this.onSlotSelected = Objects.requireNonNull(onSlotSelected, "onSlotSelected");
     this.onAppointmentSelected =
         Objects.requireNonNull(onAppointmentSelected, "onAppointmentSelected");
+    this.taskRunner = Objects.requireNonNull(taskRunner, "taskRunner");
     doctor =
         new SearchSuggestionField<>(
             "reception-calendar-doctor",
@@ -112,23 +129,25 @@ final class ReceptionistCalendarView {
   }
 
   void refreshDoctors() {
-    try {
-      Account previousDoctor = doctor.getValue();
-      doctor.setItems(services.accountService().listDoctors(session));
-      if (previousDoctor != null) {
-        doctor.getItems().stream()
-            .filter(account -> account.id() == previousDoctor.id())
-            .findFirst()
-            .ifPresent(doctor::select);
-      } else if (!doctor.getItems().isEmpty()) {
-        doctor.select(doctor.getItems().getFirst());
-      }
-    } catch (SQLException | AuthorizationException exception) {
-      UiComponents.showError(feedback, "Doctors are temporarily unavailable");
-    }
+    Account previousDoctor = doctor.getValue();
+    submit(
+        () -> services.accountService().listDoctors(session),
+        doctors -> {
+          doctor.setItems(doctors);
+          if (previousDoctor != null) {
+            doctor.getItems().stream()
+                .filter(account -> account.id() == previousDoctor.id())
+                .findFirst()
+                .ifPresent(doctor::select);
+          } else if (!doctor.getItems().isEmpty()) {
+            doctor.select(doctor.getItems().getFirst());
+          }
+        },
+        failure -> UiComponents.showError(feedback, "Doctors are temporarily unavailable"));
   }
 
   void refresh() {
+    long generation = ++refreshGeneration;
     Account selected = doctor.getValue();
     if (selected == null) {
       disposeScheduleList();
@@ -142,35 +161,65 @@ final class ReceptionistCalendarView {
         disposeScheduleList();
         scheduleList =
             new CalendarScheduleList(
-                scheduleLoader(selected.id()), scheduleAnchor, clock, onAppointmentSelected);
+                scheduleLoader(selected.id()),
+                scheduleAnchor,
+                clock,
+                onAppointmentSelected,
+                taskRunner);
         scheduleList.setId("reception-calendar-schedule-list");
         root.setCenter(scheduleList);
       } else {
         disposeScheduleList();
         List<LocalDate> dates = selectedDates();
-        DoctorCalendarWeek data =
-            services
-                .calendarService()
-                .getReceptionistRange(session, selected.id(), from.getValue(), to.getValue());
-        CalendarTimeGrid grid =
-            new CalendarTimeGrid(
-                dates,
-                data,
-                clock,
-                new CalendarTimeGrid.InteractionHandlers(
-                    onAppointmentSelected,
-                    null,
-                    start -> onSlotSelected.accept(selected, start),
-                    null));
-        grid.setId("reception-calendar-time-grid");
-        root.setCenter(grid);
+        submit(
+            () ->
+                services
+                    .calendarService()
+                    .getReceptionistRange(session, selected.id(), from.getValue(), to.getValue()),
+            data -> {
+              if (generation != refreshGeneration) {
+                return;
+              }
+              CalendarTimeGrid grid =
+                  new CalendarTimeGrid(
+                      dates,
+                      data,
+                      clock,
+                      new CalendarTimeGrid.InteractionHandlers(
+                          onAppointmentSelected,
+                          null,
+                          start -> onSlotSelected.accept(selected, start),
+                          null));
+              grid.setId("reception-calendar-time-grid");
+              root.setCenter(grid);
+            },
+            failure -> {
+              if (generation == refreshGeneration) {
+                UiComponents.showError(
+                    feedback,
+                    failure.getMessage() == null
+                        ? "Calendar is temporarily unavailable"
+                        : failure.getMessage());
+              }
+            });
       }
-    } catch (SQLException | AuthorizationException | ValidationException exception) {
+    } catch (ValidationException exception) {
       UiComponents.showError(
           feedback,
           exception.getMessage() == null
               ? "Calendar is temporarily unavailable"
               : exception.getMessage());
+    }
+  }
+
+  private <T> void submit(
+      ClinicTaskRunner.ClinicTask<T> task,
+      java.util.function.Consumer<T> onSuccess,
+      java.util.function.Consumer<Throwable> onFailure) {
+    try {
+      taskRunner.submit(task, onSuccess, onFailure);
+    } catch (RejectedExecutionException exception) {
+      onFailure.accept(exception);
     }
   }
 

@@ -2,6 +2,8 @@ package nusynapxe.ui;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.RejectedExecutionException;
 import javafx.collections.FXCollections;
 import javafx.scene.Parent;
 import javafx.scene.control.Label;
@@ -15,9 +17,7 @@ import nusynapxe.domain.ClinicalHistoryEntry;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.Prescription;
 import nusynapxe.domain.Session;
-import nusynapxe.service.AuthorizationException;
 import nusynapxe.service.ClinicServices;
-import nusynapxe.service.ValidationException;
 
 /** Builds the Doctor-only, read-only consultation history view. */
 final class ClinicalHistoryView {
@@ -33,17 +33,26 @@ final class ClinicalHistoryView {
 
   private final ClinicServices services;
   private final Session session;
+  private final ClinicTaskRunner taskRunner;
   private final Label workspaceFeedback;
   private final SearchSuggestionField<Patient> patientSelector;
   private final Label state;
   private final ListView<ClinicalHistoryEntry> historyList;
   private final VBox detailContent;
   private final VBox root;
+  private long patientGeneration;
+  private long historyGeneration;
+  private boolean disposed;
 
-  private ClinicalHistoryView(ClinicServices services, Session session, Label workspaceFeedback) {
-    this.services = services;
-    this.session = session;
+  private ClinicalHistoryView(
+      ClinicServices services,
+      Session session,
+      Label workspaceFeedback,
+      ClinicTaskRunner taskRunner) {
+    this.services = Objects.requireNonNull(services, "services");
+    this.session = Objects.requireNonNull(session, "session");
     this.workspaceFeedback = workspaceFeedback;
+    this.taskRunner = Objects.requireNonNull(taskRunner, "taskRunner");
 
     patientSelector = PatientDirectoryView.patientSearchField("doctor-history-patient");
     patientSelector.setAccessibleRoleDescription("Patient selector");
@@ -129,7 +138,17 @@ final class ClinicalHistoryView {
   /** Creates the shared history view for an authenticated Doctor. */
   static ClinicalHistoryView create(
       ClinicServices services, Session session, Label workspaceFeedback) {
-    return new ClinicalHistoryView(services, session, workspaceFeedback);
+    return new ClinicalHistoryView(
+        services, session, workspaceFeedback, ClinicTaskRunner.immediate());
+  }
+
+  /** Creates the history view with an injected database task runner. */
+  static ClinicalHistoryView create(
+      ClinicServices services,
+      Session session,
+      Label workspaceFeedback,
+      ClinicTaskRunner taskRunner) {
+    return new ClinicalHistoryView(services, session, workspaceFeedback, taskRunner);
   }
 
   /** Returns the view root for embedding in the Doctor workspace. */
@@ -139,25 +158,40 @@ final class ClinicalHistoryView {
 
   /** Reloads the patient selector without changing the selected history entry. */
   void refreshPatients() {
-    try {
-      patientSelector.setItems(services.patientService().searchAdministrative(session, ""));
-    } catch (java.sql.SQLException | AuthorizationException exception) {
-      showError("Patients are temporarily unavailable");
-    }
+    long generation = ++patientGeneration;
+    submit(
+        () -> services.patientService().searchAdministrative(session, ""),
+        patients -> {
+          if (!disposed && generation == patientGeneration) {
+            patientSelector.setItems(FXCollections.observableArrayList(patients));
+          }
+        },
+        failure -> {
+          if (!disposed && generation == patientGeneration) {
+            showError("Patients are temporarily unavailable");
+          }
+        });
   }
 
   /** Opens history for a patient selected from another Doctor workflow. */
   void showPatient(long patientId) {
-    try {
-      Patient patient = services.patientService().getAdministrative(session, patientId);
-      if (patientSelector.getItems().stream().noneMatch(value -> value.id() == patient.id())) {
-        refreshPatients();
-      }
-      patientSelector.select(patient);
-      loadHistory(patient);
-    } catch (java.sql.SQLException | AuthorizationException | ValidationException exception) {
-      showError(userMessage(exception, "Patient history is temporarily unavailable"));
-    }
+    submit(
+        () -> services.patientService().getAdministrative(session, patientId),
+        patient -> {
+          if (disposed) {
+            return;
+          }
+          if (patientSelector.getItems().stream().noneMatch(value -> value.id() == patient.id())) {
+            refreshPatients();
+          }
+          patientSelector.select(patient);
+          loadHistory(patient);
+        },
+        failure -> {
+          if (!disposed) {
+            showError(userMessage(failure, "Patient history is temporarily unavailable"));
+          }
+        });
   }
 
   private void loadSelectedPatient() {
@@ -171,20 +205,46 @@ final class ClinicalHistoryView {
   }
 
   private void loadHistory(Patient patient) {
+    long generation = ++historyGeneration;
     state.setText("Loading consultation history...");
     clearHistory();
+    submit(
+        () -> services.clinicalService().historyForDoctor(session, patient.id()),
+        history -> {
+          if (disposed || generation != historyGeneration) {
+            return;
+          }
+          historyList.setItems(FXCollections.observableArrayList(history));
+          if (history.isEmpty()) {
+            state.setText("No completed consultations found for this patient.");
+          } else {
+            state.setText(history.size() + " completed consultation(s) found.");
+            historyList.getSelectionModel().selectFirst();
+          }
+        },
+        failure -> {
+          if (!disposed && generation == historyGeneration) {
+            showError("Consultation history is temporarily unavailable");
+          }
+        });
+  }
+
+  /** Prevents callbacks from applying after the Doctor workspace is discarded. */
+  void dispose() {
+    disposed = true;
+    patientGeneration++;
+    historyGeneration++;
+    clearHistory();
+  }
+
+  private <T> void submit(
+      ClinicTaskRunner.ClinicTask<T> task,
+      java.util.function.Consumer<T> onSuccess,
+      java.util.function.Consumer<Throwable> onFailure) {
     try {
-      List<ClinicalHistoryEntry> history =
-          services.clinicalService().historyForDoctor(session, patient.id());
-      historyList.setItems(FXCollections.observableArrayList(history));
-      if (history.isEmpty()) {
-        state.setText("No completed consultations found for this patient.");
-      } else {
-        state.setText(history.size() + " completed consultation(s) found.");
-        historyList.getSelectionModel().selectFirst();
-      }
-    } catch (java.sql.SQLException | AuthorizationException exception) {
-      showError("Consultation history is temporarily unavailable");
+      taskRunner.submit(task, onSuccess, onFailure);
+    } catch (RejectedExecutionException exception) {
+      onFailure.accept(exception);
     }
   }
 
@@ -280,7 +340,7 @@ final class ClinicalHistoryView {
     return area;
   }
 
-  private static String userMessage(Exception exception, String fallback) {
+  private static String userMessage(Throwable exception, String fallback) {
     return exception.getMessage() == null ? fallback : exception.getMessage();
   }
 }
