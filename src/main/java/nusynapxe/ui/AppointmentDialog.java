@@ -5,7 +5,11 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -32,6 +36,7 @@ import nusynapxe.service.ValidationException;
 /** Shared patient, interval, and appointment-action dialog used by staff views. */
 final class AppointmentDialog {
   private static final String PATIENT_LABEL = "Patient";
+  private static final Map<String, AtomicLong> EDITOR_GENERATIONS = new ConcurrentHashMap<>();
 
   private AppointmentDialog() {
     throw new AssertionError("Utility class");
@@ -52,6 +57,7 @@ final class AppointmentDialog {
         initialStart,
         workspaceFeedback,
         onUpdated,
+        ClinicClock.system(),
         ClinicTaskRunner.immediate());
   }
 
@@ -63,10 +69,28 @@ final class AppointmentDialog {
       Label workspaceFeedback,
       Runnable onUpdated,
       ClinicTaskRunner taskRunner) {
+    showCreate(
+        services,
+        session,
+        doctorId,
+        initialStart,
+        workspaceFeedback,
+        onUpdated,
+        ClinicClock.system(),
+        taskRunner);
+  }
+
+  static void showCreate(
+      ClinicServices services,
+      Session session,
+      long doctorId,
+      LocalDateTime initialStart,
+      Label workspaceFeedback,
+      Runnable onUpdated,
+      java.time.Clock clock,
+      ClinicTaskRunner taskRunner) {
     LocalDateTime start =
-        initialStart == null
-            ? ClinicClock.now(ClinicClock.system()).withSecond(0).withNano(0)
-            : initialStart;
+        initialStart == null ? ClinicClock.now(clock).withSecond(0).withNano(0) : initialStart;
     start = nearestHalfHour(start);
     showEditor(
         services,
@@ -254,9 +278,11 @@ final class AppointmentDialog {
       Label workspaceFeedback,
       Runnable onUpdated,
       ClinicTaskRunner taskRunner) {
+    long generation = nextGeneration(prefix);
     taskRunner.submit(
         () -> services.appointmentService().get(appointmentId),
-        appointment ->
+        appointment -> {
+          if (isCurrent(prefix, generation)) {
             showEditor(
                 services,
                 session,
@@ -269,8 +295,14 @@ final class AppointmentDialog {
                 doctorActions,
                 workspaceFeedback,
                 onUpdated,
-                taskRunner),
-        failure -> workspaceFeedback.setText(message(failure)));
+                taskRunner);
+          }
+        },
+        failure -> {
+          if (isCurrent(prefix, generation)) {
+            workspaceFeedback.setText(message(failure));
+          }
+        });
   }
 
   private static void showEditor(
@@ -290,6 +322,7 @@ final class AppointmentDialog {
     Objects.requireNonNull(session, "session");
     Objects.requireNonNull(workspaceFeedback, "workspaceFeedback");
     Objects.requireNonNull(onUpdated, "onUpdated");
+    long generation = nextGeneration(prefix);
     taskRunner.submit(
         () -> {
           Patient currentPatient =
@@ -313,7 +346,8 @@ final class AppointmentDialog {
                       .orElse("Assigned doctor");
           return new EditorData(appointment, currentPatient, availablePatients, doctorName);
         },
-        loaded ->
+        loaded -> {
+          if (isCurrent(prefix, generation)) {
             renderEditor(
                 services,
                 session,
@@ -326,8 +360,15 @@ final class AppointmentDialog {
                 workspaceFeedback,
                 onUpdated,
                 taskRunner,
-                loaded),
-        failure -> workspaceFeedback.setText(message(failure)));
+                generation,
+                loaded);
+          }
+        },
+        failure -> {
+          if (isCurrent(prefix, generation)) {
+            workspaceFeedback.setText(message(failure));
+          }
+        });
   }
 
   private static void renderEditor(
@@ -342,6 +383,7 @@ final class AppointmentDialog {
       Label workspaceFeedback,
       Runnable onUpdated,
       ClinicTaskRunner taskRunner,
+      long generation,
       EditorData loaded) {
     Appointment appointment = loaded.appointment();
     Patient currentPatient = loaded.currentPatient();
@@ -396,6 +438,7 @@ final class AppointmentDialog {
     decline.setVisible(decisionVisible);
     decline.setManaged(decisionVisible);
     Stage dialog = new Stage();
+    BooleanSupplier isActive = () -> isCurrent(prefix, generation) && dialog.isShowing();
     submit.setOnAction(
         event ->
             save(
@@ -411,7 +454,8 @@ final class AppointmentDialog {
                 feedback,
                 onUpdated,
                 dialog,
-                taskRunner));
+                taskRunner,
+                isActive));
     cancel.setOnAction(
         event -> {
           if (appointment == null) {
@@ -425,7 +469,8 @@ final class AppointmentDialog {
                 feedback,
                 onUpdated,
                 dialog,
-                taskRunner);
+                taskRunner,
+                isActive);
           }
         });
     accept.setOnAction(
@@ -439,7 +484,8 @@ final class AppointmentDialog {
                 feedback,
                 onUpdated,
                 dialog,
-                taskRunner));
+                taskRunner,
+                isActive));
     decline.setOnAction(
         event ->
             decide(
@@ -451,7 +497,8 @@ final class AppointmentDialog {
                 feedback,
                 onUpdated,
                 dialog,
-                taskRunner));
+                taskRunner,
+                isActive));
 
     GridPane interval = new GridPane();
     interval.setHgap(8);
@@ -506,7 +553,8 @@ final class AppointmentDialog {
       Label feedback,
       Runnable onUpdated,
       Stage dialog,
-      ClinicTaskRunner taskRunner) {
+      ClinicTaskRunner taskRunner,
+      BooleanSupplier isActive) {
     try {
       Patient patient = patients.getValue();
       if (patient == null) {
@@ -524,6 +572,9 @@ final class AppointmentDialog {
             return null;
           },
           ignored -> {
+            if (!isActive.getAsBoolean()) {
+              return;
+            }
             if (appointment == null) {
               UiComponents.showMessage(
                   workspaceFeedback,
@@ -536,9 +587,12 @@ final class AppointmentDialog {
             onUpdated.run();
             dialog.close();
           },
-          failure ->
+          failure -> {
+            if (isActive.getAsBoolean()) {
               showOperationError(
-                  feedback, failure, "Appointment changes are temporarily unavailable"));
+                  feedback, failure, "Appointment changes are temporarily unavailable");
+            }
+          });
     } catch (ValidationException exception) {
       showOperationError(feedback, exception, "Appointment changes are temporarily unavailable");
     }
@@ -552,20 +606,27 @@ final class AppointmentDialog {
       Label feedback,
       Runnable onUpdated,
       Stage dialog,
-      ClinicTaskRunner taskRunner) {
+      ClinicTaskRunner taskRunner,
+      BooleanSupplier isActive) {
     taskRunner.submit(
         () -> {
           services.appointmentService().cancel(session, appointment.id());
           return null;
         },
         ignored -> {
+          if (!isActive.getAsBoolean()) {
+            return;
+          }
           workspaceFeedback.setText("Appointment cancelled");
           onUpdated.run();
           dialog.close();
         },
-        failure ->
+        failure -> {
+          if (isActive.getAsBoolean()) {
             showOperationError(
-                feedback, failure, "Appointment cancellation is temporarily unavailable"));
+                feedback, failure, "Appointment cancellation is temporarily unavailable");
+          }
+        });
   }
 
   private static void decide(
@@ -577,7 +638,8 @@ final class AppointmentDialog {
       Label feedback,
       Runnable onUpdated,
       Stage dialog,
-      ClinicTaskRunner taskRunner) {
+      ClinicTaskRunner taskRunner,
+      BooleanSupplier isActive) {
     taskRunner.submit(
         () -> {
           if (decision == AppointmentStatus.ACCEPTED) {
@@ -588,6 +650,9 @@ final class AppointmentDialog {
           return null;
         },
         ignored -> {
+          if (!isActive.getAsBoolean()) {
+            return;
+          }
           workspaceFeedback.setText(
               decision == AppointmentStatus.ACCEPTED
                   ? "Appointment accepted"
@@ -595,9 +660,12 @@ final class AppointmentDialog {
           onUpdated.run();
           dialog.close();
         },
-        failure ->
+        failure -> {
+          if (isActive.getAsBoolean()) {
             showOperationError(
-                feedback, failure, "Appointment decision is temporarily unavailable"));
+                feedback, failure, "Appointment decision is temporarily unavailable");
+          }
+        });
   }
 
   private static void showOperationError(Label feedback, Throwable failure, String fallback) {
@@ -608,6 +676,17 @@ final class AppointmentDialog {
             : fallback);
     feedback.setVisible(true);
     feedback.setManaged(true);
+  }
+
+  private static long nextGeneration(String prefix) {
+    return EDITOR_GENERATIONS
+        .computeIfAbsent(prefix, ignored -> new AtomicLong())
+        .incrementAndGet();
+  }
+
+  private static boolean isCurrent(String prefix, long generation) {
+    AtomicLong current = EDITOR_GENERATIONS.get(prefix);
+    return current != null && current.get() == generation;
   }
 
   private static Label patientDetails(String prefix, Patient patient) {

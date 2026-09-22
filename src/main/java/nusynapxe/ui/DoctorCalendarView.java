@@ -431,7 +431,14 @@ public final class DoctorCalendarView {
 
   private void openCreateAppointment(LocalDateTime initialStart) {
     AppointmentDialog.showCreate(
-        services, session, session.accountId(), initialStart, feedback, this::refresh, taskRunner);
+        services,
+        session,
+        session.accountId(),
+        initialStart,
+        feedback,
+        this::refresh,
+        clock,
+        taskRunner);
   }
 
   private void openCreateTimeOff() {

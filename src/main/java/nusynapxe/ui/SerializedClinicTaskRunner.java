@@ -51,13 +51,25 @@ public final class SerializedClinicTaskRunner implements ClinicTaskRunner {
   public void close() {
     if (closed.compareAndSet(false, true)) {
       executor.shutdown();
+      boolean interrupted = false;
       try {
-        if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-          executor.shutdownNow();
-          executor.awaitTermination(1, TimeUnit.SECONDS);
+        while (!executor.awaitTermination(1, TimeUnit.SECONDS)) {
+          // Keep waiting so the database worker has definitely stopped before its connection
+          // closes.
+          Thread.yield();
         }
-      } catch (InterruptedException interrupted) {
+      } catch (InterruptedException interruption) {
         executor.shutdownNow();
+        interrupted = true;
+        while (!executor.isTerminated()) {
+          try {
+            executor.awaitTermination(1, TimeUnit.SECONDS);
+          } catch (InterruptedException ignored) {
+            interrupted = true;
+          }
+        }
+      }
+      if (interrupted) {
         Thread.currentThread().interrupt();
       }
     }

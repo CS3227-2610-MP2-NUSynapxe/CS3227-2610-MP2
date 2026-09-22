@@ -45,6 +45,8 @@ public final class DoctorCalendarSettingsView {
   private Button saveButton;
   private DayOfWeek firstDayOfWeek = DayOfWeek.SUNDAY;
   private boolean settingsLoaded;
+  private long operationGeneration;
+  private boolean disposed;
 
   /**
    * Creates a Calendar settings page for one authenticated Doctor.
@@ -87,11 +89,25 @@ public final class DoctorCalendarSettingsView {
     return root;
   }
 
+  /** Prevents later database callbacks from mutating this settings page. */
+  public void dispose() {
+    disposed = true;
+    operationGeneration++;
+  }
+
   /** Reloads persisted settings into the editable draft. */
   public void reload() {
+    if (disposed) {
+      return;
+    }
+    operationGeneration++;
+    long generation = operationGeneration;
     taskRunner.submit(
         () -> services.calendarService().getSettings(session),
         settings -> {
+          if (disposed || generation != operationGeneration) {
+            return;
+          }
           populate(settings);
           settingsLoaded = true;
           if (saveButton != null) {
@@ -99,6 +115,9 @@ public final class DoctorCalendarSettingsView {
           }
         },
         failure -> {
+          if (disposed || generation != operationGeneration) {
+            return;
+          }
           settingsLoaded = false;
           if (saveButton != null) {
             saveButton.setDisable(true);
@@ -182,17 +201,25 @@ public final class DoctorCalendarSettingsView {
       }
       DoctorCalendarSettings settings =
           new DoctorCalendarSettings(session.accountId(), firstDayOfWeek, intervals);
+      operationGeneration++;
+      long generation = operationGeneration;
       taskRunner.submit(
           () -> {
             services.calendarService().saveSettings(session, settings);
             return null;
           },
           ignored -> {
+            if (disposed || generation != operationGeneration) {
+              return;
+            }
             feedback.setText("Calendar settings saved");
             onSaved.run();
           },
-          failure ->
-              feedback.setText(userMessage(failure, "Calendar settings could not be saved")));
+          failure -> {
+            if (!disposed && generation == operationGeneration) {
+              feedback.setText(userMessage(failure, "Calendar settings could not be saved"));
+            }
+          });
     } catch (ValidationException | IllegalArgumentException exception) {
       feedback.setText(userMessage(exception, "Calendar settings could not be saved"));
     }
