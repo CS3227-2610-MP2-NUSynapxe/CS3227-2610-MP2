@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
@@ -212,6 +213,9 @@ final class ClinicRepositoryTest {
       assertEquals("Dr. Babbage", history.get(0).doctorName());
       assertEquals(newerRecord, history.get(0).clinicalRecord());
       assertEquals(List.of(prescription), history.get(0).prescriptions());
+      assertEquals(
+          Map.of(newerRecord.id(), List.of(prescription)),
+          clinicalRecords.findPrescriptionsByRecordIds(List.of(newerRecord.id())));
       assertEquals(older.id(), history.get(1).appointment().id());
       assertEquals("Dr. Ada", history.get(1).doctorName());
       assertEquals(olderRecord, history.get(1).clinicalRecord());
