@@ -4,12 +4,13 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
-import java.time.LocalDateTime;
+import java.time.Clock;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.PatientDeletionBlockers;
@@ -56,6 +57,7 @@ public final class PatientRepository {
           + "OR (? IS NOT NULL AND id = ?))"
           + PATIENT_ORDER;
   private final SqliteDatabase database;
+  private final Clock clock;
 
   /**
    * Creates a patient repository backed by an opened database.
@@ -64,7 +66,19 @@ public final class PatientRepository {
    * @throws NullPointerException if {@code database} is {@code null}
    */
   public PatientRepository(SqliteDatabase database) {
+    this(database, ClinicClock.system());
+  }
+
+  /**
+   * Creates a patient repository using an injectable clinic clock.
+   *
+   * @param database database used for patient persistence
+   * @param clock source for patient timestamps
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public PatientRepository(SqliteDatabase database, Clock clock) {
     this.database = Objects.requireNonNull(database, "database");
+    this.clock = ClinicClock.withClinicZone(clock);
   }
 
   /**
@@ -93,7 +107,7 @@ public final class PatientRepository {
           try (PreparedStatement statement =
               connection.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
             bindPatient(statement, patient);
-            String timestamp = SqliteQueries.formatTimestamp(LocalDateTime.now());
+            String timestamp = SqliteQueries.formatTimestamp(ClinicClock.now(clock));
             statement.setString(15, timestamp);
             statement.setString(16, timestamp);
             statement.executeUpdate();
@@ -133,7 +147,7 @@ public final class PatientRepository {
               """;
           try (PreparedStatement statement = connection.prepareStatement(sql)) {
             bindPatient(statement, patient);
-            statement.setString(15, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+            statement.setString(15, SqliteQueries.formatTimestamp(ClinicClock.now(clock)));
             statement.setLong(16, patient.id());
             if (statement.executeUpdate() != EXPECTED_UPDATE_COUNT) {
               throw new SQLException(PATIENT_MISSING_MESSAGE + patient.id());
@@ -183,7 +197,7 @@ public final class PatientRepository {
               connection.prepareStatement(
                   "UPDATE patients SET active = ?, updated_at = ? WHERE id = ?")) {
             update.setInt(1, active ? 1 : 0);
-            update.setString(2, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+            update.setString(2, SqliteQueries.formatTimestamp(ClinicClock.now(clock)));
             update.setLong(3, patientId);
             if (update.executeUpdate() != EXPECTED_UPDATE_COUNT) {
               throw new SQLException(PATIENT_MISSING_MESSAGE + patientId);

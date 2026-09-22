@@ -328,7 +328,7 @@ final class AppointmentServiceTest {
     try (SqliteDatabase database = openDatabase()) {
       Accounts fixture = accounts(database);
       AppointmentService service =
-          service(database, Clock.fixed(Instant.parse("2026-09-01T08:00:00Z"), ZoneId.of("UTC")));
+          service(database, Clock.fixed(Instant.parse("2026-09-01T00:00:00Z"), ZoneId.of("UTC")));
       Appointment appointment =
           service.book(
               fixture.doctorSession(),

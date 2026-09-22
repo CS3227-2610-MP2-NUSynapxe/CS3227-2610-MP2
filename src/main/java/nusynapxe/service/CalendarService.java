@@ -3,9 +3,9 @@ package nusynapxe.service;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.Objects;
 import java.util.Optional;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.CalendarAppointment;
 import nusynapxe.domain.CalendarScheduleCursor;
@@ -21,7 +21,7 @@ import nusynapxe.persistence.CalendarSettingsRepository;
 /** Provides authorized Doctor Calendar reads and preference operations. */
 public final class CalendarService {
   /** Fixed clinic timezone used by Calendar date and current-time calculations. */
-  public static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Singapore");
+  public static final java.time.ZoneId CLINIC_ZONE = ClinicClock.ZONE;
 
   private final AccountRepository accounts;
   private final AppointmentRepository appointments;

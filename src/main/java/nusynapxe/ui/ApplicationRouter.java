@@ -10,6 +10,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
 import nusynapxe.persistence.SqliteDatabase;
@@ -35,18 +36,18 @@ public final class ApplicationRouter {
    * @throws NullPointerException if either argument is {@code null}
    */
   public ApplicationRouter(Stage stage, SqliteDatabase database) {
-    this(
-        stage,
-        ClinicServices.forDatabase(Objects.requireNonNull(database, "database")),
-        Clock.system(CalendarService.CLINIC_ZONE));
+    this(stage, database, ClinicClock.system());
   }
 
   ApplicationRouter(Stage stage, ClinicServices services) {
-    this(stage, services, Clock.system(CalendarService.CLINIC_ZONE));
+    this(stage, services, ClinicClock.system());
   }
 
   ApplicationRouter(Stage stage, SqliteDatabase database, Clock clock) {
-    this(stage, ClinicServices.forDatabase(Objects.requireNonNull(database, "database")), clock);
+    this(
+        stage,
+        ClinicServices.forDatabase(Objects.requireNonNull(database, "database"), clock),
+        clock);
   }
 
   ApplicationRouter(Stage stage, ClinicServices services, Clock clock) {
@@ -97,7 +98,7 @@ public final class ApplicationRouter {
       return;
     }
     if (session.role() == Role.RECEPTIONIST) {
-      setContent(ReceptionistView.create(services, session, this::showLogin));
+      setContent(ReceptionistView.create(services, session, this::showLogin, clock));
       return;
     }
     if (session.role() == Role.DOCTOR) {

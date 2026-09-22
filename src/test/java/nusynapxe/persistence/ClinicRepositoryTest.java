@@ -5,8 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
@@ -79,6 +82,22 @@ final class ClinicRepositoryTest {
           prescription,
           new ClinicalRecordRepository(database).findPrescriptions(record.id()).get(0));
       assertEquals(receptionist.role(), Role.RECEPTIONIST);
+    }
+  }
+
+  @Test
+  void repositoryTimestampsUseSingaporeDateAtUtcBoundary() throws SQLException {
+    Clock fixedClock = Clock.fixed(Instant.parse("2026-09-21T16:30:00Z"), ZoneOffset.UTC);
+    try (SqliteDatabase database = openDatabase()) {
+      new AccountRepository(database, fixedClock)
+          .create("doctor", "Dr. Ada", Role.DOCTOR, new byte[] {1}, new byte[] {2});
+
+      try (var statement = database.connection().prepareStatement("SELECT created_at FROM users")) {
+        try (var resultSet = statement.executeQuery()) {
+          assertTrue(resultSet.next());
+          assertEquals("2026-09-22T00:30:00", resultSet.getString(1));
+        }
+      }
     }
   }
 

@@ -4,6 +4,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.ClinicalHistoryEntry;
@@ -24,6 +26,7 @@ public final class ClinicalRecordRepository {
   private static final String PRESCRIPTION_COLUMNS =
       "id, clinical_record_id, medication, dosage, frequency, duration, instructions";
   private final SqliteDatabase database;
+  private final Clock clock;
 
   /**
    * Creates a clinical repository backed by an opened database.
@@ -32,7 +35,19 @@ public final class ClinicalRecordRepository {
    * @throws NullPointerException if {@code database} is {@code null}
    */
   public ClinicalRecordRepository(SqliteDatabase database) {
+    this(database, ClinicClock.system());
+  }
+
+  /**
+   * Creates a clinical repository using an injectable clinic clock.
+   *
+   * @param database database used for clinical persistence
+   * @param clock source for clinical timestamps
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public ClinicalRecordRepository(SqliteDatabase database, Clock clock) {
     this.database = Objects.requireNonNull(database, "database");
+    this.clock = ClinicClock.withClinicZone(clock);
   }
 
   /**
@@ -70,10 +85,10 @@ public final class ClinicalRecordRepository {
         connection -> {
           Optional<Long> existingId = findIdByAppointment(connection, record.appointmentId());
           if (existingId.isPresent()) {
-            updateRecord(connection, existingId.orElseThrow(), record);
+            updateRecord(connection, existingId.orElseThrow(), record, ClinicClock.now(clock));
             return withId(record, existingId.orElseThrow());
           }
-          return insertRecord(connection, record);
+          return insertRecord(connection, record, ClinicClock.now(clock));
         });
   }
 
@@ -101,7 +116,7 @@ public final class ClinicalRecordRepository {
             statement.setString(4, prescription.frequency());
             statement.setString(5, prescription.duration());
             statement.setString(6, prescription.instructions());
-            statement.setString(7, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+            statement.setString(7, SqliteQueries.formatTimestamp(ClinicClock.now(clock)));
             statement.executeUpdate();
             try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
               if (!generatedKeys.next()) {
@@ -210,7 +225,8 @@ public final class ClinicalRecordRepository {
     // Groups the joined history row before prescription enrichment.
   }
 
-  private static ClinicalRecord insertRecord(java.sql.Connection connection, ClinicalRecord record)
+  private static ClinicalRecord insertRecord(
+      java.sql.Connection connection, ClinicalRecord record, LocalDateTime updatedAt)
       throws SQLException {
     String sql =
         "INSERT INTO clinical_records(patient_id, appointment_id, doctor_id, diagnosis, "
@@ -223,7 +239,7 @@ public final class ClinicalRecordRepository {
       statement.setString(4, record.diagnosis());
       statement.setString(5, record.consultationNotes());
       statement.setString(6, record.followUpNotes());
-      statement.setString(7, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+      statement.setString(7, SqliteQueries.formatTimestamp(updatedAt));
       statement.executeUpdate();
       try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
         if (!generatedKeys.next()) {
@@ -234,7 +250,8 @@ public final class ClinicalRecordRepository {
     }
   }
 
-  private static void updateRecord(java.sql.Connection connection, long id, ClinicalRecord record)
+  private static void updateRecord(
+      java.sql.Connection connection, long id, ClinicalRecord record, LocalDateTime updatedAt)
       throws SQLException {
     String sql =
         "UPDATE clinical_records SET patient_id = ?, appointment_id = ?, doctor_id = ?, "
@@ -246,7 +263,7 @@ public final class ClinicalRecordRepository {
       statement.setString(4, record.diagnosis());
       statement.setString(5, record.consultationNotes());
       statement.setString(6, record.followUpNotes());
-      statement.setString(7, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+      statement.setString(7, SqliteQueries.formatTimestamp(updatedAt));
       statement.setLong(8, id);
       statement.executeUpdate();
     }

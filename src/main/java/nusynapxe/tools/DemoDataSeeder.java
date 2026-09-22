@@ -8,12 +8,12 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import nusynapxe.ClinicClock;
 import nusynapxe.DatabasePaths;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
@@ -37,9 +37,6 @@ import nusynapxe.service.AccountService;
 
 /** Creates and removes the local-development SQLite database used by the scripts. */
 public final class DemoDataSeeder {
-  /** Singapore timezone used to place showcase appointments in a rolling window. */
-  private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Singapore");
-
   private static final String ADMIN_USERNAME = "admin.demo";
   private static final String ADMIN_PASSWORD = "DemoAdmin123!";
   private static final String ADA_USERNAME = "ada";
@@ -536,7 +533,7 @@ public final class DemoDataSeeder {
   private static List<Appointment> createAppointments(
       AppointmentRepository repository, Account ada, Account grace, List<Patient> patients)
       throws SQLException {
-    LocalDate today = LocalDate.now(CLINIC_ZONE);
+    LocalDate today = ClinicClock.today(ClinicClock.system());
     List<Patient> schedulablePatients = patients.stream().filter(Patient::active).toList();
     List<Appointment> created = new ArrayList<>();
     for (int dayOffset = -HISTORICAL_DAYS; dayOffset <= FUTURE_DAYS; dayOffset++) {
@@ -581,7 +578,7 @@ public final class DemoDataSeeder {
 
   private static void seedClinicalHistory(
       ClinicalRecordRepository repository, List<Appointment> appointments) throws SQLException {
-    LocalDate today = LocalDate.now(CLINIC_ZONE);
+    LocalDate today = ClinicClock.today(ClinicClock.system());
     for (Appointment appointment : appointments) {
       if (!appointment.startsAt().toLocalDate().isBefore(today)
           || !CONSULTATION_STATUSES.contains(appointment.status())) {

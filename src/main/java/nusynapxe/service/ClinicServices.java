@@ -1,6 +1,8 @@
 package nusynapxe.service;
 
+import java.time.Clock;
 import java.util.Objects;
+import nusynapxe.ClinicClock;
 import nusynapxe.persistence.AccountRepository;
 import nusynapxe.persistence.AppointmentRepository;
 import nusynapxe.persistence.CalendarSettingsRepository;
@@ -44,22 +46,36 @@ public final class ClinicServices {
    * @throws NullPointerException if {@code database} is {@code null}
    */
   public static ClinicServices forDatabase(SqliteDatabase database) {
+    return forDatabase(database, ClinicClock.system());
+  }
+
+  /**
+   * Creates all application services over one opened database and one clinic clock.
+   *
+   * @param database opened database shared by all repositories and services
+   * @param clock source for implicit clinic dates and timestamps
+   * @return fully wired clinic service facade
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public static ClinicServices forDatabase(SqliteDatabase database, Clock clock) {
     Objects.requireNonNull(database, "database");
-    AccountRepository accounts = new AccountRepository(database);
-    PatientRepository patients = new PatientRepository(database);
-    AppointmentRepository appointments = new AppointmentRepository(database);
-    ClinicalRecordRepository clinicalRecords = new ClinicalRecordRepository(database);
+    Clock clinicClock = ClinicClock.withClinicZone(clock);
+    AccountRepository accounts = new AccountRepository(database, clinicClock);
+    PatientRepository patients = new PatientRepository(database, clinicClock);
+    AppointmentRepository appointments = new AppointmentRepository(database, clinicClock);
+    ClinicalRecordRepository clinicalRecords = new ClinicalRecordRepository(database, clinicClock);
     AppointmentService appointmentService =
-        new AppointmentService(appointments, accounts, patients);
+        new AppointmentService(appointments, accounts, patients, clinicClock);
     CalendarService calendarService =
         new CalendarService(accounts, appointments, new CalendarSettingsRepository(database));
     return new ClinicServices(
         new AccountService(accounts),
         new AuthenticationService(accounts),
-        new PatientService(patients, appointments, clinicalRecords),
+        new PatientService(patients, appointments, clinicalRecords, clinicClock),
         appointmentService,
         new ClinicalService(appointments, clinicalRecords),
-        new BillingService(new PaymentRepository(database), appointmentService),
+        new BillingService(
+            new PaymentRepository(database, clinicClock), appointmentService, clinicClock),
         calendarService);
   }
 

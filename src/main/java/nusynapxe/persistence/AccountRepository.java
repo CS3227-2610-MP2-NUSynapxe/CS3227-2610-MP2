@@ -4,10 +4,12 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.AccountCredential;
 import nusynapxe.domain.Role;
@@ -16,6 +18,7 @@ import nusynapxe.domain.Role;
 public final class AccountRepository {
   private static final String ACCOUNT_COLUMNS = "id, username, display_name, role, enabled";
   private final SqliteDatabase database;
+  private final Clock clock;
 
   /**
    * Creates an account repository backed by an opened database.
@@ -24,7 +27,19 @@ public final class AccountRepository {
    * @throws NullPointerException if {@code database} is {@code null}
    */
   public AccountRepository(SqliteDatabase database) {
+    this(database, ClinicClock.system());
+  }
+
+  /**
+   * Creates an account repository using an injectable clinic clock.
+   *
+   * @param database database used for account persistence
+   * @param clock source for account creation timestamps
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public AccountRepository(SqliteDatabase database, Clock clock) {
     this.database = Objects.requireNonNull(database, "database");
+    this.clock = ClinicClock.withClinicZone(clock);
   }
 
   /**
@@ -122,7 +137,10 @@ public final class AccountRepository {
     Objects.requireNonNull(salt, "salt");
     Objects.requireNonNull(verifier, "verifier");
     return SqliteTransactions.execute(
-        database, connection -> insert(connection, username, displayName, role, salt, verifier));
+        database,
+        connection ->
+            insert(
+                connection, username, displayName, role, salt, verifier, ClinicClock.now(clock)));
   }
 
   /**
@@ -150,7 +168,15 @@ public final class AccountRepository {
         connection ->
             hasAccounts(connection)
                 ? Optional.empty()
-                : Optional.of(insert(connection, username, displayName, role, salt, verifier)));
+                : Optional.of(
+                    insert(
+                        connection,
+                        username,
+                        displayName,
+                        role,
+                        salt,
+                        verifier,
+                        ClinicClock.now(clock))));
   }
 
   /**
@@ -188,7 +214,8 @@ public final class AccountRepository {
       String displayName,
       Role role,
       byte[] salt,
-      byte[] verifier)
+      byte[] verifier,
+      LocalDateTime createdAt)
       throws SQLException {
     String sql =
         "INSERT INTO users(username, display_name, role, enabled, password_salt, "
@@ -200,7 +227,7 @@ public final class AccountRepository {
       statement.setString(3, role.name());
       statement.setBytes(4, salt.clone());
       statement.setBytes(5, verifier.clone());
-      statement.setString(6, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+      statement.setString(6, SqliteQueries.formatTimestamp(createdAt));
       statement.executeUpdate();
       try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
         if (!generatedKeys.next()) {

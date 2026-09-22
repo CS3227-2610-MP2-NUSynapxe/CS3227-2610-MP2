@@ -1,9 +1,9 @@
 package nusynapxe.ui;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Month;
 import java.time.Period;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -30,6 +30,7 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.PatientDeletionBlockers;
@@ -42,7 +43,6 @@ import nusynapxe.service.ValidationException;
 
 /** Builds the shared administrative patient directory for Doctors and Receptionists. */
 final class PatientDirectoryView {
-  private static final ZoneId SINGAPORE_ZONE = ZoneId.of("Asia/Singapore");
   private static final String EMAIL_LABEL = "Email";
 
   private final ClinicServices services;
@@ -50,6 +50,7 @@ final class PatientDirectoryView {
   private final String prefix;
   private final Label workspaceFeedback;
   private final LongConsumer onPatientChanged;
+  private final Clock clock;
   private final TextField patientSearch;
   private final TableView<Patient> patientTable;
   private final Label pageTitle;
@@ -66,14 +67,16 @@ final class PatientDirectoryView {
       String prefix,
       Label workspaceFeedback,
       LongConsumer onPatientChanged,
-      Runnable onClinicalHistoryRequested) {
+      Runnable onClinicalHistoryRequested,
+      Clock clock) {
     this.services = Objects.requireNonNull(services, "services");
     this.session = Objects.requireNonNull(session, "session");
     this.prefix = requirePrefix(prefix);
     this.workspaceFeedback = Objects.requireNonNull(workspaceFeedback, "workspaceFeedback");
     this.onPatientChanged = Objects.requireNonNull(onPatientChanged, "onPatientChanged");
+    this.clock = ClinicClock.withClinicZone(clock);
 
-    PatientForm registerForm = patientForm(prefix + "-register", false);
+    PatientForm registerForm = patientForm(prefix + "-register", false, this.clock);
     Button register = button("Register patient", prefix + "-patient-register");
     patientSearch = field(prefix + "-patient-search", "Search by name, NRIC/FIN, phone, or email");
     Button searchPatients = button("Search patients", prefix + "-patient-search-submit");
@@ -181,7 +184,8 @@ final class PatientDirectoryView {
       String prefix,
       Label workspaceFeedback,
       LongConsumer onPatientChanged) {
-    return create(services, session, prefix, workspaceFeedback, onPatientChanged, null);
+    return create(
+        services, session, prefix, workspaceFeedback, onPatientChanged, null, ClinicClock.system());
   }
 
   /** Creates a directory with an optional Doctor clinical-history action. */
@@ -192,6 +196,25 @@ final class PatientDirectoryView {
       Label workspaceFeedback,
       LongConsumer onPatientChanged,
       Runnable onClinicalHistoryRequested) {
+    return create(
+        services,
+        session,
+        prefix,
+        workspaceFeedback,
+        onPatientChanged,
+        onClinicalHistoryRequested,
+        ClinicClock.system());
+  }
+
+  /** Creates a directory with an injectable clinic clock. */
+  static PatientDirectoryView create(
+      ClinicServices services,
+      Session session,
+      String prefix,
+      Label workspaceFeedback,
+      LongConsumer onPatientChanged,
+      Runnable onClinicalHistoryRequested,
+      Clock clock) {
     PatientDirectoryView view =
         new PatientDirectoryView(
             services,
@@ -199,7 +222,8 @@ final class PatientDirectoryView {
             prefix,
             workspaceFeedback,
             onPatientChanged,
-            onClinicalHistoryRequested);
+            onClinicalHistoryRequested,
+            clock);
     view.refresh();
     return view;
   }
@@ -495,7 +519,7 @@ final class PatientDirectoryView {
   }
 
   private void showPatientEdit(Patient selected) {
-    PatientForm form = patientForm(prefix + "-patient", false);
+    PatientForm form = patientForm(prefix + "-patient", false, clock);
     populatePatientForm(selected, form);
     Patient[] current = {selected};
     Label feedback = new Label();
@@ -663,7 +687,7 @@ final class PatientDirectoryView {
     return patient.active() ? "Deactivate patient" : "Activate patient";
   }
 
-  private static PatientForm patientForm(String prefix, boolean includePatientId) {
+  private static PatientForm patientForm(String prefix, boolean includePatientId, Clock clock) {
     TextField patientId = includePatientId ? field(prefix + "-id", "Generated Patient ID") : null;
     if (patientId != null) {
       patientId.setEditable(false);
@@ -712,7 +736,7 @@ final class PatientDirectoryView {
     ComboBox<Integer> birthYear = UiComponents.compactSelector();
     birthYear.setId(prefix + "-date-of-birth-year");
     birthYear.setPromptText("Year");
-    int currentYear = LocalDate.now(SINGAPORE_ZONE).getYear();
+    int currentYear = ClinicClock.today(clock).getYear();
     for (int year = currentYear; year >= 1900; year--) {
       birthYear.getItems().add(year);
     }
@@ -726,7 +750,7 @@ final class PatientDirectoryView {
             try {
               LocalDate dateOfBirth =
                   LocalDate.of(birthYear.getValue(), birthMonth.getValue(), birthDay.getValue());
-              age.setText(calculateAgeText(dateOfBirth));
+              age.setText(calculateAgeText(dateOfBirth, clock));
             } catch (java.time.DateTimeException exception) {
               age.setText("");
             }
@@ -897,10 +921,14 @@ final class PatientDirectoryView {
   }
 
   static String calculateAgeText(LocalDate dateOfBirth) {
+    return calculateAgeText(dateOfBirth, ClinicClock.system());
+  }
+
+  static String calculateAgeText(LocalDate dateOfBirth, Clock clock) {
     if (dateOfBirth == null) {
       return "";
     }
-    LocalDate today = LocalDate.now(SINGAPORE_ZONE);
+    LocalDate today = ClinicClock.today(clock);
     return dateOfBirth.isAfter(today)
         ? ""
         : Integer.toString(Period.between(dateOfBirth, today).getYears());

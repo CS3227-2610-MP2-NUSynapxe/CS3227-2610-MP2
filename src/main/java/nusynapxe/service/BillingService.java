@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.Payment;
@@ -35,13 +36,13 @@ public final class BillingService {
    * @throws NullPointerException if a dependency is {@code null}
    */
   public BillingService(PaymentRepository payments, AppointmentService appointments) {
-    this(payments, appointments, Clock.systemDefaultZone());
+    this(payments, appointments, ClinicClock.system());
   }
 
-  BillingService(PaymentRepository payments, AppointmentService appointments, Clock clock) {
+  public BillingService(PaymentRepository payments, AppointmentService appointments, Clock clock) {
     this.payments = Objects.requireNonNull(payments, "payments");
     this.appointments = Objects.requireNonNull(appointments, "appointments");
-    this.clock = Objects.requireNonNull(clock, "clock");
+    this.clock = ClinicClock.withClinicZone(clock);
     this.receipts = new ReceiptRepository(payments.backingDatabase());
   }
 

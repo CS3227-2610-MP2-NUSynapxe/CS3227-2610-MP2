@@ -389,7 +389,8 @@ public final class DoctorView {
               dashboardHolder[0].refresh();
               clinicalHistoryView.refreshPatients();
             },
-            () -> showHistoryHolder[0].run());
+            () -> showHistoryHolder[0].run(),
+            clinicClock);
     setVisibleManaged(clinicalHistoryView.view(), false);
     StackPane patientPages = new StackPane(patientDirectory.view(), clinicalHistoryView.view());
     patientPages.setId("doctor-patient-pages");

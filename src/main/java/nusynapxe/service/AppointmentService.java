@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
@@ -34,7 +35,7 @@ public final class AppointmentService {
    */
   public AppointmentService(
       AppointmentRepository appointments, AccountRepository accounts, PatientRepository patients) {
-    this(appointments, accounts, patients, Clock.system(CalendarService.CLINIC_ZONE));
+    this(appointments, accounts, patients, ClinicClock.system());
   }
 
   AppointmentService(
@@ -45,7 +46,7 @@ public final class AppointmentService {
     this.appointments = Objects.requireNonNull(appointments, "appointments");
     this.accounts = Objects.requireNonNull(accounts, "accounts");
     this.patients = Objects.requireNonNull(patients, "patients");
-    this.clock = Objects.requireNonNull(clock, "clock");
+    this.clock = ClinicClock.withClinicZone(clock);
   }
 
   /**

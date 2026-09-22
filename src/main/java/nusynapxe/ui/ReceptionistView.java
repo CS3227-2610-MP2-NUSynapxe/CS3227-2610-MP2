@@ -5,9 +5,9 @@ import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.sql.SQLException;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -44,6 +44,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
@@ -75,7 +76,6 @@ public final class ReceptionistView {
   private static final int JSON_CONTROL_CHARACTER_LIMIT = 0x20;
   private static final DateTimeFormatter DATE_TIME_FORMAT =
       DateTimeFormatter.ofPattern(DATE_TIME_PATTERN);
-  private static final ZoneId SINGAPORE_ZONE = ZoneId.of("Asia/Singapore");
 
   private ReceptionistView() {
     throw new AssertionError("Utility class");
@@ -91,6 +91,11 @@ public final class ReceptionistView {
    * @throws NullPointerException if an argument is {@code null}
    */
   public static Parent create(ClinicServices services, Session session, Runnable onLogout) {
+    return create(services, session, onLogout, ClinicClock.system());
+  }
+
+  static Parent create(ClinicServices services, Session session, Runnable onLogout, Clock clock) {
+    Clock clinicClock = ClinicClock.withClinicZone(clock);
     SearchSuggestionField<Account> doctor =
         doctorSelector("reception-doctor", "Search doctors by name or username");
     AppointmentDialog.TimeFields startsAt = AppointmentDialog.timeSelector("reception-start");
@@ -117,7 +122,7 @@ public final class ReceptionistView {
     scheduleSummary.setId("reception-schedule-summary");
     TableView<Appointment> queueList =
         appointmentTable("reception-check-in-queue-list", services, session);
-    DatePicker queueDate = UiComponents.compactDatePicker(LocalDate.now(SINGAPORE_ZONE));
+    DatePicker queueDate = UiComponents.compactDatePicker(LocalDate.now(clinicClock));
     queueDate.setId("reception-check-in-queue-date");
     SearchSuggestionField<Account> queueDoctor =
         doctorSelector("reception-check-in-queue-doctor", ALL_DOCTORS);
@@ -130,7 +135,7 @@ public final class ReceptionistView {
     Label queueSummary = new Label();
     queueSummary.setId("reception-check-in-queue-summary");
     Button queueSearch = button("Search", "reception-check-in-queue-search");
-    DatePicker appointmentDate = UiComponents.compactDatePicker(LocalDate.now());
+    DatePicker appointmentDate = UiComponents.compactDatePicker(LocalDate.now(clinicClock));
     appointmentDate.setId("reception-appointment-date");
     SearchSuggestionField<Patient> appointmentPatient =
         PatientDirectoryView.patientSearchField("reception-appointment-patient");
@@ -154,9 +159,9 @@ public final class ReceptionistView {
     Button receiptSearch = button("Search receipts", "reception-receipt-search");
     Label receiptPreview = new Label();
     receiptPreview.setId("reception-receipt-preview");
-    DatePicker reportFromDate = UiComponents.compactDatePicker(LocalDate.now(SINGAPORE_ZONE));
+    DatePicker reportFromDate = UiComponents.compactDatePicker(LocalDate.now(clinicClock));
     reportFromDate.setId("reception-revenue-report-from");
-    DatePicker reportToDate = UiComponents.compactDatePicker(LocalDate.now(SINGAPORE_ZONE));
+    DatePicker reportToDate = UiComponents.compactDatePicker(LocalDate.now(clinicClock));
     reportToDate.setId("reception-revenue-report-to");
     TextField reportPatient = field("reception-revenue-report-patient", "Patient name or ID");
     SearchSuggestionField<Account> reportDoctor =
@@ -189,7 +194,9 @@ public final class ReceptionistView {
             feedback,
             patientId ->
                 PatientDirectoryView.refreshAppointmentPatients(
-                    services, session, appointmentPatient, feedback, patientId));
+                    services, session, appointmentPatient, feedback, patientId),
+            null,
+            clinicClock);
     appointmentList
         .getSelectionModel()
         .selectedItemProperty()
@@ -215,6 +222,7 @@ public final class ReceptionistView {
                 session,
                 selected.id(),
                 feedback,
+                clinicClock,
                 () ->
                     refreshQueue(
                         services,
@@ -1596,6 +1604,7 @@ public final class ReceptionistView {
       Session session,
       long appointmentId,
       Label workspaceFeedback,
+      Clock clock,
       Runnable onUpdated) {
     try {
       Appointment appointment = services.appointmentService().get(appointmentId);
@@ -1624,7 +1633,8 @@ public final class ReceptionistView {
       Button checkIn = button("Check in patient", "reception-check-in-submit");
       boolean eligible =
           appointment.status() == AppointmentStatus.ACCEPTED
-              && !LocalDateTime.now(SINGAPORE_ZONE).isBefore(appointment.startsAt());
+              && !LocalDateTime.now(ClinicClock.withClinicZone(clock))
+                  .isBefore(appointment.startsAt());
       checkIn.setDisable(!eligible);
       Stage dialog = new Stage();
       checkIn.setOnAction(

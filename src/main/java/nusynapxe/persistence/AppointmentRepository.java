@@ -5,11 +5,13 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.CalendarAppointment;
@@ -25,6 +27,7 @@ public final class AppointmentRepository {
       "id, patient_id, doctor_id, starts_at, ends_at, " + STATUS_COLUMN;
   private static final String TIME_OFF_COLUMNS = "id, doctor_id, starts_at, ends_at";
   private final SqliteDatabase database;
+  private final Clock clock;
 
   /**
    * Creates an appointment repository backed by an opened database.
@@ -33,7 +36,19 @@ public final class AppointmentRepository {
    * @throws NullPointerException if {@code database} is {@code null}
    */
   public AppointmentRepository(SqliteDatabase database) {
+    this(database, ClinicClock.system());
+  }
+
+  /**
+   * Creates an appointment repository using an injectable clinic clock.
+   *
+   * @param database database used for appointment persistence
+   * @param clock source for appointment timestamps
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public AppointmentRepository(SqliteDatabase database, Clock clock) {
     this.database = Objects.requireNonNull(database, "database");
+    this.clock = ClinicClock.withClinicZone(clock);
   }
 
   /**
@@ -72,7 +87,7 @@ public final class AppointmentRepository {
             SqliteQueries.bindTimestamp(statement, 3, startsAt);
             SqliteQueries.bindTimestamp(statement, 4, endsAt);
             statement.setString(5, status.name());
-            String timestamp = SqliteQueries.formatTimestamp(LocalDateTime.now());
+            String timestamp = SqliteQueries.formatTimestamp(ClinicClock.now(clock));
             statement.setString(6, timestamp);
             statement.setString(7, timestamp);
             statement.executeUpdate();
@@ -144,7 +159,7 @@ public final class AppointmentRepository {
             } else {
               statement.setNull(3, Types.VARCHAR);
             }
-            statement.setString(4, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+            statement.setString(4, SqliteQueries.formatTimestamp(ClinicClock.now(clock)));
             statement.setLong(5, id);
             statement.executeUpdate();
           }
@@ -177,7 +192,7 @@ public final class AppointmentRepository {
               connection.prepareStatement(
                   "UPDATE appointments SET status = ?, updated_at = ? WHERE id = ?")) {
             statement.setString(1, status.name());
-            statement.setString(2, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+            statement.setString(2, SqliteQueries.formatTimestamp(ClinicClock.now(clock)));
             statement.setLong(3, id);
             statement.executeUpdate();
           }
