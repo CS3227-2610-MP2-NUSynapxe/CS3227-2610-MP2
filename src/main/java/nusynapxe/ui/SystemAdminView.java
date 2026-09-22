@@ -1,6 +1,5 @@
 package nusynapxe.ui;
 
-import java.sql.SQLException;
 import java.util.List;
 import java.util.function.Function;
 import javafx.beans.property.ReadOnlyStringWrapper;
@@ -42,6 +41,12 @@ public final class SystemAdminView {
    * @throws NullPointerException if an argument is {@code null}
    */
   public static Parent create(AccountService accounts, Session session, Runnable onLogout) {
+    return create(accounts, session, onLogout, ClinicTaskRunner.immediate());
+  }
+
+  /** Creates the account workspace with serialized background database work. */
+  public static Parent create(
+      AccountService accounts, Session session, Runnable onLogout, ClinicTaskRunner taskRunner) {
     TextField username = new TextField();
     username.setId("admin-account-username");
     TextField displayName = new TextField();
@@ -67,24 +72,25 @@ public final class SystemAdminView {
             UiComponents.showError(feedback, "Passwords do not match");
             return;
           }
-          try {
-            accounts.createStaff(
-                session,
-                username.getText(),
-                displayName.getText(),
-                role.getValue(),
-                password.getText().toCharArray());
-            UiComponents.showMessage(feedback, "Account created");
-            username.clear();
-            displayName.clear();
-            password.clear();
-            confirmation.clear();
-            refreshAccounts(accounts, session, accountTable, feedback);
-          } catch (ValidationException | AuthorizationException exception) {
-            UiComponents.showError(feedback, exception.getMessage());
-          } catch (SQLException exception) {
-            UiComponents.showError(feedback, "Accounts are temporarily unavailable");
-          }
+          taskRunner.submit(
+              () -> {
+                accounts.createStaff(
+                    session,
+                    username.getText(),
+                    displayName.getText(),
+                    role.getValue(),
+                    password.getText().toCharArray());
+                return null;
+              },
+              ignored -> {
+                UiComponents.showMessage(feedback, "Account created");
+                username.clear();
+                displayName.clear();
+                password.clear();
+                confirmation.clear();
+                refreshAccounts(accounts, session, accountTable, feedback, taskRunner);
+              },
+              failure -> showAccountError(feedback, failure));
         });
     Button logout = new Button("Log out");
     logout.setId("logout-button");
@@ -117,7 +123,7 @@ public final class SystemAdminView {
     ScrollPane scroll = new ScrollPane(content);
     scroll.setFitToWidth(true);
     root.setCenter(scroll);
-    refreshAccounts(accounts, session, accountTable, feedback);
+    refreshAccounts(accounts, session, accountTable, feedback, taskRunner);
     return UiComponents.notificationOverlay(root, feedback);
   }
 
@@ -177,13 +183,26 @@ public final class SystemAdminView {
   }
 
   private static void refreshAccounts(
-      AccountService accounts, Session session, TableView<Account> accountTable, Label feedback) {
-    try {
-      accountTable.setItems(FXCollections.observableArrayList(accounts.listAccounts(session)));
-      accountTable.getSelectionModel().clearSelection();
-      int visibleRows = Math.min(Math.max(accountTable.getItems().size(), 1), 5);
-      accountTable.setPrefHeight(40 + visibleRows * 40);
-    } catch (SQLException exception) {
+      AccountService accounts,
+      Session session,
+      TableView<Account> accountTable,
+      Label feedback,
+      ClinicTaskRunner taskRunner) {
+    taskRunner.submit(
+        () -> accounts.listAccounts(session),
+        accountsList -> {
+          accountTable.setItems(FXCollections.observableArrayList(accountsList));
+          accountTable.getSelectionModel().clearSelection();
+          int visibleRows = Math.min(Math.max(accountTable.getItems().size(), 1), 5);
+          accountTable.setPrefHeight(40 + visibleRows * 40);
+        },
+        failure -> showAccountError(feedback, failure));
+  }
+
+  private static void showAccountError(Label feedback, Throwable failure) {
+    if (failure instanceof ValidationException || failure instanceof AuthorizationException) {
+      UiComponents.showError(feedback, failure.getMessage());
+    } else {
       UiComponents.showError(feedback, "Accounts are temporarily unavailable");
     }
   }
