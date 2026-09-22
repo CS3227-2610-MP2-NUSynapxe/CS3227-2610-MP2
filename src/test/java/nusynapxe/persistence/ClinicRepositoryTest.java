@@ -288,6 +288,16 @@ final class ClinicRepositoryTest {
         database.connection().setAutoCommit(true);
       }
       assertEquals(1, receipts.findAll("grace", doctor.id(), LocalDate.of(2026, 9, 1)).size());
+      assertEquals(
+          1,
+          receipts
+              .findRange(
+                  "grace",
+                  doctor.id(),
+                  LocalDate.of(2026, 9, 1),
+                  LocalDate.of(2026, 9, 2),
+                  PaymentMethod.CARD)
+              .size());
       assertTrue(receipts.findAll("unknown", null, LocalDate.of(2026, 9, 1)).isEmpty());
     }
   }

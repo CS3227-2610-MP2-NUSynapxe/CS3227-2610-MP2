@@ -4,7 +4,6 @@ import java.sql.SQLException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import nusynapxe.ClinicClock;
@@ -135,12 +134,7 @@ public final class BillingService {
     if (to.isBefore(from)) {
       throw new ValidationException("Report end date must not be before its start date");
     }
-    List<Receipt> result = new ArrayList<>();
-    for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
-      receipts.findAll(patientQuery, doctorId, date).stream()
-          .filter(receipt -> method == null || receipt.method() == method)
-          .forEach(result::add);
-    }
+    List<Receipt> result = receipts.findRange(patientQuery, doctorId, from, to, method);
     return new RevenueReport(result);
   }
 
