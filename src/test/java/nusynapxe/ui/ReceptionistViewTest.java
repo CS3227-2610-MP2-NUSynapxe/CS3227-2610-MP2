@@ -63,10 +63,13 @@ final class ReceptionistViewTest extends ApplicationTest {
   void appointmentTableUsesPreloadedDisplayNamesInsteadOfCellQueries() throws Exception {
     String source =
         Files.readString(Path.of("src/main/java/nusynapxe/ui/ReceptionistWorkspace.java"));
+    String panelSource =
+        Files.readString(Path.of("src/main/java/nusynapxe/ui/ReceptionistAppointmentPanel.java"));
     String tableSource =
         Files.readString(Path.of("src/main/java/nusynapxe/ui/ReceptionistAppointmentView.java"));
 
-    assertTrue(source.contains("ReceptionistAppointmentView.appointmentTable"));
+    assertFalse(source.contains("services.appointmentService().searchAppointmentRows"));
+    assertTrue(panelSource.contains("ReceptionistAppointmentView.appointmentTable"));
     assertFalse(tableSource.contains("patientDisplayName(services"));
     assertFalse(tableSource.contains("doctorDisplayName(services"));
     assertTrue(tableSource.contains("AppointmentListRow::patientDisplayName"));

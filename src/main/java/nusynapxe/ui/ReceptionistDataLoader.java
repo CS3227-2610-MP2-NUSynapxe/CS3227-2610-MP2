@@ -265,7 +265,7 @@ final class ReceptionistDataLoader {
 
   void refreshSchedule(
       TableView<AppointmentListRow> appointmentList,
-      ReceptionistWorkspace.SelectionState selection,
+      ReceptionistAppointmentPanel.SelectionState selection,
       Label feedback,
       LocalDate date,
       Long doctorId,
@@ -299,7 +299,7 @@ final class ReceptionistDataLoader {
       ClinicServices ignoredServices,
       Session ignoredSession,
       TableView<AppointmentListRow> appointmentList,
-      ReceptionistWorkspace.SelectionState selection,
+      ReceptionistAppointmentPanel.SelectionState selection,
       Label feedback,
       LocalDate date,
       Long doctorId,
