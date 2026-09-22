@@ -61,16 +61,16 @@ final class ReceptionistViewTest extends ApplicationTest {
 
   @Test
   void appointmentTableUsesPreloadedDisplayNamesInsteadOfCellQueries() throws Exception {
-    String source = Files.readString(Path.of("src/main/java/nusynapxe/ui/ReceptionistView.java"));
-    int tableStart =
-        source.indexOf("private static TableView<", source.indexOf("appointmentTable("));
-    int statusColumnStart = source.indexOf("private static TableColumn<", tableStart);
-    String tableMethod = source.substring(tableStart, statusColumnStart);
+    String source =
+        Files.readString(Path.of("src/main/java/nusynapxe/ui/ReceptionistWorkspace.java"));
+    String tableSource =
+        Files.readString(Path.of("src/main/java/nusynapxe/ui/ReceptionistAppointmentView.java"));
 
-    assertFalse(tableMethod.contains("patientDisplayName(services"));
-    assertFalse(tableMethod.contains("doctorDisplayName(services"));
-    assertTrue(tableMethod.contains("AppointmentListRow::patientDisplayName"));
-    assertTrue(tableMethod.contains("AppointmentListRow::doctorDisplayName"));
+    assertTrue(source.contains("ReceptionistAppointmentView.appointmentTable"));
+    assertFalse(tableSource.contains("patientDisplayName(services"));
+    assertFalse(tableSource.contains("doctorDisplayName(services"));
+    assertTrue(tableSource.contains("AppointmentListRow::patientDisplayName"));
+    assertTrue(tableSource.contains("AppointmentListRow::doctorDisplayName"));
   }
 
   private SqliteDatabase database;

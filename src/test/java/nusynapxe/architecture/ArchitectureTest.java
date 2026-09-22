@@ -7,6 +7,8 @@ import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 final class ArchitectureTest {
@@ -91,5 +93,18 @@ final class ArchitectureTest {
   @Test
   void corePackagesRemainFreeOfCycles() {
     CORE_SLICES_ARE_CYCLE_FREE.check(MAIN_CLASSES);
+  }
+
+  @Test
+  void primaryViewsRemainCompositionShells() throws Exception {
+    assertLineLimit("src/main/java/nusynapxe/ui/ReceptionistView.java", 500);
+    assertLineLimit("src/main/java/nusynapxe/ui/DoctorView.java", 450);
+  }
+
+  private static void assertLineLimit(String file, int maximumLines) throws Exception {
+    long lineCount = Files.lines(Path.of(file)).count();
+    org.junit.jupiter.api.Assertions.assertTrue(
+        lineCount <= maximumLines,
+        () -> file + " has " + lineCount + " lines; expected at most " + maximumLines);
   }
 }
