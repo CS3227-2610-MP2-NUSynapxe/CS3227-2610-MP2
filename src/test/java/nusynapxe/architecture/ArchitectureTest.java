@@ -101,6 +101,22 @@ final class ArchitectureTest {
   void primaryViewsRemainCompositionShells() throws Exception {
     assertLineLimit("src/main/java/nusynapxe/ui/ReceptionistView.java", 500);
     assertLineLimit("src/main/java/nusynapxe/ui/DoctorView.java", 450);
+    assertLineLimit("src/main/java/nusynapxe/ui/ReceptionistWorkspace.java", 450);
+    assertLineLimit("src/main/java/nusynapxe/ui/DoctorWorkspace.java", 850);
+  }
+
+  @Test
+  void blockingAuthenticationAndAdminEntryPointsUseTheClinicTaskRunner() throws Exception {
+    for (String file :
+        new String[] {
+          "src/main/java/nusynapxe/ui/ApplicationRouter.java",
+          "src/main/java/nusynapxe/ui/LoginView.java",
+          "src/main/java/nusynapxe/ui/SetupView.java",
+          "src/main/java/nusynapxe/ui/SystemAdminView.java"
+        }) {
+      String source = Files.readString(Path.of(file));
+      assertTrue(source.contains("taskRunner.submit"), () -> file + " must submit blocking work");
+    }
   }
 
   @Test

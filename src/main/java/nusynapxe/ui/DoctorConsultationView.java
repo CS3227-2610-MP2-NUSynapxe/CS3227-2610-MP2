@@ -4,6 +4,7 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import javafx.collections.FXCollections;
 import javafx.scene.control.Label;
@@ -84,6 +85,32 @@ final class DoctorConsultationView {
       Label feedback,
       ClinicTaskRunner taskRunner,
       Consumer<Boolean> onComplete) {
+    loadClinicalAsync(
+        services,
+        session,
+        appointment,
+        diagnosis,
+        consultationNotes,
+        followUpNotes,
+        prescriptions,
+        feedback,
+        taskRunner,
+        () -> true,
+        onComplete);
+  }
+
+  static void loadClinicalAsync(
+      ClinicServices services,
+      Session session,
+      Appointment appointment,
+      TextField diagnosis,
+      TextArea consultationNotes,
+      TextArea followUpNotes,
+      ListView<Prescription> prescriptions,
+      Label feedback,
+      ClinicTaskRunner taskRunner,
+      BooleanSupplier isCurrent,
+      Consumer<Boolean> onComplete) {
     if (appointment == null) {
       clearClinical(diagnosis, consultationNotes, followUpNotes, prescriptions);
       onComplete.accept(true);
@@ -100,6 +127,9 @@ final class DoctorConsultationView {
           return new ClinicalProjection(record, values);
         },
         projection -> {
+          if (!isCurrent.getAsBoolean()) {
+            return;
+          }
           clearClinical(diagnosis, consultationNotes, followUpNotes, prescriptions);
           projection
               .record()
@@ -114,6 +144,9 @@ final class DoctorConsultationView {
           onComplete.accept(true);
         },
         failure -> {
+          if (!isCurrent.getAsBoolean()) {
+            return;
+          }
           clearClinical(diagnosis, consultationNotes, followUpNotes, prescriptions);
           UiComponents.showError(
               feedback,

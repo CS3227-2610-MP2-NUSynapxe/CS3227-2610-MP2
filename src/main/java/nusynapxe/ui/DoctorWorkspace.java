@@ -9,7 +9,6 @@ import javafx.geometry.Insets;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SplitPane;
@@ -35,7 +34,6 @@ import nusynapxe.service.ValidationException;
 final class DoctorWorkspace {
   private static final String APPOINTMENT_REQUIRED = "Select an appointment first";
   private static final String DATE_TIME_PATTERN = "yyyy-MM-dd HH:mm";
-  private static final String FIELD_SEPARATOR = " | ";
   private static final String ACTIVE_NAVIGATION_STYLE = "active-navigation";
   private static final DateTimeFormatter DATE_TIME_FORMAT =
       DateTimeFormatter.ofPattern(DATE_TIME_PATTERN);
@@ -75,51 +73,28 @@ final class DoctorWorkspace {
     Clock clinicClock =
         Objects.requireNonNull(clock, "clock").withZone(CalendarService.CLINIC_ZONE);
     SelectionState selection = new SelectionState();
+    Label feedback = UiComponents.feedback("doctor-feedback");
 
     Button accept = UiComponents.primaryButton("Accept", "doctor-accept");
     Button decline = UiComponents.dangerButton("Decline", "doctor-decline");
     Button checkIn = UiComponents.primaryButton("Check in", "doctor-check-in");
     Button reschedule = UiComponents.secondaryButton("Reschedule", "doctor-reschedule");
 
-    TextField diagnosis = field("doctor-diagnosis", "Diagnosis");
-    TextArea consultationNotes = textArea("doctor-consultation-notes", "Consultation notes");
-    TextArea followUpNotes = textArea("doctor-follow-up", "Follow-up notes");
-    Button saveConsultation =
-        UiComponents.primaryButton("Save consultation", "doctor-consultation-save");
-
-    TextField medication = field("doctor-medication", "Medication");
-    TextField dosage = field("doctor-dosage", "Dosage");
-    TextField frequency = field("doctor-frequency", "Frequency");
-    TextField duration = field("doctor-duration", "Duration");
-    TextField instructions = field("doctor-instructions", "Instructions");
-    Button addPrescription =
-        UiComponents.primaryButton("Add prescription", "doctor-prescription-submit");
-    ListView<Prescription> prescriptions = new ListView<>();
-    prescriptions.setId("doctor-prescription-list");
-    prescriptions.setPlaceholder(
-        UiComponents.emptyState("doctor-prescription-empty", "No prescriptions have been added."));
-    prescriptions.setCellFactory(
-        view ->
-            new ListCell<>() {
-              @Override
-              protected void updateItem(Prescription prescription, boolean empty) {
-                super.updateItem(prescription, empty);
-                setText(
-                    empty || prescription == null
-                        ? null
-                        : prescription.medication()
-                            + FIELD_SEPARATOR
-                            + prescription.dosage()
-                            + FIELD_SEPARATOR
-                            + prescription.frequency()
-                            + FIELD_SEPARATOR
-                            + prescription.duration()
-                            + FIELD_SEPARATOR
-                            + prescription.instructions());
-              }
-            });
+    DoctorConsultationPanel consultationPanel =
+        new DoctorConsultationPanel(
+            services,
+            session,
+            feedback,
+            taskRunner,
+            () -> selection.appointmentId,
+            () -> selection.generation);
+    TextField diagnosis = consultationPanel.diagnosisField();
+    TextArea consultationNotes = consultationPanel.consultationNotesArea();
+    TextArea followUpNotes = consultationPanel.followUpNotesArea();
+    Button saveConsultation = consultationPanel.saveButton();
+    Button addPrescription = consultationPanel.addPrescriptionButton();
+    ListView<Prescription> prescriptions = consultationPanel.prescriptionsList();
     Button complete = UiComponents.primaryButton("Mark consultation completed", "doctor-complete");
-    Label feedback = UiComponents.feedback("doctor-feedback");
     Label selectionSummary = new Label();
     selectionSummary.setId("doctor-selected-appointment");
     selectionSummary.getStyleClass().add("selection-summary");
@@ -220,97 +195,6 @@ final class DoctorWorkspace {
               taskRunner);
         });
 
-    saveConsultation.setOnAction(
-        event -> {
-          try {
-            requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
-            long appointmentId = selection.appointmentId;
-            String diagnosisValue = diagnosis.getText();
-            String consultationValue = consultationNotes.getText();
-            String followUpValue = followUpNotes.getText();
-            run(
-                feedback,
-                taskRunner,
-                () -> {
-                  services
-                      .clinicalService()
-                      .saveConsultation(
-                          session, appointmentId, diagnosisValue, consultationValue, followUpValue);
-                  return services.appointmentService().get(appointmentId);
-                },
-                appointment -> {
-                  feedback.setText("Consultation saved");
-                  DoctorConsultationView.loadClinicalAsync(
-                      services,
-                      session,
-                      appointment,
-                      diagnosis,
-                      consultationNotes,
-                      followUpNotes,
-                      prescriptions,
-                      feedback,
-                      taskRunner,
-                      clinicalLoaded -> {
-                        if (!clinicalLoaded) {
-                          setClinicalEditable(nodesHolder[0], false);
-                        }
-                      });
-                });
-          } catch (ValidationException exception) {
-            UiComponents.showError(feedback, exception.getMessage());
-          }
-        });
-
-    addPrescription.setOnAction(
-        event -> {
-          try {
-            requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
-            long appointmentId = selection.appointmentId;
-            String medicationValue = medication.getText();
-            String dosageValue = dosage.getText();
-            String frequencyValue = frequency.getText();
-            String durationValue = duration.getText();
-            String instructionsValue = instructions.getText();
-            run(
-                feedback,
-                taskRunner,
-                () -> {
-                  services
-                      .clinicalService()
-                      .addPrescription(
-                          session,
-                          appointmentId,
-                          medicationValue,
-                          dosageValue,
-                          frequencyValue,
-                          durationValue,
-                          instructionsValue);
-                  return services.appointmentService().get(appointmentId);
-                },
-                appointment -> {
-                  feedback.setText("Prescription added");
-                  clear(medication, dosage, frequency, duration, instructions);
-                  DoctorConsultationView.loadClinicalAsync(
-                      services,
-                      session,
-                      appointment,
-                      diagnosis,
-                      consultationNotes,
-                      followUpNotes,
-                      prescriptions,
-                      feedback,
-                      taskRunner,
-                      clinicalLoaded -> {
-                        if (!clinicalLoaded) {
-                          setClinicalEditable(nodesHolder[0], false);
-                        }
-                      });
-                });
-          } catch (ValidationException exception) {
-            UiComponents.showError(feedback, exception.getMessage());
-          }
-        });
-
     complete.setOnAction(
         event -> {
           try {
@@ -333,6 +217,7 @@ final class DoctorWorkspace {
 
     DoctorCalendarView[] calendarHolder = new DoctorCalendarView[1];
     PatientDirectoryView[] patientDirectoryHolder = new PatientDirectoryView[1];
+    DoctorCalendarSettingsView[] settingsHolder = new DoctorCalendarSettingsView[1];
     Button logout = new Button("Log out");
     logout.setId("logout-button");
     logout.setOnAction(
@@ -347,36 +232,18 @@ final class DoctorWorkspace {
           if (dashboardHolder[0] != null) {
             dashboardHolder[0].dispose();
           }
+          if (settingsHolder[0] != null) {
+            settingsHolder[0].dispose();
+          }
           onLogout.run();
         });
     HBox header = UiComponents.workspaceHeader("DOCTOR workspace", session.username(), logout);
 
-    VBox prescriptionForm =
-        new VBox(
-            10,
-            UiComponents.fieldGroup("Medication", medication),
-            UiComponents.fieldGroup("Dosage", dosage),
-            UiComponents.fieldGroup("Frequency", frequency),
-            UiComponents.fieldGroup("Duration", duration),
-            UiComponents.fieldGroup("Instructions", instructions));
-
-    HBox consultationActions = UiComponents.actionBar(saveConsultation);
-    VBox consultationCard =
-        UiComponents.card(
-            "doctor-consultation-card",
-            UiComponents.sectionHeading("Consultation"),
-            UiComponents.fieldGroup("Diagnosis", diagnosis),
-            UiComponents.fieldGroup("Consultation notes", consultationNotes),
-            UiComponents.fieldGroup("Follow-up notes", followUpNotes),
-            consultationActions);
-    HBox prescriptionActions = UiComponents.actionBar(addPrescription);
-    VBox prescriptionCard =
-        UiComponents.card(
-            "doctor-prescription-card",
-            UiComponents.sectionHeading("Prescriptions"),
-            prescriptionForm,
-            prescriptionActions,
-            prescriptions);
+    VBox prescriptionForm = consultationPanel.prescriptionFormView();
+    HBox consultationActions = consultationPanel.consultationActionsBar();
+    VBox consultationCard = consultationPanel.consultationCardView();
+    HBox prescriptionActions = consultationPanel.prescriptionActionsBar();
+    VBox prescriptionCard = consultationPanel.prescriptionCardView();
     HBox completionActions = UiComponents.actionBar(complete);
     VBox completionCard =
         UiComponents.card(
@@ -430,6 +297,12 @@ final class DoctorWorkspace {
             prescriptions,
             viewPatientHistory);
     nodesHolder[0] = nodes;
+    consultationPanel.setOnClinicalLoaded(
+        clinicalLoaded -> {
+          if (!clinicalLoaded && nodesHolder[0] != null) {
+            setClinicalEditable(nodesHolder[0], false);
+          }
+        });
     updateSelectionState(selection, nodes, null, null, clinicClock);
 
     dashboardHolder[0] =
@@ -444,6 +317,7 @@ final class DoctorWorkspace {
                     calendarAppointment,
                     selection,
                     nodes,
+                    consultationPanel,
                     feedback,
                     clinicClock,
                     taskRunner),
@@ -500,7 +374,6 @@ final class DoctorWorkspace {
     VBox navigation =
         new VBox(0, navigationTitle, dashboardNavigation, patientsNavigation, calendarNavigation);
     navigation.setId("doctor-navigation");
-    DoctorCalendarSettingsView[] settingsHolder = new DoctorCalendarSettingsView[1];
     Runnable showDirectory =
         () -> {
           setVisibleManaged(patientDirectory.view(), true);
@@ -575,21 +448,6 @@ final class DoctorWorkspace {
     root.setCenter(pages);
     dashboardHolder[0].show();
     return UiComponents.notificationOverlay(root, feedback);
-  }
-
-  private static TextField field(String id, String prompt) {
-    TextField field = new TextField();
-    field.setId(id);
-    field.setPromptText(prompt);
-    return field;
-  }
-
-  private static TextArea textArea(String id, String prompt) {
-    TextArea area = new TextArea();
-    area.setId(id);
-    area.setPromptText(prompt);
-    area.setPrefRowCount(3);
-    return area;
   }
 
   private static void updateSelectionState(
@@ -756,14 +614,14 @@ final class DoctorWorkspace {
       CalendarAppointment calendarAppointment,
       SelectionState selection,
       SelectionNodes nodes,
+      DoctorConsultationPanel consultationPanel,
       Label feedback,
       Clock clock,
       ClinicTaskRunner taskRunner) {
     selection.generation++;
     long generation = selection.generation;
     if (calendarAppointment == null) {
-      applyDashboardSelection(
-          services, session, selection, nodes, feedback, clock, taskRunner, generation, null, null);
+      applyDashboardSelection(selection, nodes, consultationPanel, clock, generation, null, null);
       return;
     }
     taskRunner.submit(
@@ -780,13 +638,10 @@ final class DoctorWorkspace {
         resolved -> {
           if (generation == selection.generation) {
             applyDashboardSelection(
-                services,
-                session,
                 selection,
                 nodes,
-                feedback,
+                consultationPanel,
                 clock,
-                taskRunner,
                 generation,
                 resolved.appointment(),
                 resolved.patient());
@@ -799,27 +654,15 @@ final class DoctorWorkspace {
           UiComponents.showError(
               feedback, userMessage(failure, "Appointment is temporarily unavailable"));
           applyDashboardSelection(
-              services,
-              session,
-              selection,
-              nodes,
-              feedback,
-              clock,
-              taskRunner,
-              generation,
-              null,
-              null);
+              selection, nodes, consultationPanel, clock, generation, null, null);
         });
   }
 
   private static void applyDashboardSelection(
-      ClinicServices services,
-      Session session,
       SelectionState selection,
       SelectionNodes nodes,
-      Label feedback,
+      DoctorConsultationPanel consultationPanel,
       Clock clock,
-      ClinicTaskRunner taskRunner,
       long generation,
       Appointment appointment,
       Patient patient) {
@@ -829,16 +672,7 @@ final class DoctorWorkspace {
     selection.appointmentId = appointment == null || patient == null ? 0 : appointment.id();
     selection.patientId = patient == null ? 0 : patient.id();
     updateSelectionState(selection, nodes, appointment, patient, clock);
-    DoctorConsultationView.loadClinicalAsync(
-        services,
-        session,
-        appointment,
-        nodes.diagnosis(),
-        nodes.consultationNotes(),
-        nodes.followUpNotes(),
-        nodes.prescriptions(),
-        feedback,
-        taskRunner,
+    consultationPanel.setOnClinicalLoaded(
         clinicalLoaded -> {
           if (!clinicalLoaded
               && appointment != null
@@ -846,17 +680,12 @@ final class DoctorWorkspace {
             setClinicalEditable(nodes, false);
           }
         });
+    consultationPanel.load(appointment, generation);
   }
 
   private static void requireSelection(long id, String message) {
     if (id == 0) {
       throw new ValidationException(message);
-    }
-  }
-
-  private static void clear(TextField... fields) {
-    for (TextField field : fields) {
-      field.clear();
     }
   }
 
