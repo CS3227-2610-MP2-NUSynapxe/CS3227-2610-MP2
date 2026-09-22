@@ -47,6 +47,7 @@ import javafx.stage.Stage;
 import nusynapxe.ClinicClock;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
+import nusynapxe.domain.AppointmentListRow;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.PaymentMethod;
@@ -103,8 +104,7 @@ public final class ReceptionistView {
     Button book = button("Book appointment", "reception-book");
     Button reschedule = button("Reschedule selected", "reception-reschedule");
     Button cancel = button("Cancel selected", "reception-cancel");
-    TableView<Appointment> appointmentList =
-        appointmentTable("reception-appointment-list", services, session);
+    TableView<AppointmentListRow> appointmentList = appointmentTable("reception-appointment-list");
     DatePicker scheduleDate = UiComponents.compactDatePicker();
     scheduleDate.setId("reception-schedule-date");
     scheduleDate.setPromptText("Any date");
@@ -120,8 +120,7 @@ public final class ReceptionistView {
     TextField schedulePatient = field("reception-schedule-patient", "Patient name or ID");
     Label scheduleSummary = new Label();
     scheduleSummary.setId("reception-schedule-summary");
-    TableView<Appointment> queueList =
-        appointmentTable("reception-check-in-queue-list", services, session);
+    TableView<AppointmentListRow> queueList = appointmentTable("reception-check-in-queue-list");
     DatePicker queueDate = UiComponents.compactDatePicker(LocalDate.now(clinicClock));
     queueDate.setId("reception-check-in-queue-date");
     SearchSuggestionField<Account> queueDoctor =
@@ -140,8 +139,8 @@ public final class ReceptionistView {
     SearchSuggestionField<Patient> appointmentPatient =
         PatientDirectoryView.patientSearchField("reception-appointment-patient");
     Button checkIn = button("Check in selected", "reception-check-in");
-    TableView<Appointment> checkoutAppointmentList =
-        appointmentTable("reception-checkout-appointment-list", services, session);
+    TableView<AppointmentListRow> checkoutAppointmentList =
+        appointmentTable("reception-checkout-appointment-list");
     boolean[] checkoutMouseSelection = {false};
     boolean[] checkoutTabActive = {false};
     TextField checkoutPatient = field("reception-checkout-patient", PATIENT_NAME_ID);
@@ -202,20 +201,22 @@ public final class ReceptionistView {
         .selectedItemProperty()
         .addListener(
             (observable, previous, selected) -> {
-              selection.appointmentId = selected == null ? 0 : selected.id();
+              Appointment appointment = selected == null ? null : selected.appointment();
+              selection.appointmentId = appointment == null ? 0 : appointment.id();
               boolean editable =
-                  selected != null
-                      && (selected.status() == AppointmentStatus.PENDING
-                          || selected.status() == AppointmentStatus.ACCEPTED
-                          || selected.status() == AppointmentStatus.DECLINED);
+                  appointment != null
+                      && (appointment.status() == AppointmentStatus.PENDING
+                          || appointment.status() == AppointmentStatus.ACCEPTED
+                          || appointment.status() == AppointmentStatus.DECLINED);
               reschedule.setDisable(!editable);
               cancel.setDisable(!editable);
               checkIn.setDisable(
-                  selected == null || selected.status() != AppointmentStatus.ACCEPTED);
+                  appointment == null || appointment.status() != AppointmentStatus.ACCEPTED);
             });
     queueList.setOnMouseClicked(
         event -> {
-          Appointment selected = queueList.getSelectionModel().getSelectedItem();
+          AppointmentListRow selectedRow = queueList.getSelectionModel().getSelectedItem();
+          Appointment selected = selectedRow == null ? null : selectedRow.appointment();
           if (selected != null) {
             showCheckInDetailsDialog(
                 services,
@@ -369,12 +370,13 @@ public final class ReceptionistView {
         .selectedItemProperty()
         .addListener(
             (observable, previous, selected) -> {
-              selection.appointmentId = selected == null ? 0 : selected.id();
-              if (selected != null && checkoutTabActive[0] && !checkoutMouseSelection[0]) {
+              Appointment appointment = selected == null ? null : selected.appointment();
+              selection.appointmentId = appointment == null ? 0 : appointment.id();
+              if (appointment != null && checkoutTabActive[0] && !checkoutMouseSelection[0]) {
                 showCheckoutDetailsDialog(
                     services,
                     session,
-                    selected.id(),
+                    appointment.id(),
                     feedback,
                     receiptPreview,
                     () -> {
@@ -401,7 +403,9 @@ public final class ReceptionistView {
     checkoutAppointmentList.setOnMousePressed(event -> checkoutMouseSelection[0] = true);
     checkoutAppointmentList.setOnMouseClicked(
         event -> {
-          Appointment selected = checkoutAppointmentList.getSelectionModel().getSelectedItem();
+          AppointmentListRow selectedRow =
+              checkoutAppointmentList.getSelectionModel().getSelectedItem();
+          Appointment selected = selectedRow == null ? null : selectedRow.appointment();
           if (selected != null) {
             showCheckoutDetailsDialog(
                 services,
@@ -1125,30 +1129,27 @@ public final class ReceptionistView {
     return button;
   }
 
-  private static TableView<Appointment> appointmentTable(
-      String id, ClinicServices services, Session session) {
-    TableView<Appointment> table = new TableView<>();
+  private static TableView<AppointmentListRow> appointmentTable(String id) {
+    TableView<AppointmentListRow> table = new TableView<>();
     table.setId(id);
     table.setPrefHeight(360);
     table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
     table.setPlaceholder(
         UiComponents.emptyState(id + "-empty", "No appointments match these filters."));
-    TableColumn<Appointment, String> date =
-        textColumn(DATE_LABEL, appointment -> appointment.startsAt().toLocalDate().toString());
-    TableColumn<Appointment, String> time =
+    TableColumn<AppointmentListRow, String> date =
+        textColumn(DATE_LABEL, row -> row.appointment().startsAt().toLocalDate().toString());
+    TableColumn<AppointmentListRow, String> time =
         textColumn(
             "Time",
-            appointment ->
-                appointment.startsAt().toLocalTime() + " – " + appointment.endsAt().toLocalTime());
-    TableColumn<Appointment, String> patient =
-        textColumn(
-            "Patient",
-            appointment -> patientDisplayName(services, session, appointment.patientId()));
-    TableColumn<Appointment, String> doctor =
-        textColumn(
-            DOCTOR_LABEL,
-            appointment -> doctorDisplayName(services, session, appointment.doctorId()));
-    TableColumn<Appointment, AppointmentStatus> status = statusColumn("Status");
+            row ->
+                row.appointment().startsAt().toLocalTime()
+                    + " – "
+                    + row.appointment().endsAt().toLocalTime());
+    TableColumn<AppointmentListRow, String> patient =
+        textColumn("Patient", AppointmentListRow::patientDisplayName);
+    TableColumn<AppointmentListRow, String> doctor =
+        textColumn(DOCTOR_LABEL, AppointmentListRow::doctorDisplayName);
+    TableColumn<AppointmentListRow, AppointmentStatus> status = statusColumn("Status");
     table.getColumns().add(date);
     table.getColumns().add(time);
     table.getColumns().add(patient);
@@ -1157,9 +1158,10 @@ public final class ReceptionistView {
     return table;
   }
 
-  private static TableColumn<Appointment, AppointmentStatus> statusColumn(String title) {
-    TableColumn<Appointment, AppointmentStatus> column = new TableColumn<>(title);
-    column.setCellValueFactory(data -> new ReadOnlyObjectWrapper<>(data.getValue().status()));
+  private static TableColumn<AppointmentListRow, AppointmentStatus> statusColumn(String title) {
+    TableColumn<AppointmentListRow, AppointmentStatus> column = new TableColumn<>(title);
+    column.setCellValueFactory(
+        data -> new ReadOnlyObjectWrapper<>(data.getValue().appointment().status()));
     column.setCellFactory(
         tableColumn ->
             new TableCell<>() {
@@ -1288,16 +1290,16 @@ public final class ReceptionistView {
   private static void refreshCheckoutReady(
       ClinicServices services,
       Session session,
-      TableView<Appointment> list,
+      TableView<AppointmentListRow> list,
       Label feedback,
       String patientQuery,
       Long doctorId,
       LocalDate date) {
     try {
-      List<Appointment> appointments =
+      List<AppointmentListRow> appointments =
           services
               .appointmentService()
-              .searchAppointments(
+              .searchAppointmentRows(
                   session, date, doctorId, patientQuery, AppointmentStatus.COMPLETED);
       list.setItems(FXCollections.observableArrayList(appointments));
     } catch (SQLException exception) {
@@ -1498,7 +1500,7 @@ public final class ReceptionistView {
   private static void refreshSchedule(
       ClinicServices services,
       Session session,
-      TableView<Appointment> appointmentList,
+      TableView<AppointmentListRow> appointmentList,
       SelectionState selection,
       Label feedback,
       LocalDate date,
@@ -1507,23 +1509,33 @@ public final class ReceptionistView {
       String status,
       Label summary) {
     try {
-      List<Appointment> appointments =
+      List<AppointmentListRow> appointments =
           services
               .appointmentService()
-              .searchAppointments(
+              .searchAppointmentRows(
                   session, date, doctorId, patientQuery, selectedAppointmentStatus(status));
       appointmentList.setItems(FXCollections.observableArrayList(appointments));
       selectAppointment(appointmentList, selection.appointmentId);
       long pending =
-          appointments.stream().filter(a -> a.status() == AppointmentStatus.PENDING).count();
+          appointments.stream()
+              .filter(a -> a.appointment().status() == AppointmentStatus.PENDING)
+              .count();
       long accepted =
-          appointments.stream().filter(a -> a.status() == AppointmentStatus.ACCEPTED).count();
+          appointments.stream()
+              .filter(a -> a.appointment().status() == AppointmentStatus.ACCEPTED)
+              .count();
       long checkedIn =
-          appointments.stream().filter(a -> a.status() == AppointmentStatus.CHECKED_IN).count();
+          appointments.stream()
+              .filter(a -> a.appointment().status() == AppointmentStatus.CHECKED_IN)
+              .count();
       long completed =
-          appointments.stream().filter(a -> a.status() == AppointmentStatus.COMPLETED).count();
+          appointments.stream()
+              .filter(a -> a.appointment().status() == AppointmentStatus.COMPLETED)
+              .count();
       long declined =
-          appointments.stream().filter(a -> a.status() == AppointmentStatus.DECLINED).count();
+          appointments.stream()
+              .filter(a -> a.appointment().status() == AppointmentStatus.DECLINED)
+              .count();
       summary.setText(
           appointments.size()
               + " appointment(s) | Pending: "
@@ -1544,7 +1556,7 @@ public final class ReceptionistView {
   private static void refreshQueue(
       ClinicServices services,
       Session session,
-      TableView<Appointment> queue,
+      TableView<AppointmentListRow> queue,
       Label feedback,
       LocalDate date,
       Long doctorId,
@@ -1552,7 +1564,7 @@ public final class ReceptionistView {
       String status,
       Label summary) {
     try {
-      List<Appointment> appointments = new ArrayList<>();
+      List<AppointmentListRow> appointments = new ArrayList<>();
       boolean includeWaiting =
           status == null || QUEUE_ALL.equals(status) || QUEUE_WAITING.equals(status);
       boolean includeChecked =
@@ -1561,22 +1573,26 @@ public final class ReceptionistView {
         appointments.addAll(
             services
                 .appointmentService()
-                .searchAppointments(
+                .searchAppointmentRows(
                     session, date, doctorId, patientQuery, AppointmentStatus.ACCEPTED));
       }
       if (includeChecked) {
         appointments.addAll(
             services
                 .appointmentService()
-                .searchAppointments(
+                .searchAppointmentRows(
                     session, date, doctorId, patientQuery, AppointmentStatus.CHECKED_IN));
       }
-      appointments.sort(Comparator.comparing(Appointment::startsAt));
+      appointments.sort(Comparator.comparing(row -> row.appointment().startsAt()));
       queue.setItems(FXCollections.observableArrayList(appointments));
       long waiting =
-          appointments.stream().filter(a -> a.status() == AppointmentStatus.ACCEPTED).count();
+          appointments.stream()
+              .filter(a -> a.appointment().status() == AppointmentStatus.ACCEPTED)
+              .count();
       long checkedIn =
-          appointments.stream().filter(a -> a.status() == AppointmentStatus.CHECKED_IN).count();
+          appointments.stream()
+              .filter(a -> a.appointment().status() == AppointmentStatus.CHECKED_IN)
+              .count();
       summary.setText(
           "Waiting: "
               + waiting
@@ -1765,9 +1781,9 @@ public final class ReceptionistView {
     }
   }
 
-  private static void selectAppointment(TableView<Appointment> list, long id) {
+  private static void selectAppointment(TableView<AppointmentListRow> list, long id) {
     for (int index = 0; index < list.getItems().size(); index++) {
-      if (list.getItems().get(index).id() == id) {
+      if (list.getItems().get(index).appointment().id() == id) {
         list.getSelectionModel().select(index);
         return;
       }

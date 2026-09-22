@@ -9,6 +9,7 @@ import java.util.Objects;
 import nusynapxe.ClinicClock;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
+import nusynapxe.domain.AppointmentListRow;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.DoctorTimeOff;
 import nusynapxe.domain.Patient;
@@ -139,6 +140,29 @@ public final class AppointmentService {
       requireDoctor(doctorId);
     }
     return appointments.search(date, doctorId, patientQuery, status);
+  }
+
+  /**
+   * Returns Receptionist-visible appointment rows with display names preloaded.
+   *
+   * @param actor authenticated Receptionist session
+   * @param date optional appointment date
+   * @param doctorId optional doctor filter
+   * @param patientQuery optional patient search text
+   * @param status optional lifecycle status filter
+   * @return immutable appointment-table rows
+   * @throws AuthorizationException if the actor is not a Receptionist
+   * @throws SQLException if the query fails
+   * @throws ValidationException if a supplied doctor identifier is not a Doctor account
+   */
+  public List<AppointmentListRow> searchAppointmentRows(
+      Session actor, LocalDate date, Long doctorId, String patientQuery, AppointmentStatus status)
+      throws SQLException {
+    Authorization.requireRole(actor, Role.RECEPTIONIST);
+    if (doctorId != null) {
+      requireDoctor(doctorId);
+    }
+    return appointments.searchListRows(date, doctorId, patientQuery, status);
   }
 
   /**

@@ -14,6 +14,7 @@ import java.util.Locale;
 import java.util.Set;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
+import nusynapxe.domain.AppointmentListRow;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.CalendarScheduleCursor;
 import nusynapxe.domain.CalendarSchedulePage;
@@ -26,6 +27,27 @@ import org.junit.jupiter.api.io.TempDir;
 final class AppointmentRepositoryScheduleTest {
 
   @TempDir private Path temporaryDirectory;
+
+  @Test
+  void appointmentListRowsContainNamesFromOneJoinedProjection() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      Account doctor = createAccount(database, "doctor", "Dr. Ada", Role.DOCTOR);
+      Patient patient = createPatient(database, "Grace", "Hopper");
+      AppointmentRepository appointments = new AppointmentRepository(database);
+      createAppointment(
+          appointments,
+          patient,
+          doctor,
+          LocalDateTime.of(2026, 9, 3, 9, 0),
+          AppointmentStatus.PENDING);
+
+      List<AppointmentListRow> rows = appointments.searchListRows(null, null, "", null);
+
+      assertEquals(1, rows.size());
+      assertEquals("Grace Hopper", rows.getFirst().patientDisplayName());
+      assertEquals("Dr. Ada", rows.getFirst().doctorDisplayName());
+    }
+  }
 
   @Test
   void pagesDoctorScheduleByStartAndIdWithoutDuplicatesOrSkips() throws SQLException {

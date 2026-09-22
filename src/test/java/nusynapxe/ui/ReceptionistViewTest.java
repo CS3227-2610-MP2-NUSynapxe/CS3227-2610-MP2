@@ -9,6 +9,7 @@ import static org.testfx.api.FxAssert.verifyThat;
 import static org.testfx.matcher.base.NodeMatchers.isVisible;
 import static org.testfx.matcher.control.LabeledMatchers.hasText;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.LocalDate;
@@ -35,6 +36,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
+import nusynapxe.domain.AppointmentListRow;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
@@ -56,6 +58,21 @@ import org.testfx.util.WaitForAsyncUtils;
 
 final class ReceptionistViewTest extends ApplicationTest {
   @TempDir private Path temporaryDirectory;
+
+  @Test
+  void appointmentTableUsesPreloadedDisplayNamesInsteadOfCellQueries() throws Exception {
+    String source = Files.readString(Path.of("src/main/java/nusynapxe/ui/ReceptionistView.java"));
+    int tableStart =
+        source.indexOf("private static TableView<", source.indexOf("appointmentTable("));
+    int statusColumnStart = source.indexOf("private static TableColumn<", tableStart);
+    String tableMethod = source.substring(tableStart, statusColumnStart);
+
+    assertFalse(tableMethod.contains("patientDisplayName(services"));
+    assertFalse(tableMethod.contains("doctorDisplayName(services"));
+    assertTrue(tableMethod.contains("AppointmentListRow::patientDisplayName"));
+    assertTrue(tableMethod.contains("AppointmentListRow::doctorDisplayName"));
+  }
+
   private SqliteDatabase database;
   private ClinicServices services;
   private Account doctor;
@@ -560,7 +577,8 @@ final class ReceptionistViewTest extends ApplicationTest {
     assertEquals(
         AppointmentStatus.PENDING, services.appointmentService().get(appointment.id()).status());
     selectCombo("#reception-schedule-status", "All statuses");
-    assertEquals(AppointmentStatus.PENDING, appointmentList().getItems().get(0).status());
+    assertEquals(
+        AppointmentStatus.PENDING, appointmentList().getItems().get(0).appointment().status());
   }
 
   @Test
@@ -950,7 +968,7 @@ final class ReceptionistViewTest extends ApplicationTest {
   }
 
   @SuppressWarnings("unchecked")
-  private TableView<Appointment> appointmentList() {
+  private TableView<AppointmentListRow> appointmentList() {
     return lookup("#reception-appointment-list").queryAs(TableView.class);
   }
 

@@ -13,6 +13,7 @@ import java.util.Objects;
 import java.util.Optional;
 import nusynapxe.ClinicClock;
 import nusynapxe.domain.Appointment;
+import nusynapxe.domain.AppointmentListRow;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.CalendarAppointment;
 import nusynapxe.domain.CalendarScheduleCursor;
@@ -394,6 +395,57 @@ public final class AppointmentRepository {
   }
 
   /**
+   * Searches appointment-table rows with patient and Doctor names loaded by the same SQL query.
+   *
+   * @param date optional Singapore-local appointment date
+   * @param doctorId optional doctor identifier
+   * @param patientQuery optional case-insensitive patient search text
+   * @param status optional lifecycle status
+   * @return immutable matching appointment rows ordered by start timestamp and identifier
+   * @throws SQLException if the query fails
+   */
+  public List<AppointmentListRow> searchListRows(
+      LocalDate date, Long doctorId, String patientQuery, AppointmentStatus status)
+      throws SQLException {
+    StringBuilder sql =
+        new StringBuilder(
+            "SELECT a.id, a.patient_id, a.doctor_id, a.starts_at, a.ends_at, a.status, "
+                + "p.first_name || ' ' || p.last_name AS patient_display_name, "
+                + "u.display_name AS doctor_display_name "
+                + "FROM appointments a "
+                + "JOIN patients p ON p.id = a.patient_id "
+                + "JOIN users u ON u.id = a.doctor_id WHERE 1 = 1");
+    List<Object> parameters = new java.util.ArrayList<>();
+    if (date != null) {
+      sql.append(" AND a.starts_at LIKE ?");
+      parameters.add(date + "%");
+    }
+    if (doctorId != null) {
+      sql.append(" AND a.doctor_id = ?");
+      parameters.add(doctorId);
+    }
+    if (status != null) {
+      sql.append(" AND a.status = ?");
+      parameters.add(status.name());
+    }
+    if (patientQuery != null && !patientQuery.trim().isEmpty()) {
+      sql.append(
+          " AND (CAST(p.id AS TEXT) LIKE ? OR LOWER(p.first_name) LIKE ? "
+              + "OR LOWER(p.last_name) LIKE ? OR LOWER(p.email) LIKE ?)");
+      String pattern = "%" + patientQuery.trim().toLowerCase(java.util.Locale.ROOT) + "%";
+      parameters.add(pattern);
+      parameters.add(pattern);
+      parameters.add(pattern);
+      parameters.add(pattern);
+    }
+    sql.append(" ORDER BY a.starts_at, a.id");
+    try (PreparedStatement statement = database.connection().prepareStatement(sql.toString())) {
+      bindSearchParameters(statement, parameters);
+      return SqliteQueries.readAll(statement, AppointmentRepository::readAppointmentListRow);
+    }
+  }
+
+  /**
    * Adds a doctor time-off interval after checking existing availability.
    *
    * @param doctorId doctor identifier
@@ -582,6 +634,26 @@ public final class AppointmentRepository {
         SqliteQueries.parseTimestamp(resultSet.getString("starts_at")),
         SqliteQueries.parseTimestamp(resultSet.getString("ends_at")),
         AppointmentStatus.valueOf(resultSet.getString(STATUS_COLUMN)));
+  }
+
+  private static AppointmentListRow readAppointmentListRow(ResultSet resultSet)
+      throws SQLException {
+    return new AppointmentListRow(
+        readAppointment(resultSet),
+        resultSet.getString("patient_display_name"),
+        resultSet.getString("doctor_display_name"));
+  }
+
+  private static void bindSearchParameters(PreparedStatement statement, List<Object> parameters)
+      throws SQLException {
+    for (int index = 0; index < parameters.size(); index++) {
+      Object parameter = parameters.get(index);
+      if (parameter instanceof Long value) {
+        statement.setLong(index + 1, value);
+      } else {
+        statement.setString(index + 1, parameter.toString());
+      }
+    }
   }
 
   private static DoctorTimeOff readTimeOff(ResultSet resultSet) throws SQLException {
