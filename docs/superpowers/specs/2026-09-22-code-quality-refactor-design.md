@@ -27,6 +27,12 @@ for the behavior being changed.
 - Make maintainability expectations executable through tests and build checks.
 - Preserve deterministic, fast unit tests and provide focused UI regression coverage
   for the workflows affected by decomposition and asynchronous loading.
+- Resolve every open review thread on the code-quality pull request with a verified
+  code or test change.
+- Keep every repository-owned Java source file at or below 500 physical lines.
+- Make the Javadoc task warning-free rather than accepting a nonfatal warning budget.
+- Increase the minimum JaCoCo branch-coverage requirement to 70 percent, supported by
+  focused tests for asynchronous and filtering behavior.
 
 ## Non-goals and constraints
 
@@ -137,11 +143,77 @@ Strengthen the build in proportion to the repository's existing conventions:
   small explicit margin for incremental improvement;
 - add architecture tests or equivalent checks for UI/database boundaries, controller
   size, and forbidden database calls from table cell factories; and
+- enforce a 500-physical-line maximum for every Java file under `src/main/java` and
+  `src/test/java`, with a build failure that names each violating file;
+- make the Javadoc task emit zero warnings, including missing parameter, return,
+  type-parameter, record-component, and member documentation warnings; and
+- raise the JaCoCo branch-coverage minimum from 65 percent to 70 percent after adding
+  focused tests for the new asynchronous and report-state branches; and
 - keep the checks runnable through the normal Gradle verification task.
 
-Thresholds will be chosen from measured current output and recorded in the build
-configuration or test names. A failing gate must identify the violated rule rather
-than relying on a reviewer to infer it from a report.
+The 500-line rule counts physical lines, including comments and Javadocs, so the
+constraint cannot be satisfied by deleting documentation or compressing code. The
+branch threshold is an explicit 0.70 `BRANCH` `COVEREDRATIO` limit. A failing gate
+must identify the violated rule rather than relying on a reviewer to infer it from a
+report. Javadoc warnings must be fixed at their source; blanket warning suppression
+is out of scope.
+
+### 9. Review-thread remediation
+
+The eight unresolved pull-request threads will be handled as behavior-preserving
+changes with one regression test or executable assertion for each distinct failure
+mode:
+
+- Doctor appointment actions capture the selected appointment ID and selection
+  generation on the JavaFX thread. Actions are cleared or disabled while a new
+  selection is loading, and stale completions cannot refresh another selection.
+- Doctor consultation and prescription reloads apply only when their captured
+  selection generation remains current.
+- Doctor and Receptionist calendar range tasks receive immutable date snapshots
+  captured before database work is submitted.
+- Receptionist Doctor-selector loads use per-selector freshness state, and callers
+  explicitly choose whether a selector may select its first result. Filter selectors
+  retain the empty “All Doctors” state after loading.
+- Appointment dialogs receive an owning workspace lifecycle guard. Logging out
+  invalidates delayed loads and prevents an editor retaining the old session from
+  being rendered.
+- Revenue range SQL preserves ascending receipt-date order and descending sequence
+  order within a date.
+- Revenue export controls are disabled and the previous report is discarded while a
+  new asynchronous report is pending.
+
+The current consultation-generation guard will be tested before being changed; if
+the existing implementation already satisfies that thread, the implementation
+commit will add the missing regression evidence and the thread reply will identify
+the existing guard rather than introduce duplicate logic.
+
+### 10. Remaining god-file decomposition
+
+The strict size rule applies to both production and test Java sources. The current
+violations are split by responsibility, not by arbitrary line count:
+
+- `PatientDirectoryView` becomes a composition shell over directory loading,
+  patient editing, and result-table concerns.
+- `DoctorWorkspace` delegates appointment-selection/action coordination while
+  retaining workspace composition and lifecycle ownership.
+- `AppointmentDialog` separates asynchronous editor loading from editor rendering
+  and action wiring while preserving its compatibility facade.
+- `AppointmentRepository` and `PatientRepository` delegate read/query-heavy work to
+  focused repository collaborators while preserving service-facing APIs.
+- `DemoDataSeeder` delegates account, patient, schedule, and clinical-history seed
+  data to focused builders.
+- `CalendarTimeGrid` delegates geometry/layout and interaction-node construction to
+  focused helpers.
+- `ReceptionistCheckoutPanel` separates checkout queue behavior from receipt-history
+  presentation.
+- `DoctorCalendarView` extracts toolbar/control composition where needed to keep the
+  calendar controller below the limit.
+- Oversized UI and service tests are split by workflow scenario, retaining shared
+  fixtures in test helpers rather than duplicating setup in each class.
+
+Each extracted unit has one primary reason to change, and the original public or
+package-facing contracts remain stable unless a narrower dependency is required for
+the lifecycle or testability fix.
 
 ## Data-flow and error handling
 
@@ -173,24 +245,30 @@ Coverage will include:
 - direct checkout receipt behavior, including no-receipt and failure cases;
 - deterministic task-runner tests for serialization, FX-thread callback application,
   failure handling, and stale-result suppression;
+- regression tests for captured Doctor actions, calendar date snapshots, per-selector
+  Doctor loading, logout-invalidated dialogs, receipt ordering, and pending report
+  exports;
 - focused TestFX regression tests for the decomposed receptionist and doctor flows;
-- architecture/size tests that fail when database calls return to cell factories or
-  the primary controllers grow beyond the agreed limits; and
+- unit tests for extracted repository, seed-data, calendar-layout, and test-helper
+  components where their behavior is not already covered by integration tests;
+- architecture/size checks that fail when database calls return to cell factories or
+  any Java source file grows beyond 500 physical lines; and
+- a warning-free Javadoc run and a branch-coverage report that remains above the
+  explicit 70 percent minimum; and
 - the full Gradle quality gate before the pull request is created.
 
 ## Commit and issue boundaries
 
-The implementation will use one commit and one GitHub issue for each item below. The
-issue numbers will be inserted into the pull request after creation.
+The implementation will use separate, reviewable commits for each item below. The
+existing PR-linked issues will be referenced where they cover the work; creating new
+issues is not required unless a genuinely separate scope is discovered.
 
-1. `refactor: centralize clinic clock`
-2. `refactor: add appointment list projection`
-3. `perf: batch clinical history prescriptions`
-4. `perf: query revenue by range`
-5. `refactor: return checkout receipt directly`
-6. `refactor: split large clinic views`
-7. `refactor: move clinic database work off the fx thread`
-8. `build: enforce maintainability quality gates`
+1. one commit per unresolved review-thread behavior group, with its regression test;
+2. one commit per remaining production god-file decomposition group;
+3. one or more commits for splitting oversized test classes and extracting shared
+   fixtures;
+4. one commit for the 500-line source-size gate, Javadoc warning cleanup, added
+   documentation tests/checks, and the 70 percent branch-coverage threshold.
 
 Documentation changes that describe the completed work will be kept separate from
 production refactors where practical. No commit will combine unrelated cleanup with a
