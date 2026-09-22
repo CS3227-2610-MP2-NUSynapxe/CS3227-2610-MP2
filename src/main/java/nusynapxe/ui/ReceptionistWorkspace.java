@@ -194,9 +194,10 @@ final class ReceptionistWorkspace {
             feedback,
             patientId ->
                 PatientDirectoryView.refreshAppointmentPatients(
-                    services, session, appointmentPatient, feedback, patientId),
+                    services, session, appointmentPatient, feedback, patientId, taskRunner),
             null,
-            clinicClock);
+            clinicClock,
+            taskRunner);
     appointmentList
         .getSelectionModel()
         .selectedItemProperty()

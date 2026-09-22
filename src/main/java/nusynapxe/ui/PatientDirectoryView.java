@@ -51,6 +51,7 @@ final class PatientDirectoryView {
   private final Label workspaceFeedback;
   private final LongConsumer onPatientChanged;
   private final Clock clock;
+  private final ClinicTaskRunner taskRunner;
   private final TextField patientSearch;
   private final TableView<Patient> patientTable;
   private final Label pageTitle;
@@ -60,6 +61,7 @@ final class PatientDirectoryView {
   private final VBox editingContent;
   private final VBox root;
   private long preferredPatientId;
+  private long refreshGeneration;
   private boolean disposed;
 
   private PatientDirectoryView(
@@ -69,13 +71,15 @@ final class PatientDirectoryView {
       Label workspaceFeedback,
       LongConsumer onPatientChanged,
       Runnable onClinicalHistoryRequested,
-      Clock clock) {
+      Clock clock,
+      ClinicTaskRunner taskRunner) {
     this.services = Objects.requireNonNull(services, "services");
     this.session = Objects.requireNonNull(session, "session");
     this.prefix = requirePrefix(prefix);
     this.workspaceFeedback = Objects.requireNonNull(workspaceFeedback, "workspaceFeedback");
     this.onPatientChanged = Objects.requireNonNull(onPatientChanged, "onPatientChanged");
     this.clock = ClinicClock.withClinicZone(clock);
+    this.taskRunner = Objects.requireNonNull(taskRunner, "taskRunner");
 
     PatientForm registerForm = patientForm(prefix + "-register", false, this.clock);
     Button register = button("Register patient", prefix + "-patient-register");
@@ -87,20 +91,25 @@ final class PatientDirectoryView {
     register.setOnAction(
         event -> {
           try {
-            Patient patient =
-                services.patientService().register(session, patientFromForm(registerForm, 0, true));
-            clearPatientForm(registerForm);
-            patientSearch.clear();
-            showDirectory();
-            UiComponents.showMessage(workspaceFeedback, "Patient registered");
-            refresh();
-            preferredPatientId = patient.id();
-            onPatientChanged.accept(patient.id());
-          } catch (ValidationException | AuthorizationException exception) {
+            Patient draft = patientFromForm(registerForm, 0, true);
+            taskRunner.submit(
+                () -> services.patientService().register(session, draft),
+                patient -> {
+                  clearPatientForm(registerForm);
+                  patientSearch.clear();
+                  showDirectory();
+                  UiComponents.showMessage(workspaceFeedback, "Patient registered");
+                  refresh();
+                  preferredPatientId = patient.id();
+                  onPatientChanged.accept(patient.id());
+                },
+                failure ->
+                    showTaskError(
+                        workspaceFeedback,
+                        failure,
+                        "Patient registration is temporarily unavailable"));
+          } catch (ValidationException exception) {
             UiComponents.showError(workspaceFeedback, exception.getMessage());
-          } catch (java.sql.SQLException exception) {
-            UiComponents.showError(
-                workspaceFeedback, "Patient registration is temporarily unavailable");
           }
         });
 
@@ -186,7 +195,14 @@ final class PatientDirectoryView {
       Label workspaceFeedback,
       LongConsumer onPatientChanged) {
     return create(
-        services, session, prefix, workspaceFeedback, onPatientChanged, null, ClinicClock.system());
+        services,
+        session,
+        prefix,
+        workspaceFeedback,
+        onPatientChanged,
+        null,
+        ClinicClock.system(),
+        ClinicTaskRunner.immediate());
   }
 
   /** Creates a directory with an optional Doctor clinical-history action. */
@@ -204,7 +220,8 @@ final class PatientDirectoryView {
         workspaceFeedback,
         onPatientChanged,
         onClinicalHistoryRequested,
-        ClinicClock.system());
+        ClinicClock.system(),
+        ClinicTaskRunner.immediate());
   }
 
   /** Creates a directory with an injectable clinic clock. */
@@ -216,6 +233,27 @@ final class PatientDirectoryView {
       LongConsumer onPatientChanged,
       Runnable onClinicalHistoryRequested,
       Clock clock) {
+    return create(
+        services,
+        session,
+        prefix,
+        workspaceFeedback,
+        onPatientChanged,
+        onClinicalHistoryRequested,
+        clock,
+        ClinicTaskRunner.immediate());
+  }
+
+  /** Creates a directory with an injectable clock and database task runner. */
+  static PatientDirectoryView create(
+      ClinicServices services,
+      Session session,
+      String prefix,
+      Label workspaceFeedback,
+      LongConsumer onPatientChanged,
+      Runnable onClinicalHistoryRequested,
+      Clock clock,
+      ClinicTaskRunner taskRunner) {
     PatientDirectoryView view =
         new PatientDirectoryView(
             services,
@@ -224,7 +262,8 @@ final class PatientDirectoryView {
             workspaceFeedback,
             onPatientChanged,
             onClinicalHistoryRequested,
-            clock);
+            clock,
+            taskRunner);
     view.refresh();
     return view;
   }
@@ -237,6 +276,7 @@ final class PatientDirectoryView {
   /** Prevents further directory work after the owning workspace is discarded. */
   void dispose() {
     disposed = true;
+    refreshGeneration++;
   }
 
   private void showDirectory() {
@@ -292,17 +332,26 @@ final class PatientDirectoryView {
     if (disposed) {
       return;
     }
-    try {
-      patientTable.setItems(
-          FXCollections.observableArrayList(
-              services.patientService().searchAdministrative(session, patientSearch.getText())));
-      patientTable.getSelectionModel().clearSelection();
-      int visibleRows = Math.min(Math.max(patientTable.getItems().size(), 1), 5);
-      patientTable.setPrefHeight(44 + visibleRows * 52);
-    } catch (java.sql.SQLException exception) {
-      UiComponents.showError(workspaceFeedback, "Patients are temporarily unavailable");
-      patientTable.setItems(FXCollections.observableArrayList());
-    }
+    long generation = ++refreshGeneration;
+    String query = patientSearch.getText();
+    taskRunner.submit(
+        () -> services.patientService().searchAdministrative(session, query),
+        patients -> {
+          if (disposed || generation != refreshGeneration) {
+            return;
+          }
+          patientTable.setItems(FXCollections.observableArrayList(patients));
+          patientTable.getSelectionModel().clearSelection();
+          int visibleRows = Math.min(Math.max(patientTable.getItems().size(), 1), 5);
+          patientTable.setPrefHeight(44 + visibleRows * 52);
+        },
+        failure -> {
+          if (disposed || generation != refreshGeneration) {
+            return;
+          }
+          UiComponents.showError(workspaceFeedback, "Patients are temporarily unavailable");
+          patientTable.setItems(FXCollections.observableArrayList());
+        });
   }
 
   /** Returns the patient most recently selected for a related workflow. */
@@ -336,17 +385,29 @@ final class PatientDirectoryView {
       SearchSuggestionField<Patient> selector,
       Label feedback,
       long preferredPatientId) {
-    try {
-      selector.setItems(
-          services.patientService().searchAdministrative(session, "").stream()
-              .filter(Patient::active)
-              .toList());
-      if (!selectPatient(selector, preferredPatientId) && !selector.getItems().isEmpty()) {
-        selector.select(selector.getItems().getFirst());
-      }
-    } catch (java.sql.SQLException exception) {
-      UiComponents.showError(feedback, "Patients are temporarily unavailable");
-    }
+    refreshAppointmentPatients(
+        services, session, selector, feedback, preferredPatientId, ClinicTaskRunner.immediate());
+  }
+
+  static void refreshAppointmentPatients(
+      ClinicServices services,
+      Session session,
+      SearchSuggestionField<Patient> selector,
+      Label feedback,
+      long preferredPatientId,
+      ClinicTaskRunner taskRunner) {
+    taskRunner.submit(
+        () ->
+            services.patientService().searchAdministrative(session, "").stream()
+                .filter(Patient::active)
+                .toList(),
+        patients -> {
+          selector.setItems(patients);
+          if (!selectPatient(selector, preferredPatientId) && !selector.getItems().isEmpty()) {
+            selector.select(selector.getItems().getFirst());
+          }
+        },
+        failure -> UiComponents.showError(feedback, "Patients are temporarily unavailable"));
   }
 
   private static String patientOptionLabel(Patient patient) {
@@ -467,49 +528,66 @@ final class PatientDirectoryView {
     status.setOnAction(
         event -> {
           try {
-            Patient updated =
-                current[0].active()
-                    ? services.patientService().deactivateAdministrative(session, current[0].id())
-                    : services.patientService().activateAdministrative(session, current[0].id());
-            String message = updated.active() ? "Patient activated" : "Patient deactivated";
-            UiComponents.showMessage(workspaceFeedback, message);
-            preferredPatientId = updated.id();
-            onPatientChanged.accept(updated.id());
-            refresh();
-            showPatientView(updated);
-          } catch (ValidationException | AuthorizationException exception) {
-            UiComponents.showError(feedback, exception.getMessage());
-          } catch (java.sql.SQLException exception) {
-            UiComponents.showError(feedback, "Patient status update is temporarily unavailable");
+            taskRunner.submit(
+                () ->
+                    current[0].active()
+                        ? services
+                            .patientService()
+                            .deactivateAdministrative(session, current[0].id())
+                        : services
+                            .patientService()
+                            .activateAdministrative(session, current[0].id()),
+                updated -> {
+                  String message = updated.active() ? "Patient activated" : "Patient deactivated";
+                  UiComponents.showMessage(workspaceFeedback, message);
+                  preferredPatientId = updated.id();
+                  onPatientChanged.accept(updated.id());
+                  refresh();
+                  showPatientView(updated);
+                },
+                failure ->
+                    showTaskError(
+                        feedback, failure, "Patient status update is temporarily unavailable"));
+          } catch (java.util.concurrent.RejectedExecutionException exception) {
+            showTaskError(feedback, exception, "Patient status update is temporarily unavailable");
           }
         });
     delete.setOnAction(
         event -> {
           Stage owner = (Stage) viewingContent.getScene().getWindow();
-          try {
-            PatientDeletionBlockers blockers =
-                services.patientService().deletionBlockers(session, current[0].id());
-            if (!blockers.canDelete()) {
-              showBlockedDeletionDialog(owner, blockers);
-              return;
-            }
-            if (!confirmDeletion(owner, current[0])) {
-              return;
-            }
-            services.patientService().deleteAdministrative(session, current[0].id());
-            UiComponents.showMessage(workspaceFeedback, "Patient deleted");
-            viewingContent.getChildren().clear();
-            showDirectory();
-            refresh();
-            preferredPatientId = 0;
-            onPatientChanged.accept(0);
-          } catch (PatientDeletionBlockedException exception) {
-            showBlockedDeletionDialog(owner, exception.blockers());
-          } catch (ValidationException | AuthorizationException exception) {
-            UiComponents.showError(feedback, exception.getMessage());
-          } catch (java.sql.SQLException exception) {
-            UiComponents.showError(feedback, "Patient deletion is temporarily unavailable");
-          }
+          taskRunner.submit(
+              () -> services.patientService().deletionBlockers(session, current[0].id()),
+              blockers -> {
+                if (!blockers.canDelete()) {
+                  showBlockedDeletionDialog(owner, blockers);
+                  return;
+                }
+                if (!confirmDeletion(owner, current[0])) {
+                  return;
+                }
+                taskRunner.submit(
+                    () -> {
+                      services.patientService().deleteAdministrative(session, current[0].id());
+                      return null;
+                    },
+                    ignored -> {
+                      UiComponents.showMessage(workspaceFeedback, "Patient deleted");
+                      viewingContent.getChildren().clear();
+                      showDirectory();
+                      refresh();
+                      preferredPatientId = 0;
+                      onPatientChanged.accept(0);
+                    },
+                    failure ->
+                        showDeletionError(
+                            owner,
+                            feedback,
+                            failure,
+                            "Patient deletion is temporarily unavailable"));
+              },
+              failure ->
+                  showDeletionError(
+                      owner, feedback, failure, "Patient deletion is temporarily unavailable"));
         });
     back.setOnAction(
         event -> {
@@ -539,24 +617,24 @@ final class PatientDirectoryView {
     update.setOnAction(
         event -> {
           try {
-            Patient updated =
-                services
-                    .patientService()
-                    .updateAdministrative(
-                        session, patientFromForm(form, current[0].id(), current[0].active()));
-            current[0] = updated;
-            populatePatientForm(updated, form);
-            UiComponents.showMessage(feedback, "Patient changes saved");
-            UiComponents.showMessage(workspaceFeedback, "Patient changes saved");
-            refresh();
-            preferredPatientId = updated.id();
-            onPatientChanged.accept(updated.id());
-            editingContent.getChildren().clear();
-            showPatientView(updated);
-          } catch (ValidationException | AuthorizationException exception) {
+            Patient draft = patientFromForm(form, current[0].id(), current[0].active());
+            taskRunner.submit(
+                () -> services.patientService().updateAdministrative(session, draft),
+                updated -> {
+                  current[0] = updated;
+                  populatePatientForm(updated, form);
+                  UiComponents.showMessage(feedback, "Patient changes saved");
+                  UiComponents.showMessage(workspaceFeedback, "Patient changes saved");
+                  refresh();
+                  preferredPatientId = updated.id();
+                  onPatientChanged.accept(updated.id());
+                  editingContent.getChildren().clear();
+                  showPatientView(updated);
+                },
+                failure ->
+                    showTaskError(feedback, failure, "Patient update is temporarily unavailable"));
+          } catch (ValidationException exception) {
             UiComponents.showError(feedback, exception.getMessage());
-          } catch (java.sql.SQLException exception) {
-            UiComponents.showError(feedback, "Patient update is temporarily unavailable");
           }
         });
 
@@ -619,6 +697,22 @@ final class PatientDirectoryView {
 
   private static String valueOrEmpty(Object value) {
     return value == null ? "" : value.toString();
+  }
+
+  private static void showTaskError(Label feedback, Throwable failure, String fallback) {
+    if (failure instanceof ValidationException || failure instanceof AuthorizationException) {
+      UiComponents.showError(feedback, failure.getMessage());
+    } else {
+      UiComponents.showError(feedback, fallback);
+    }
+  }
+
+  private void showDeletionError(Stage owner, Label feedback, Throwable failure, String fallback) {
+    if (failure instanceof PatientDeletionBlockedException blocked) {
+      showBlockedDeletionDialog(owner, blocked.blockers());
+    } else {
+      showTaskError(feedback, failure, fallback);
+    }
   }
 
   private boolean confirmDeletion(Stage owner, Patient patient) {

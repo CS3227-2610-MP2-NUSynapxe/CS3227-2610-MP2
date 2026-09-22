@@ -407,7 +407,8 @@ final class DoctorWorkspace {
               clinicalHistoryView.refreshPatients();
             },
             () -> showHistoryHolder[0].run(),
-            clinicClock);
+            clinicClock,
+            taskRunner);
     patientDirectoryHolder[0] = patientDirectory;
     setVisibleManaged(clinicalHistoryView.view(), false);
     StackPane patientPages = new StackPane(patientDirectory.view(), clinicalHistoryView.view());
