@@ -2,14 +2,11 @@ package nusynapxe.ui;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.sql.SQLException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Function;
@@ -47,7 +44,6 @@ import nusynapxe.domain.Patient;
 import nusynapxe.domain.PaymentMethod;
 import nusynapxe.domain.Receipt;
 import nusynapxe.domain.RevenueReport;
-import nusynapxe.domain.RevenueSummary;
 import nusynapxe.domain.Session;
 import nusynapxe.service.AuthorizationException;
 import nusynapxe.service.ClinicServices;
@@ -188,6 +184,7 @@ final class ReceptionistWorkspace {
     Label legacyRevenue = new Label();
     legacyRevenue.setId("reception-revenue");
     Label feedback = UiComponents.feedback("reception-feedback");
+    ReceptionistDataLoader dataLoader = new ReceptionistDataLoader(services, session, taskRunner);
     SelectionState selection = new SelectionState();
     PatientDirectoryView patientDirectory =
         PatientDirectoryView.create(
@@ -223,13 +220,12 @@ final class ReceptionistWorkspace {
           Appointment selected = selectedRow == null ? null : selectedRow.appointment();
           if (selected != null) {
             showCheckInDetailsDialog(
-                services,
-                session,
+                dataLoader,
                 selected.id(),
                 feedback,
                 clinicClock,
                 () ->
-                    refreshQueue(
+                    dataLoader.refreshQueue(
                         services,
                         session,
                         queueList,
@@ -245,7 +241,7 @@ final class ReceptionistWorkspace {
         .valueProperty()
         .addListener(
             (observable, previous, selected) ->
-                refreshQueue(
+                dataLoader.refreshQueue(
                     services,
                     session,
                     queueList,
@@ -259,7 +255,7 @@ final class ReceptionistWorkspace {
         .valueProperty()
         .addListener(
             (observable, previous, selected) ->
-                refreshQueue(
+                dataLoader.refreshQueue(
                     services,
                     session,
                     queueList,
@@ -273,7 +269,7 @@ final class ReceptionistWorkspace {
         .valueProperty()
         .addListener(
             (observable, previous, selected) ->
-                refreshQueue(
+                dataLoader.refreshQueue(
                     services,
                     session,
                     queueList,
@@ -287,7 +283,7 @@ final class ReceptionistWorkspace {
         .textProperty()
         .addListener(
             (observable, previous, selected) ->
-                refreshQueue(
+                dataLoader.refreshQueue(
                     services,
                     session,
                     queueList,
@@ -299,7 +295,7 @@ final class ReceptionistWorkspace {
                     queueSummary));
     queueSearch.setOnAction(
         event ->
-            refreshQueue(
+            dataLoader.refreshQueue(
                 services,
                 session,
                 queueList,
@@ -313,7 +309,7 @@ final class ReceptionistWorkspace {
         .valueProperty()
         .addListener(
             (observable, previous, selected) ->
-                refreshSchedule(
+                dataLoader.refreshSchedule(
                     services,
                     session,
                     appointmentList,
@@ -328,7 +324,7 @@ final class ReceptionistWorkspace {
         .valueProperty()
         .addListener(
             (observable, previous, selected) ->
-                refreshSchedule(
+                dataLoader.refreshSchedule(
                     services,
                     session,
                     appointmentList,
@@ -343,7 +339,7 @@ final class ReceptionistWorkspace {
         .valueProperty()
         .addListener(
             (observable, previous, selected) ->
-                refreshSchedule(
+                dataLoader.refreshSchedule(
                     services,
                     session,
                     appointmentList,
@@ -358,7 +354,7 @@ final class ReceptionistWorkspace {
         .textProperty()
         .addListener(
             (observable, previous, selected) ->
-                refreshSchedule(
+                dataLoader.refreshSchedule(
                     services,
                     session,
                     appointmentList,
@@ -378,13 +374,12 @@ final class ReceptionistWorkspace {
               selection.appointmentId = appointment == null ? 0 : appointment.id();
               if (appointment != null && checkoutTabActive[0] && !checkoutMouseSelection[0]) {
                 showCheckoutDetailsDialog(
-                    services,
-                    session,
+                    dataLoader,
                     appointment.id(),
                     feedback,
                     receiptPreview,
                     () -> {
-                      refreshCheckoutReady(
+                      dataLoader.refreshCheckoutReady(
                           services,
                           session,
                           checkoutAppointmentList,
@@ -392,7 +387,7 @@ final class ReceptionistWorkspace {
                           checkoutPatient.getText(),
                           checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
                           checkoutDate.getValue());
-                      refreshReceiptHistory(
+                      dataLoader.refreshReceiptHistory(
                           services,
                           session,
                           receiptHistoryList,
@@ -412,13 +407,12 @@ final class ReceptionistWorkspace {
           Appointment selected = selectedRow == null ? null : selectedRow.appointment();
           if (selected != null) {
             showCheckoutDetailsDialog(
-                services,
-                session,
+                dataLoader,
                 selected.id(),
                 feedback,
                 receiptPreview,
                 () -> {
-                  refreshCheckoutReady(
+                  dataLoader.refreshCheckoutReady(
                       services,
                       session,
                       checkoutAppointmentList,
@@ -426,7 +420,7 @@ final class ReceptionistWorkspace {
                       checkoutPatient.getText(),
                       checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
                       checkoutDate.getValue());
-                  refreshReceiptHistory(
+                  dataLoader.refreshReceiptHistory(
                       services,
                       session,
                       receiptHistoryList,
@@ -450,7 +444,7 @@ final class ReceptionistWorkspace {
             });
     receiptSearch.setOnAction(
         event ->
-            refreshReceiptHistory(
+            dataLoader.refreshReceiptHistory(
                 services,
                 session,
                 receiptHistoryList,
@@ -461,7 +455,7 @@ final class ReceptionistWorkspace {
                 feedback));
     checkoutSearch.setOnAction(
         event ->
-            refreshCheckoutReady(
+            dataLoader.refreshCheckoutReady(
                 services,
                 session,
                 checkoutAppointmentList,
@@ -473,7 +467,7 @@ final class ReceptionistWorkspace {
         .textProperty()
         .addListener(
             (observable, previous, selected) ->
-                refreshReceiptHistory(
+                dataLoader.refreshReceiptHistory(
                     services,
                     session,
                     receiptHistoryList,
@@ -486,7 +480,7 @@ final class ReceptionistWorkspace {
         .valueProperty()
         .addListener(
             (observable, previous, selected) ->
-                refreshReceiptHistory(
+                dataLoader.refreshReceiptHistory(
                     services,
                     session,
                     receiptHistoryList,
@@ -499,7 +493,7 @@ final class ReceptionistWorkspace {
         .valueProperty()
         .addListener(
             (observable, previous, selected) ->
-                refreshReceiptHistory(
+                dataLoader.refreshReceiptHistory(
                     services,
                     session,
                     receiptHistoryList,
@@ -515,42 +509,40 @@ final class ReceptionistWorkspace {
             if (appointmentPatient.getValue() == null || doctor.getValue() == null) {
               throw new ValidationException("Select a patient and Doctor first");
             }
-            Appointment appointment =
-                services
-                    .appointmentService()
-                    .book(
-                        session,
-                        appointmentPatient.getValue().id(),
-                        doctor.getValue().id(),
-                        parseScheduleDateTime(appointmentDate, startsAt, "Start time"),
-                        parseScheduleDateTime(appointmentDate, endsAt, "End time"));
-            selection.appointmentId = appointment.id();
-            UiComponents.showMessage(feedback, "Appointment booked and awaiting Doctor acceptance");
-            refreshSchedule(
-                services,
-                session,
-                appointmentList,
-                selection,
-                feedback,
-                scheduleDate.getValue(),
-                scheduleDoctor.getValue() == null ? null : scheduleDoctor.getValue().id(),
-                schedulePatient.getText(),
-                scheduleStatus.getValue(),
-                scheduleSummary);
-            refreshCheckoutReady(
-                services,
-                session,
-                checkoutAppointmentList,
-                feedback,
-                checkoutPatient.getText(),
-                checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
-                checkoutDate.getValue());
-          } catch (ValidationException
-              | AuthorizationException
-              | IllegalArgumentException exception) {
+            dataLoader.book(
+                appointmentPatient.getValue().id(),
+                doctor.getValue().id(),
+                parseScheduleDateTime(appointmentDate, startsAt, "Start time"),
+                parseScheduleDateTime(appointmentDate, endsAt, "End time"),
+                appointment -> {
+                  selection.appointmentId = appointment.id();
+                  UiComponents.showMessage(
+                      feedback, "Appointment booked and awaiting Doctor acceptance");
+                  dataLoader.refreshSchedule(
+                      services,
+                      session,
+                      appointmentList,
+                      selection,
+                      feedback,
+                      scheduleDate.getValue(),
+                      scheduleDoctor.getValue() == null ? null : scheduleDoctor.getValue().id(),
+                      schedulePatient.getText(),
+                      scheduleStatus.getValue(),
+                      scheduleSummary);
+                  dataLoader.refreshCheckoutReady(
+                      services,
+                      session,
+                      checkoutAppointmentList,
+                      feedback,
+                      checkoutPatient.getText(),
+                      checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
+                      checkoutDate.getValue());
+                },
+                failure ->
+                    showTaskError(
+                        feedback, failure, "Appointment booking is temporarily unavailable"));
+          } catch (ValidationException | IllegalArgumentException exception) {
             UiComponents.showError(feedback, exception.getMessage());
-          } catch (SQLException exception) {
-            UiComponents.showError(feedback, "Appointment booking is temporarily unavailable");
           }
         });
 
@@ -564,7 +556,7 @@ final class ReceptionistWorkspace {
                 selection.appointmentId,
                 feedback,
                 () ->
-                    refreshSchedule(
+                    dataLoader.refreshSchedule(
                         services,
                         session,
                         appointmentList,
@@ -584,31 +576,35 @@ final class ReceptionistWorkspace {
         event -> {
           try {
             requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
-            services.appointmentService().cancel(session, selection.appointmentId);
-            UiComponents.showMessage(feedback, "Appointment cancelled");
-            refreshSchedule(
-                services,
-                session,
-                appointmentList,
-                selection,
-                feedback,
-                scheduleDate.getValue(),
-                scheduleDoctor.getValue() == null ? null : scheduleDoctor.getValue().id(),
-                schedulePatient.getText(),
-                scheduleStatus.getValue(),
-                scheduleSummary);
-            refreshCheckoutReady(
-                services,
-                session,
-                checkoutAppointmentList,
-                feedback,
-                checkoutPatient.getText(),
-                checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
-                checkoutDate.getValue());
-          } catch (ValidationException | AuthorizationException exception) {
+            dataLoader.cancel(
+                selection.appointmentId,
+                () -> {
+                  UiComponents.showMessage(feedback, "Appointment cancelled");
+                  dataLoader.refreshSchedule(
+                      services,
+                      session,
+                      appointmentList,
+                      selection,
+                      feedback,
+                      scheduleDate.getValue(),
+                      scheduleDoctor.getValue() == null ? null : scheduleDoctor.getValue().id(),
+                      schedulePatient.getText(),
+                      scheduleStatus.getValue(),
+                      scheduleSummary);
+                  dataLoader.refreshCheckoutReady(
+                      services,
+                      session,
+                      checkoutAppointmentList,
+                      feedback,
+                      checkoutPatient.getText(),
+                      checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
+                      checkoutDate.getValue());
+                },
+                failure ->
+                    showTaskError(
+                        feedback, failure, "Appointment cancellation is temporarily unavailable"));
+          } catch (ValidationException exception) {
             UiComponents.showError(feedback, exception.getMessage());
-          } catch (SQLException exception) {
-            UiComponents.showError(feedback, "Appointment cancellation is temporarily unavailable");
           }
         });
 
@@ -616,31 +612,33 @@ final class ReceptionistWorkspace {
         event -> {
           try {
             requireSelection(selection.appointmentId, APPOINTMENT_REQUIRED);
-            services.appointmentService().checkIn(session, selection.appointmentId);
-            UiComponents.showMessage(feedback, "Patient checked in");
-            refreshSchedule(
-                services,
-                session,
-                appointmentList,
-                selection,
-                feedback,
-                scheduleDate.getValue(),
-                scheduleDoctor.getValue() == null ? null : scheduleDoctor.getValue().id(),
-                schedulePatient.getText(),
-                scheduleStatus.getValue(),
-                scheduleSummary);
-            refreshCheckoutReady(
-                services,
-                session,
-                checkoutAppointmentList,
-                feedback,
-                checkoutPatient.getText(),
-                checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
-                checkoutDate.getValue());
-          } catch (ValidationException | AuthorizationException exception) {
+            dataLoader.checkIn(
+                selection.appointmentId,
+                () -> {
+                  UiComponents.showMessage(feedback, "Patient checked in");
+                  dataLoader.refreshSchedule(
+                      services,
+                      session,
+                      appointmentList,
+                      selection,
+                      feedback,
+                      scheduleDate.getValue(),
+                      scheduleDoctor.getValue() == null ? null : scheduleDoctor.getValue().id(),
+                      schedulePatient.getText(),
+                      scheduleStatus.getValue(),
+                      scheduleSummary);
+                  dataLoader.refreshCheckoutReady(
+                      services,
+                      session,
+                      checkoutAppointmentList,
+                      feedback,
+                      checkoutPatient.getText(),
+                      checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
+                      checkoutDate.getValue());
+                },
+                failure -> showTaskError(feedback, failure, "Check-in is temporarily unavailable"));
+          } catch (ValidationException exception) {
             UiComponents.showError(feedback, exception.getMessage());
-          } catch (SQLException exception) {
-            UiComponents.showError(feedback, "Check-in is temporarily unavailable");
           }
         });
 
@@ -649,44 +647,42 @@ final class ReceptionistWorkspace {
           try {
             LocalDate from = reportFromDate.getValue();
             LocalDate to = reportToDate.getValue();
-            RevenueReport report =
-                services
-                    .billingService()
-                    .revenueReport(
-                        session,
-                        from,
-                        to,
-                        reportPatient.getText(),
-                        reportDoctor.getValue() == null ? null : reportDoctor.getValue().id(),
-                        selectedPaymentMethod(reportMethod.getValue()));
-            String summary = ReceptionistRevenueView.formatSummary(report);
-            currentReport[0] = report;
-            reportRows.setItems(FXCollections.observableArrayList(report.receipts()));
-            reportSummary.setText(summary);
-            UiComponents.showMessage(feedback, "Revenue report generated");
-          } catch (ValidationException | AuthorizationException exception) {
+            dataLoader.revenueReport(
+                from,
+                to,
+                reportPatient.getText(),
+                reportDoctor.getValue() == null ? null : reportDoctor.getValue().id(),
+                selectedPaymentMethod(reportMethod.getValue()),
+                report -> {
+                  String summary = ReceptionistRevenueView.formatSummary(report);
+                  currentReport[0] = report;
+                  reportRows.setItems(FXCollections.observableArrayList(report.receipts()));
+                  reportSummary.setText(summary);
+                  UiComponents.showMessage(feedback, "Revenue report generated");
+                },
+                failure ->
+                    showTaskError(feedback, failure, "Revenue report is temporarily unavailable"));
+          } catch (ValidationException exception) {
             UiComponents.showError(feedback, exception.getMessage());
           } catch (ArithmeticException exception) {
             UiComponents.showError(feedback, "Revenue total exceeds the supported range");
-          } catch (SQLException exception) {
-            UiComponents.showError(feedback, "Revenue report is temporarily unavailable");
           }
         });
     legacyRevenueButton.setOnAction(
         event -> {
           try {
-            RevenueSummary summary =
-                services
-                    .billingService()
-                    .dailyRevenue(session, LocalDate.parse(legacyRevenueDate.getText()));
-            legacyRevenue.setText(
-                summary.transactionCount()
-                    + " successful payment(s), total "
-                    + formatMinor(summary.totalMinor()));
-          } catch (ValidationException | AuthorizationException exception) {
-            UiComponents.showError(feedback, exception.getMessage());
-          } catch (SQLException | DateTimeParseException exception) {
+            dataLoader.dailyRevenue(
+                LocalDate.parse(legacyRevenueDate.getText()),
+                summary ->
+                    legacyRevenue.setText(
+                        summary.transactionCount()
+                            + " successful payment(s), total "
+                            + formatMinor(summary.totalMinor())),
+                failure -> showTaskError(feedback, failure, "Revenue is temporarily unavailable"));
+          } catch (DateTimeParseException exception) {
             UiComponents.showError(feedback, "Revenue is temporarily unavailable");
+          } catch (ValidationException exception) {
+            UiComponents.showError(feedback, exception.getMessage());
           }
         });
 
@@ -700,6 +696,7 @@ final class ReceptionistWorkspace {
     Button logout = button("Log out", "logout-button");
     logout.setOnAction(
         event -> {
+          dataLoader.dispose();
           patientDirectory.dispose();
           if (calendarHolder[0] != null) {
             calendarHolder[0].dispose();
@@ -893,7 +890,7 @@ final class ReceptionistWorkspace {
                     feedback,
                     () -> {
                       calendarHolder[0].refresh();
-                      refreshSchedule(
+                      dataLoader.refreshSchedule(
                           services,
                           session,
                           appointmentList,
@@ -913,7 +910,7 @@ final class ReceptionistWorkspace {
                     feedback,
                     () -> {
                       calendarHolder[0].refresh();
-                      refreshSchedule(
+                      dataLoader.refreshSchedule(
                           services,
                           session,
                           appointmentList,
@@ -1000,16 +997,16 @@ final class ReceptionistWorkspace {
               if (selected == patientFeature) {
                 patientDirectory.refresh();
               } else if (selected == appointmentFeature) {
-                refreshDoctors(services, session, doctor, feedback);
+                dataLoader.refreshDoctors(services, session, doctor, feedback);
                 PatientDirectoryView.refreshAppointmentPatients(
                     services,
                     session,
                     appointmentPatient,
                     feedback,
                     patientDirectory.selectedPatientId());
-                refreshDoctors(services, session, scheduleDoctor, feedback);
+                dataLoader.refreshDoctors(services, session, scheduleDoctor, feedback);
                 scheduleDoctor.clearSelection();
-                refreshSchedule(
+                dataLoader.refreshSchedule(
                     services,
                     session,
                     appointmentList,
@@ -1024,9 +1021,9 @@ final class ReceptionistWorkspace {
                 receptionistCalendar.refreshDoctors();
                 receptionistCalendar.refresh();
               } else if (selected == queueFeature) {
-                refreshDoctors(services, session, queueDoctor, feedback);
+                dataLoader.refreshDoctors(services, session, queueDoctor, feedback);
                 queueDoctor.clearSelection();
-                refreshQueue(
+                dataLoader.refreshQueue(
                     services,
                     session,
                     queueList,
@@ -1037,11 +1034,11 @@ final class ReceptionistWorkspace {
                     queueStatus.getValue(),
                     queueSummary);
               } else if (selected == checkoutFeature) {
-                refreshDoctors(services, session, checkoutDoctor, feedback);
+                dataLoader.refreshDoctors(services, session, checkoutDoctor, feedback);
                 checkoutDoctor.clearSelection();
-                refreshDoctors(services, session, receiptDoctor, feedback);
+                dataLoader.refreshDoctors(services, session, receiptDoctor, feedback);
                 receiptDoctor.clearSelection();
-                refreshCheckoutReady(
+                dataLoader.refreshCheckoutReady(
                     services,
                     session,
                     checkoutAppointmentList,
@@ -1049,7 +1046,7 @@ final class ReceptionistWorkspace {
                     checkoutPatient.getText(),
                     checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
                     checkoutDate.getValue());
-                refreshReceiptHistory(
+                dataLoader.refreshReceiptHistory(
                     services,
                     session,
                     receiptHistoryList,
@@ -1059,7 +1056,7 @@ final class ReceptionistWorkspace {
                     receiptDate.getValue(),
                     feedback);
               } else if (selected == revenueFeature) {
-                refreshDoctors(services, session, reportDoctor, feedback);
+                dataLoader.refreshDoctors(services, session, reportDoctor, feedback);
                 reportDoctor.clearSelection();
               }
             });
@@ -1070,12 +1067,12 @@ final class ReceptionistWorkspace {
     root.setTop(header);
     root.setLeft(navigation);
     BorderPane.setMargin(navigation, new Insets(0, 16, 0, 0));
-    refreshDoctors(services, session, doctor, feedback);
-    refreshDoctors(services, session, reportDoctor, feedback);
+    dataLoader.refreshDoctors(services, session, doctor, feedback);
+    dataLoader.refreshDoctors(services, session, reportDoctor, feedback);
     patientDirectory.refresh();
     PatientDirectoryView.refreshAppointmentPatients(
         services, session, appointmentPatient, feedback, 0);
-    refreshSchedule(
+    dataLoader.refreshSchedule(
         services,
         session,
         appointmentList,
@@ -1086,9 +1083,9 @@ final class ReceptionistWorkspace {
         "",
         null,
         scheduleSummary);
-    refreshDoctors(services, session, queueDoctor, feedback);
+    dataLoader.refreshDoctors(services, session, queueDoctor, feedback);
     queueDoctor.clearSelection();
-    refreshQueue(
+    dataLoader.refreshQueue(
         services,
         session,
         queueList,
@@ -1098,11 +1095,11 @@ final class ReceptionistWorkspace {
         queuePatient.getText(),
         queueStatus.getValue(),
         queueSummary);
-    refreshDoctors(services, session, checkoutDoctor, feedback);
+    dataLoader.refreshDoctors(services, session, checkoutDoctor, feedback);
     checkoutDoctor.clearSelection();
-    refreshDoctors(services, session, receiptDoctor, feedback);
+    dataLoader.refreshDoctors(services, session, receiptDoctor, feedback);
     receiptDoctor.clearSelection();
-    refreshCheckoutReady(
+    dataLoader.refreshCheckoutReady(
         services,
         session,
         checkoutAppointmentList,
@@ -1240,60 +1237,6 @@ final class ReceptionistWorkspace {
     return account == null ? "" : account.displayName() + " (" + account.username() + ")";
   }
 
-  private static void refreshDoctors(
-      ClinicServices services,
-      Session session,
-      SearchSuggestionField<Account> doctor,
-      Label feedback) {
-    try {
-      doctor.setItems(services.accountService().listDoctors(session));
-      if (!doctor.getItems().isEmpty()) {
-        doctor.select(doctor.getItems().getFirst());
-      }
-    } catch (SQLException exception) {
-      UiComponents.showError(feedback, "Doctors are temporarily unavailable");
-    }
-  }
-
-  private static void refreshCheckoutReady(
-      ClinicServices services,
-      Session session,
-      TableView<AppointmentListRow> list,
-      Label feedback,
-      String patientQuery,
-      Long doctorId,
-      LocalDate date) {
-    try {
-      List<AppointmentListRow> appointments =
-          services
-              .appointmentService()
-              .searchAppointmentRows(
-                  session, date, doctorId, patientQuery, AppointmentStatus.COMPLETED);
-      list.setItems(FXCollections.observableArrayList(appointments));
-    } catch (SQLException exception) {
-      UiComponents.showError(feedback, "Checkout appointments are temporarily unavailable");
-    }
-  }
-
-  private static void refreshReceiptHistory(
-      ClinicServices services,
-      Session session,
-      TableView<Receipt> history,
-      Label preview,
-      String patientQuery,
-      Long doctorId,
-      LocalDate date,
-      Label feedback) {
-    try {
-      List<Receipt> receipts =
-          services.billingService().receiptHistory(session, patientQuery, doctorId, date);
-      history.setItems(FXCollections.observableArrayList(receipts));
-      preview.setText("");
-    } catch (SQLException | ValidationException | AuthorizationException exception) {
-      UiComponents.showError(feedback, "Receipt history is temporarily unavailable");
-    }
-  }
-
   private static void exportReport(
       RevenueReport report, javafx.stage.Window owner, boolean json, Label feedback) {
     ReportExporter.export(report, owner, json, feedback);
@@ -1307,114 +1250,6 @@ final class ReceptionistWorkspace {
     return ReportExporter.toJson(report);
   }
 
-  private static void refreshSchedule(
-      ClinicServices services,
-      Session session,
-      TableView<AppointmentListRow> appointmentList,
-      SelectionState selection,
-      Label feedback,
-      LocalDate date,
-      Long doctorId,
-      String patientQuery,
-      String status,
-      Label summary) {
-    try {
-      List<AppointmentListRow> appointments =
-          services
-              .appointmentService()
-              .searchAppointmentRows(
-                  session, date, doctorId, patientQuery, selectedAppointmentStatus(status));
-      appointmentList.setItems(FXCollections.observableArrayList(appointments));
-      selectAppointment(appointmentList, selection.appointmentId);
-      long pending =
-          appointments.stream()
-              .filter(a -> a.appointment().status() == AppointmentStatus.PENDING)
-              .count();
-      long accepted =
-          appointments.stream()
-              .filter(a -> a.appointment().status() == AppointmentStatus.ACCEPTED)
-              .count();
-      long checkedIn =
-          appointments.stream()
-              .filter(a -> a.appointment().status() == AppointmentStatus.CHECKED_IN)
-              .count();
-      long completed =
-          appointments.stream()
-              .filter(a -> a.appointment().status() == AppointmentStatus.COMPLETED)
-              .count();
-      long declined =
-          appointments.stream()
-              .filter(a -> a.appointment().status() == AppointmentStatus.DECLINED)
-              .count();
-      summary.setText(
-          appointments.size()
-              + " appointment(s) | Pending: "
-              + pending
-              + " | Accepted: "
-              + accepted
-              + " | Declined: "
-              + declined
-              + " | Checked in: "
-              + checkedIn
-              + " | Completed: "
-              + completed);
-    } catch (SQLException exception) {
-      UiComponents.showError(feedback, "Appointments are temporarily unavailable");
-    }
-  }
-
-  private static void refreshQueue(
-      ClinicServices services,
-      Session session,
-      TableView<AppointmentListRow> queue,
-      Label feedback,
-      LocalDate date,
-      Long doctorId,
-      String patientQuery,
-      String status,
-      Label summary) {
-    try {
-      List<AppointmentListRow> appointments = new ArrayList<>();
-      boolean includeWaiting =
-          status == null || QUEUE_ALL.equals(status) || QUEUE_WAITING.equals(status);
-      boolean includeChecked =
-          status == null || QUEUE_ALL.equals(status) || QUEUE_CHECKED_IN.equals(status);
-      if (includeWaiting) {
-        appointments.addAll(
-            services
-                .appointmentService()
-                .searchAppointmentRows(
-                    session, date, doctorId, patientQuery, AppointmentStatus.ACCEPTED));
-      }
-      if (includeChecked) {
-        appointments.addAll(
-            services
-                .appointmentService()
-                .searchAppointmentRows(
-                    session, date, doctorId, patientQuery, AppointmentStatus.CHECKED_IN));
-      }
-      appointments.sort(Comparator.comparing(row -> row.appointment().startsAt()));
-      queue.setItems(FXCollections.observableArrayList(appointments));
-      long waiting =
-          appointments.stream()
-              .filter(a -> a.appointment().status() == AppointmentStatus.ACCEPTED)
-              .count();
-      long checkedIn =
-          appointments.stream()
-              .filter(a -> a.appointment().status() == AppointmentStatus.CHECKED_IN)
-              .count();
-      summary.setText(
-          "Waiting: "
-              + waiting
-              + " | Checked in: "
-              + checkedIn
-              + " | Total: "
-              + appointments.size());
-    } catch (SQLException exception) {
-      UiComponents.showError(feedback, "Check-in queue is temporarily unavailable");
-    }
-  }
-
   private static void showRescheduleDialog(
       ClinicServices services,
       Session session,
@@ -1426,144 +1261,163 @@ final class ReceptionistWorkspace {
   }
 
   private static void showCheckInDetailsDialog(
-      ClinicServices services,
-      Session session,
+      ReceptionistDataLoader dataLoader,
       long appointmentId,
       Label workspaceFeedback,
       Clock clock,
       Runnable onUpdated) {
-    try {
-      Appointment appointment = services.appointmentService().get(appointmentId);
-      Patient patient =
-          services.patientService().getAdministrative(session, appointment.patientId());
-      Label details =
-          new Label(
-              valueOrEmpty(patient.firstName())
-                  + " "
-                  + valueOrEmpty(patient.lastName())
-                  + "\nEmail: "
-                  + valueOrEmpty(patient.email())
-                  + "\nPhone: "
-                  + valueOrEmpty(patient.phone())
-                  + "\nDoctor: "
-                  + doctorDisplayName(services, session, appointment.doctorId())
-                  + "\nScheduled: "
-                  + appointment.startsAt().format(DATE_TIME_FORMAT)
-                  + " - "
-                  + appointment.endsAt().toLocalTime()
-                  + "\nStatus: "
-                  + appointment.status());
-      details.setId("reception-check-in-details");
-      Label feedback = new Label();
-      feedback.setId("reception-check-in-feedback");
-      Button checkIn = button("Check in patient", "reception-check-in-submit");
-      boolean eligible =
-          appointment.status() == AppointmentStatus.ACCEPTED
-              && !LocalDateTime.now(ClinicClock.withClinicZone(clock))
-                  .isBefore(appointment.startsAt());
-      checkIn.setDisable(!eligible);
-      Stage dialog = new Stage();
-      checkIn.setOnAction(
-          event -> {
-            try {
-              services.appointmentService().checkIn(session, appointmentId);
-              UiComponents.showMessage(workspaceFeedback, "Patient checked in");
-              onUpdated.run();
-              dialog.close();
-            } catch (ValidationException | AuthorizationException exception) {
-              UiComponents.showError(feedback, exception.getMessage());
-            } catch (SQLException exception) {
-              UiComponents.showError(feedback, "Check-in is temporarily unavailable");
-            }
-          });
-      VBox content = new VBox(12, new Label("Appointment details"), details, checkIn, feedback);
-      content.setPadding(new Insets(18));
-      dialog.initOwner(workspaceFeedback.getScene().getWindow());
-      dialog.initModality(Modality.WINDOW_MODAL);
-      dialog.setTitle("Check-in details");
-      dialog.setScene(new Scene(content, 500, 300));
-      dialog.show();
-    } catch (SQLException | ValidationException | AuthorizationException exception) {
-      UiComponents.showError(workspaceFeedback, exception.getMessage());
-    }
+    dataLoader.loadCheckInDetails(
+        appointmentId,
+        details ->
+            showCheckInDetailsDialog(
+                dataLoader, details, appointmentId, workspaceFeedback, clock, onUpdated),
+        failure ->
+            showTaskError(
+                workspaceFeedback, failure, "Check-in details are temporarily unavailable"));
+  }
+
+  private static void showCheckInDetailsDialog(
+      ReceptionistDataLoader dataLoader,
+      ReceptionistDataLoader.AppointmentDetails loaded,
+      long appointmentId,
+      Label workspaceFeedback,
+      Clock clock,
+      Runnable onUpdated) {
+    Appointment appointment = loaded.appointment();
+    Patient patient = loaded.patient();
+    Label details =
+        new Label(
+            valueOrEmpty(patient.firstName())
+                + " "
+                + valueOrEmpty(patient.lastName())
+                + "\nEmail: "
+                + valueOrEmpty(patient.email())
+                + "\nPhone: "
+                + valueOrEmpty(patient.phone())
+                + "\nDoctor: "
+                + loaded.doctorName()
+                + "\nScheduled: "
+                + appointment.startsAt().format(DATE_TIME_FORMAT)
+                + " - "
+                + appointment.endsAt().toLocalTime()
+                + "\nStatus: "
+                + appointment.status());
+    details.setId("reception-check-in-details");
+    Label feedback = new Label();
+    feedback.setId("reception-check-in-feedback");
+    Button checkIn = button("Check in patient", "reception-check-in-submit");
+    boolean eligible =
+        appointment.status() == AppointmentStatus.ACCEPTED
+            && !LocalDateTime.now(ClinicClock.withClinicZone(clock))
+                .isBefore(appointment.startsAt());
+    checkIn.setDisable(!eligible);
+    Stage dialog = new Stage();
+    checkIn.setOnAction(
+        event ->
+            dataLoader.checkIn(
+                appointmentId,
+                () -> {
+                  UiComponents.showMessage(workspaceFeedback, "Patient checked in");
+                  onUpdated.run();
+                  dialog.close();
+                },
+                failure ->
+                    showTaskError(feedback, failure, "Check-in is temporarily unavailable")));
+    VBox content = new VBox(12, new Label("Appointment details"), details, checkIn, feedback);
+    content.setPadding(new Insets(18));
+    dialog.initOwner(workspaceFeedback.getScene().getWindow());
+    dialog.initModality(Modality.WINDOW_MODAL);
+    dialog.setTitle("Check-in details");
+    dialog.setScene(new Scene(content, 500, 300));
+    dialog.show();
   }
 
   private static void showCheckoutDetailsDialog(
-      ClinicServices services,
-      Session session,
+      ReceptionistDataLoader dataLoader,
       long appointmentId,
       Label workspaceFeedback,
       Label receiptPreview,
       Runnable onUpdated) {
-    try {
-      Appointment appointment = services.appointmentService().get(appointmentId);
-      Patient patient =
-          services.patientService().getAdministrative(session, appointment.patientId());
-      Label details =
-          new Label(
-              valueOrEmpty(patient.firstName())
-                  + " "
-                  + valueOrEmpty(patient.lastName())
-                  + "\nEmail: "
-                  + valueOrEmpty(patient.email())
-                  + "\nPhone: "
-                  + valueOrEmpty(patient.phone())
-                  + "\nDoctor: "
-                  + doctorDisplayName(services, session, appointment.doctorId())
-                  + "\nScheduled: "
-                  + appointment.startsAt().format(DATE_TIME_FORMAT)
-                  + " - "
-                  + appointment.endsAt().toLocalTime()
-                  + "\nStatus: "
-                  + appointment.status());
-      details.setId("reception-checkout-details");
-      TextField charge = field("reception-charge", "Amount");
-      ComboBox<PaymentMethod> method = UiComponents.compactSelector();
-      method.setItems(FXCollections.observableArrayList(PaymentMethod.values()));
-      method.setId("reception-method");
-      method.getSelectionModel().select(PaymentMethod.CASH);
-      Button checkout = button("Complete checkout", "reception-checkout");
-      Label feedback = new Label();
-      feedback.setId("reception-checkout-feedback");
-      GridPane paymentForm = new GridPane();
-      paymentForm.setHgap(8);
-      paymentForm.setVgap(8);
-      paymentForm.addRow(0, new Label("Amount"), charge);
-      paymentForm.addRow(1, new Label("Method"), method);
-      Stage dialog = new Stage();
-      checkout.setOnAction(
-          event -> {
-            try {
-              services
-                  .billingService()
-                  .checkout(
-                      session, appointmentId, parseMinor(charge.getText()), method.getValue());
-              services
-                  .billingService()
-                  .receiptForAppointment(session, appointmentId)
-                  .ifPresent(
-                      receipt ->
-                          receiptPreview.setText(ReceptionistCheckoutView.formatReceipt(receipt)));
-              UiComponents.showMessage(workspaceFeedback, "Checkout completed");
-              onUpdated.run();
-              dialog.close();
-            } catch (ValidationException | AuthorizationException exception) {
-              UiComponents.showError(feedback, exception.getMessage());
-            } catch (SQLException exception) {
-              UiComponents.showError(feedback, "Checkout is temporarily unavailable");
-            }
-          });
-      VBox content =
-          new VBox(12, new Label("Checkout appointment"), details, paymentForm, checkout, feedback);
-      content.setPadding(new Insets(18));
-      dialog.initOwner(workspaceFeedback.getScene().getWindow());
-      dialog.initModality(Modality.WINDOW_MODAL);
-      dialog.setTitle("Checkout details");
-      dialog.setScene(new Scene(content, 500, 400));
-      dialog.show();
-    } catch (SQLException | ValidationException | AuthorizationException exception) {
-      UiComponents.showError(workspaceFeedback, exception.getMessage());
-    }
+    dataLoader.loadCheckoutDetails(
+        appointmentId,
+        details ->
+            showCheckoutDetailsDialog(
+                dataLoader, details, appointmentId, workspaceFeedback, receiptPreview, onUpdated),
+        failure ->
+            showTaskError(
+                workspaceFeedback, failure, "Checkout details are temporarily unavailable"));
+  }
+
+  private static void showCheckoutDetailsDialog(
+      ReceptionistDataLoader dataLoader,
+      ReceptionistDataLoader.AppointmentDetails loaded,
+      long appointmentId,
+      Label workspaceFeedback,
+      Label receiptPreview,
+      Runnable onUpdated) {
+    Appointment appointment = loaded.appointment();
+    Patient patient = loaded.patient();
+    Label details =
+        new Label(
+            valueOrEmpty(patient.firstName())
+                + " "
+                + valueOrEmpty(patient.lastName())
+                + "\nEmail: "
+                + valueOrEmpty(patient.email())
+                + "\nPhone: "
+                + valueOrEmpty(patient.phone())
+                + "\nDoctor: "
+                + loaded.doctorName()
+                + "\nScheduled: "
+                + appointment.startsAt().format(DATE_TIME_FORMAT)
+                + " - "
+                + appointment.endsAt().toLocalTime()
+                + "\nStatus: "
+                + appointment.status());
+    details.setId("reception-checkout-details");
+    TextField charge = field("reception-charge", "Amount");
+    ComboBox<PaymentMethod> method = UiComponents.compactSelector();
+    method.setItems(FXCollections.observableArrayList(PaymentMethod.values()));
+    method.setId("reception-method");
+    method.getSelectionModel().select(PaymentMethod.CASH);
+    Button checkout = button("Complete checkout", "reception-checkout");
+    Label feedback = new Label();
+    feedback.setId("reception-checkout-feedback");
+    GridPane paymentForm = new GridPane();
+    paymentForm.setHgap(8);
+    paymentForm.setVgap(8);
+    paymentForm.addRow(0, new Label("Amount"), charge);
+    paymentForm.addRow(1, new Label("Method"), method);
+    Stage dialog = new Stage();
+    checkout.setOnAction(
+        event -> {
+          try {
+            long amountMinor = parseMinor(charge.getText());
+            dataLoader.checkout(
+                appointmentId,
+                amountMinor,
+                method.getValue(),
+                receipt -> {
+                  receipt.ifPresent(
+                      value ->
+                          receiptPreview.setText(ReceptionistCheckoutView.formatReceipt(value)));
+                  UiComponents.showMessage(workspaceFeedback, "Checkout completed");
+                  onUpdated.run();
+                  dialog.close();
+                },
+                failure -> showTaskError(feedback, failure, "Checkout is temporarily unavailable"));
+          } catch (ValidationException exception) {
+            UiComponents.showError(feedback, exception.getMessage());
+          }
+        });
+    VBox content =
+        new VBox(12, new Label("Checkout appointment"), details, paymentForm, checkout, feedback);
+    content.setPadding(new Insets(18));
+    dialog.initOwner(workspaceFeedback.getScene().getWindow());
+    dialog.initModality(Modality.WINDOW_MODAL);
+    dialog.setTitle("Checkout details");
+    dialog.setScene(new Scene(content, 500, 400));
+    dialog.show();
   }
 
   private static LocalDateTime parseScheduleDateTime(
@@ -1571,15 +1425,11 @@ final class ReceptionistWorkspace {
     return AppointmentDialog.parseDateTime(date, time, fieldName);
   }
 
-  private static String doctorDisplayName(ClinicServices services, Session session, long doctorId) {
-    try {
-      return services.accountService().listDoctors(session).stream()
-          .filter(doctor -> doctor.id() == doctorId)
-          .map(Account::displayName)
-          .findFirst()
-          .orElse("Doctor unavailable");
-    } catch (SQLException | AuthorizationException exception) {
-      return "Doctor unavailable";
+  private static void showTaskError(Label feedback, Throwable failure, String fallback) {
+    if (failure instanceof ValidationException || failure instanceof AuthorizationException) {
+      UiComponents.showError(feedback, failure.getMessage());
+    } else {
+      UiComponents.showError(feedback, fallback);
     }
   }
 
@@ -1621,7 +1471,7 @@ final class ReceptionistWorkspace {
     }
   }
 
-  private static final class SelectionState {
-    private long appointmentId;
+  static final class SelectionState {
+    long appointmentId;
   }
 }

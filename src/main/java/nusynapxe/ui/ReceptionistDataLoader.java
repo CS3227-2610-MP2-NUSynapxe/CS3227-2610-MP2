@@ -1,0 +1,447 @@
+package nusynapxe.ui;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.function.Consumer;
+import javafx.collections.FXCollections;
+import javafx.scene.control.Label;
+import javafx.scene.control.TableView;
+import nusynapxe.domain.Account;
+import nusynapxe.domain.Appointment;
+import nusynapxe.domain.AppointmentListRow;
+import nusynapxe.domain.AppointmentStatus;
+import nusynapxe.domain.Patient;
+import nusynapxe.domain.PaymentMethod;
+import nusynapxe.domain.Receipt;
+import nusynapxe.domain.RevenueReport;
+import nusynapxe.domain.RevenueSummary;
+import nusynapxe.domain.Session;
+import nusynapxe.service.ClinicServices;
+
+/** Serializes Receptionist database-backed refreshes away from the JavaFX thread. */
+final class ReceptionistDataLoader {
+  private static final String QUEUE_WAITING = "Waiting";
+  private static final String QUEUE_CHECKED_IN = "Checked in";
+  private static final String QUEUE_ALL = "All";
+  private static final String ALL_STATUSES = "All statuses";
+
+  private final ClinicServices services;
+  private final Session session;
+  private final ClinicTaskRunner taskRunner;
+  private long scheduleGeneration;
+  private long queueGeneration;
+  private long checkoutGeneration;
+  private long receiptGeneration;
+  private long doctorGeneration;
+  private boolean disposed;
+
+  ReceptionistDataLoader(ClinicServices services, Session session, ClinicTaskRunner taskRunner) {
+    this.services = Objects.requireNonNull(services, "services");
+    this.session = Objects.requireNonNull(session, "session");
+    this.taskRunner = Objects.requireNonNull(taskRunner, "taskRunner");
+  }
+
+  void dispose() {
+    disposed = true;
+    scheduleGeneration++;
+    queueGeneration++;
+    checkoutGeneration++;
+    receiptGeneration++;
+    doctorGeneration++;
+  }
+
+  void loadCheckInDetails(
+      long appointmentId, Consumer<AppointmentDetails> onSuccess, Consumer<Throwable> onFailure) {
+    loadAppointmentDetails(appointmentId, onSuccess, onFailure);
+  }
+
+  void loadCheckoutDetails(
+      long appointmentId, Consumer<AppointmentDetails> onSuccess, Consumer<Throwable> onFailure) {
+    loadAppointmentDetails(appointmentId, onSuccess, onFailure);
+  }
+
+  void run(
+      ClinicTaskRunner.ClinicTask<Void> task, Runnable onSuccess, Consumer<Throwable> onFailure) {
+    submit(task, ignored -> onSuccess.run(), onFailure);
+  }
+
+  void checkIn(long appointmentId, Runnable onSuccess, Consumer<Throwable> onFailure) {
+    run(
+        () -> {
+          services.appointmentService().checkIn(session, appointmentId);
+          return null;
+        },
+        onSuccess,
+        onFailure);
+  }
+
+  void checkout(
+      long appointmentId,
+      long amountMinor,
+      PaymentMethod paymentMethod,
+      Consumer<Optional<Receipt>> onSuccess,
+      Consumer<Throwable> onFailure) {
+    submit(
+        () -> {
+          services.billingService().checkout(session, appointmentId, amountMinor, paymentMethod);
+          return services.billingService().receiptForAppointment(session, appointmentId);
+        },
+        onSuccess,
+        onFailure);
+  }
+
+  void book(
+      long patientId,
+      long doctorId,
+      LocalDateTime startsAt,
+      LocalDateTime endsAt,
+      Consumer<Appointment> onSuccess,
+      Consumer<Throwable> onFailure) {
+    submit(
+        () -> services.appointmentService().book(session, patientId, doctorId, startsAt, endsAt),
+        onSuccess,
+        onFailure);
+  }
+
+  void cancel(long appointmentId, Runnable onSuccess, Consumer<Throwable> onFailure) {
+    run(
+        () -> {
+          services.appointmentService().cancel(session, appointmentId);
+          return null;
+        },
+        onSuccess,
+        onFailure);
+  }
+
+  void revenueReport(
+      LocalDate from,
+      LocalDate to,
+      String patientQuery,
+      Long doctorId,
+      PaymentMethod paymentMethod,
+      Consumer<RevenueReport> onSuccess,
+      Consumer<Throwable> onFailure) {
+    submit(
+        () ->
+            services
+                .billingService()
+                .revenueReport(session, from, to, patientQuery, doctorId, paymentMethod),
+        onSuccess,
+        onFailure);
+  }
+
+  void dailyRevenue(
+      LocalDate date, Consumer<RevenueSummary> onSuccess, Consumer<Throwable> onFailure) {
+    submit(() -> services.billingService().dailyRevenue(session, date), onSuccess, onFailure);
+  }
+
+  private void loadAppointmentDetails(
+      long appointmentId, Consumer<AppointmentDetails> onSuccess, Consumer<Throwable> onFailure) {
+    submit(
+        () -> {
+          Appointment appointment = services.appointmentService().get(appointmentId);
+          Patient patient =
+              services.patientService().getAdministrative(session, appointment.patientId());
+          String doctorName =
+              services.accountService().listDoctors(session).stream()
+                  .filter(doctor -> doctor.id() == appointment.doctorId())
+                  .map(Account::displayName)
+                  .findFirst()
+                  .orElse("Doctor unavailable");
+          return new AppointmentDetails(appointment, patient, doctorName);
+        },
+        onSuccess,
+        onFailure);
+  }
+
+  void refreshDoctors(
+      ClinicServices ignoredServices,
+      Session ignoredSession,
+      SearchSuggestionField<Account> doctor,
+      Label feedback) {
+    refreshDoctors(doctor, feedback);
+  }
+
+  void refreshDoctors(SearchSuggestionField<Account> doctor, Label feedback) {
+    long generation = ++doctorGeneration;
+    submit(
+        () -> services.accountService().listDoctors(session),
+        doctors -> {
+          if (generation != doctorGeneration) {
+            return;
+          }
+          doctor.setItems(doctors);
+          if (!doctor.getItems().isEmpty()) {
+            doctor.select(doctor.getItems().getFirst());
+          }
+        },
+        failure -> {
+          if (generation == doctorGeneration) {
+            UiComponents.showError(feedback, "Doctors are temporarily unavailable");
+          }
+        });
+  }
+
+  void refreshCheckoutReady(
+      TableView<AppointmentListRow> list,
+      Label feedback,
+      String patientQuery,
+      Long doctorId,
+      LocalDate date) {
+    long generation = ++checkoutGeneration;
+    submit(
+        () ->
+            services
+                .appointmentService()
+                .searchAppointmentRows(
+                    session, date, doctorId, patientQuery, AppointmentStatus.COMPLETED),
+        appointments -> {
+          if (generation == checkoutGeneration) {
+            list.setItems(FXCollections.observableArrayList(appointments));
+          }
+        },
+        failure -> {
+          if (generation == checkoutGeneration) {
+            UiComponents.showError(feedback, "Checkout appointments are temporarily unavailable");
+          }
+        });
+  }
+
+  void refreshCheckoutReady(
+      ClinicServices ignoredServices,
+      Session ignoredSession,
+      TableView<AppointmentListRow> list,
+      Label feedback,
+      String patientQuery,
+      Long doctorId,
+      LocalDate date) {
+    refreshCheckoutReady(list, feedback, patientQuery, doctorId, date);
+  }
+
+  void refreshReceiptHistory(
+      TableView<Receipt> history,
+      Label preview,
+      String patientQuery,
+      Long doctorId,
+      LocalDate date,
+      Label feedback) {
+    long generation = ++receiptGeneration;
+    submit(
+        () -> services.billingService().receiptHistory(session, patientQuery, doctorId, date),
+        receipts -> {
+          if (generation == receiptGeneration) {
+            history.setItems(FXCollections.observableArrayList(receipts));
+            preview.setText("");
+          }
+        },
+        failure -> {
+          if (generation == receiptGeneration) {
+            UiComponents.showError(feedback, "Receipt history is temporarily unavailable");
+          }
+        });
+  }
+
+  void refreshReceiptHistory(
+      ClinicServices ignoredServices,
+      Session ignoredSession,
+      TableView<Receipt> history,
+      Label preview,
+      String patientQuery,
+      Long doctorId,
+      LocalDate date,
+      Label feedback) {
+    refreshReceiptHistory(history, preview, patientQuery, doctorId, date, feedback);
+  }
+
+  void refreshSchedule(
+      TableView<AppointmentListRow> appointmentList,
+      ReceptionistWorkspace.SelectionState selection,
+      Label feedback,
+      LocalDate date,
+      Long doctorId,
+      String patientQuery,
+      String status,
+      Label summary) {
+    long generation = ++scheduleGeneration;
+    submit(
+        () ->
+            services
+                .appointmentService()
+                .searchAppointmentRows(
+                    session, date, doctorId, patientQuery, selectedAppointmentStatus(status)),
+        appointments -> {
+          if (generation != scheduleGeneration) {
+            return;
+          }
+          appointmentList.setItems(FXCollections.observableArrayList(appointments));
+          selectAppointment(appointmentList, selection.appointmentId);
+          summary.setText(scheduleSummary(appointments));
+        },
+        failure -> {
+          if (generation == scheduleGeneration) {
+            UiComponents.showError(feedback, "Appointments are temporarily unavailable");
+          }
+        });
+  }
+
+  void refreshSchedule(
+      ClinicServices ignoredServices,
+      Session ignoredSession,
+      TableView<AppointmentListRow> appointmentList,
+      ReceptionistWorkspace.SelectionState selection,
+      Label feedback,
+      LocalDate date,
+      Long doctorId,
+      String patientQuery,
+      String status,
+      Label summary) {
+    refreshSchedule(
+        appointmentList, selection, feedback, date, doctorId, patientQuery, status, summary);
+  }
+
+  void refreshQueue(
+      TableView<AppointmentListRow> queue,
+      Label feedback,
+      LocalDate date,
+      Long doctorId,
+      String patientQuery,
+      String status,
+      Label summary) {
+    long generation = ++queueGeneration;
+    submit(
+        () -> {
+          List<AppointmentListRow> appointments = new ArrayList<>();
+          boolean includeWaiting =
+              status == null || QUEUE_ALL.equals(status) || QUEUE_WAITING.equals(status);
+          boolean includeChecked =
+              status == null || QUEUE_ALL.equals(status) || QUEUE_CHECKED_IN.equals(status);
+          if (includeWaiting) {
+            appointments.addAll(
+                services
+                    .appointmentService()
+                    .searchAppointmentRows(
+                        session, date, doctorId, patientQuery, AppointmentStatus.ACCEPTED));
+          }
+          if (includeChecked) {
+            appointments.addAll(
+                services
+                    .appointmentService()
+                    .searchAppointmentRows(
+                        session, date, doctorId, patientQuery, AppointmentStatus.CHECKED_IN));
+          }
+          appointments.sort(Comparator.comparing(row -> row.appointment().startsAt()));
+          return appointments;
+        },
+        appointments -> {
+          if (generation != queueGeneration) {
+            return;
+          }
+          queue.setItems(FXCollections.observableArrayList(appointments));
+          long waiting =
+              appointments.stream()
+                  .filter(row -> row.appointment().status() == AppointmentStatus.ACCEPTED)
+                  .count();
+          long checkedIn =
+              appointments.stream()
+                  .filter(row -> row.appointment().status() == AppointmentStatus.CHECKED_IN)
+                  .count();
+          summary.setText(
+              "Waiting: "
+                  + waiting
+                  + " | Checked in: "
+                  + checkedIn
+                  + " | Total: "
+                  + appointments.size());
+        },
+        failure -> {
+          if (generation == queueGeneration) {
+            UiComponents.showError(feedback, "Check-in queue is temporarily unavailable");
+          }
+        });
+  }
+
+  void refreshQueue(
+      ClinicServices ignoredServices,
+      Session ignoredSession,
+      TableView<AppointmentListRow> queue,
+      Label feedback,
+      LocalDate date,
+      Long doctorId,
+      String patientQuery,
+      String status,
+      Label summary) {
+    refreshQueue(queue, feedback, date, doctorId, patientQuery, status, summary);
+  }
+
+  private <T> void submit(
+      ClinicTaskRunner.ClinicTask<T> task,
+      java.util.function.Consumer<T> onSuccess,
+      java.util.function.Consumer<Throwable> onFailure) {
+    Consumer<T> guardedSuccess =
+        value -> {
+          if (!disposed) {
+            onSuccess.accept(value);
+          }
+        };
+    Consumer<Throwable> guardedFailure =
+        failure -> {
+          if (!disposed) {
+            onFailure.accept(failure);
+          }
+        };
+    try {
+      taskRunner.submit(task, guardedSuccess, guardedFailure);
+    } catch (RejectedExecutionException exception) {
+      guardedFailure.accept(exception);
+    }
+  }
+
+  record AppointmentDetails(Appointment appointment, Patient patient, String doctorName) {}
+
+  private static AppointmentStatus selectedAppointmentStatus(String value) {
+    if (value == null || ALL_STATUSES.equals(value)) {
+      return null;
+    }
+    return AppointmentStatus.valueOf(value.toUpperCase().replace(' ', '_'));
+  }
+
+  private static String scheduleSummary(List<AppointmentListRow> appointments) {
+    long pending = count(appointments, AppointmentStatus.PENDING);
+    long accepted = count(appointments, AppointmentStatus.ACCEPTED);
+    long declined = count(appointments, AppointmentStatus.DECLINED);
+    long checkedIn = count(appointments, AppointmentStatus.CHECKED_IN);
+    long completed = count(appointments, AppointmentStatus.COMPLETED);
+    return appointments.size()
+        + " appointment(s) | Pending: "
+        + pending
+        + " | Accepted: "
+        + accepted
+        + " | Declined: "
+        + declined
+        + " | Checked in: "
+        + checkedIn
+        + " | Completed: "
+        + completed;
+  }
+
+  private static long count(List<AppointmentListRow> appointments, AppointmentStatus status) {
+    return appointments.stream().filter(row -> row.appointment().status() == status).count();
+  }
+
+  private static void selectAppointment(TableView<AppointmentListRow> list, long appointmentId) {
+    if (appointmentId == 0) {
+      list.getSelectionModel().clearSelection();
+      return;
+    }
+    list.getItems().stream()
+        .filter(row -> row.appointment().id() == appointmentId)
+        .findFirst()
+        .ifPresent(list.getSelectionModel()::select);
+  }
+}

@@ -73,6 +73,21 @@ final class ReceptionistViewTest extends ApplicationTest {
     assertTrue(tableSource.contains("AppointmentListRow::doctorDisplayName"));
   }
 
+  @Test
+  void receptionistWorkspaceDelegatesBlockingRefreshesToTheDataLoader() throws Exception {
+    String source =
+        Files.readString(Path.of("src/main/java/nusynapxe/ui/ReceptionistWorkspace.java"));
+    assertTrue(source.contains("ReceptionistDataLoader"));
+    assertFalse(source.contains("services.appointmentService().searchAppointmentRows"));
+    assertFalse(source.contains("services.appointmentService().book"));
+    assertFalse(source.contains("services.appointmentService().cancel"));
+    assertFalse(source.contains("services.appointmentService().checkIn"));
+    assertFalse(source.contains("services.billingService().receiptHistory"));
+    assertFalse(source.contains("services.billingService().revenueReport"));
+    assertFalse(source.contains("services.billingService().dailyRevenue"));
+    assertFalse(source.contains("services.accountService().listDoctors"));
+  }
+
   private SqliteDatabase database;
   private ClinicServices services;
   private Account doctor;
