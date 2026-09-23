@@ -144,6 +144,9 @@ final class ReceptionistRevenueTest extends ReceptionistViewTestSupport {
         ReceptionistView.reportCsv(new RevenueReport(List.of(receipt, quoteOnly, newlineOnly)));
     assertTrue(csv.contains("\"Quote\"\"Only\""));
     assertTrue(csv.contains("\"Line\nBreak\""));
+    String multipleReceiptJson =
+        ReceptionistView.reportJson(new RevenueReport(List.of(receipt, quoteOnly)));
+    assertTrue(multipleReceiptJson.contains("},{\"receiptNumber\""));
     assertTrue(
         ReceptionistView.reportCsv(new RevenueReport(List.of())).contains("summary,0,0,0.00"));
     assertTrue(

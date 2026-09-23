@@ -104,10 +104,10 @@ final class ArchitectureTest {
 
   @Test
   void primaryViewsRemainCompositionShells() throws Exception {
-    assertLineLimit("src/main/java/nusynapxe/ui/ReceptionistView.java", 500);
-    assertLineLimit("src/main/java/nusynapxe/ui/DoctorView.java", 450);
-    assertLineLimit("src/main/java/nusynapxe/ui/ReceptionistWorkspace.java", 450);
-    assertLineLimit("src/main/java/nusynapxe/ui/DoctorWorkspace.java", 850);
+    assertLineLimit("src/main/java/nusynapxe/ui/ReceptionistView.java", SOURCE_LINE_LIMIT);
+    assertLineLimit("src/main/java/nusynapxe/ui/DoctorView.java", SOURCE_LINE_LIMIT);
+    assertLineLimit("src/main/java/nusynapxe/ui/ReceptionistWorkspace.java", SOURCE_LINE_LIMIT);
+    assertLineLimit("src/main/java/nusynapxe/ui/DoctorWorkspace.java", SOURCE_LINE_LIMIT);
   }
 
   @Test
