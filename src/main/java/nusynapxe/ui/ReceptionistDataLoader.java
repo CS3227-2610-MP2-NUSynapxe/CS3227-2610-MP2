@@ -149,7 +149,8 @@ final class ReceptionistDataLoader {
 
   private void loadAppointmentDetails(
       long appointmentId, Consumer<AppointmentDetails> onSuccess, Consumer<Throwable> onFailure) {
-    long generation = ++appointmentDetailsGeneration;
+    long generation = appointmentDetailsGeneration + 1;
+    appointmentDetailsGeneration = generation;
     submit(
         () -> {
           Appointment appointment = services.appointmentService().get(appointmentId);

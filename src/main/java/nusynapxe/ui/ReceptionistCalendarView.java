@@ -144,7 +144,8 @@ final class ReceptionistCalendarView {
     if (disposed) {
       return;
     }
-    long generation = ++doctorRefreshGeneration;
+    long generation = doctorRefreshGeneration + 1;
+    doctorRefreshGeneration = generation;
     long selectionGeneration = doctorSelectionGeneration;
     Account previousDoctor = doctor.getValue();
     submit(
