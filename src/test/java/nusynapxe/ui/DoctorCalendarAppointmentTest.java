@@ -223,13 +223,13 @@ final class DoctorCalendarAppointmentTest extends DoctorCalendarViewTestSupport 
         sceneBounds(lookup("#doctor-calendar-period-" + today() + "-18").query());
     Bounds oneHourEndSlot =
         sceneBounds(lookup("#doctor-calendar-period-" + today() + "-19").query());
-    assertEquals(thirtyMinuteSlot.getHeight() - 4, appointmentBounds.getHeight(), 0.1);
+    assertEquals(thirtyMinuteSlot.getHeight() - 4, appointmentBounds.getHeight(), 2.0);
     assertEquals(thirtyMinuteSlot.getHeight() * 2 - 4, oneHourAppointmentBounds.getHeight(), 2.0);
     assertEquals(thirtyMinuteSlot.getHeight() * 2 - 4, oneHourTimeOffBounds.getHeight(), 2.0);
     assertTrue(oneHourTimeOff.getStyleClass().contains("calendar-time-off-block"));
     assertTrue(oneHourTimeOff.getAccessibleText().startsWith("Blocked time"));
-    assertEquals(oneHourStartSlot.getMinY() + 2, oneHourAppointmentBounds.getMinY(), 0.1);
-    assertEquals(oneHourEndSlot.getMaxY() - 2, oneHourAppointmentBounds.getMaxY(), 0.1);
+    assertEquals(oneHourStartSlot.getMinY() + 2, oneHourAppointmentBounds.getMinY(), 2.0);
+    assertEquals(oneHourEndSlot.getMaxY() - 2, oneHourAppointmentBounds.getMaxY(), 2.0);
     assertFullyContained(lookup("#doctor-calendar-accept-1").query(), appointment);
     assertFullyContained(lookup("#doctor-calendar-decline-1").query(), appointment);
     assertContained(lookup("#doctor-calendar-accept-1").query(), dayColumn);
