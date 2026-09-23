@@ -1,5 +1,6 @@
 package nusynapxe.ui;
 
+import java.util.Arrays;
 import javafx.geometry.Insets;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
@@ -50,8 +51,16 @@ public final class LoginView {
     submit.setDefaultButton(true);
     submit.setOnAction(
         event -> {
+          String submittedUsername = username.getText();
+          char[] submittedPassword = password.getText().toCharArray();
           taskRunner.submit(
-              () -> authentication.login(username.getText(), password.getText().toCharArray()),
+              () -> {
+                try {
+                  return authentication.login(submittedUsername, submittedPassword);
+                } finally {
+                  Arrays.fill(submittedPassword, '\0');
+                }
+              },
               session -> {
                 if (session.isPresent()) {
                   feedback.setText("");
