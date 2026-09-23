@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
+import java.util.Optional;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
@@ -234,6 +235,81 @@ final class ClinicalServiceTest {
           service
               .historyForDoctor(fixture.doctorSession(), fixture.appointment().patientId())
               .size());
+    }
+  }
+
+  @Test
+  void prescriptionsForDoctorHistoryAndValidationGuards() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      Fixture fixture = fixture(database);
+      AppointmentRepository appointments = new AppointmentRepository(database);
+      ClinicalService service =
+          new ClinicalService(appointments, new ClinicalRecordRepository(database));
+
+      Appointment pending =
+          appointments.create(
+              fixture.appointment().patientId(),
+              fixture.doctorSession().accountId(),
+              LocalDateTime.of(2026, 9, 4, 9, 0),
+              LocalDateTime.of(2026, 9, 4, 9, 30),
+              AppointmentStatus.PENDING);
+
+      assertThrows(
+          ValidationException.class,
+          () ->
+              service.saveConsultation(
+                  fixture.doctorSession(), pending.id(), "Diagnosis", "Notes", "Review"));
+      assertThrows(
+          ValidationException.class,
+          () ->
+              service.addPrescription(
+                  fixture.doctorSession(),
+                  fixture.appointment().id(),
+                  "Med",
+                  "10mg",
+                  "Daily",
+                  "3d",
+                  "Inst"));
+      assertThrows(
+          ValidationException.class,
+          () ->
+              service.prescriptionsForDoctor(fixture.doctorSession(), fixture.appointment().id()));
+
+      service.saveConsultation(
+          fixture.doctorSession(), fixture.appointment().id(), "Diagnosis", "Notes", "Review");
+      service.addPrescription(
+          fixture.doctorSession(),
+          fixture.appointment().id(),
+          "Med",
+          "10mg",
+          "Daily",
+          "3d",
+          "Inst");
+
+      assertThrows(
+          AuthorizationException.class,
+          () ->
+              service.prescriptionsForDoctorHistory(
+                  fixture.otherDoctorSession(), fixture.appointment().id()));
+
+      appointments.updateStatus(fixture.appointment().id(), AppointmentStatus.COMPLETED);
+      assertEquals(
+          1,
+          service
+              .prescriptionsForDoctorHistory(
+                  fixture.otherDoctorSession(), fixture.appointment().id())
+              .size());
+
+      Appointment checkedOut =
+          appointments.create(
+              fixture.appointment().patientId(),
+              fixture.doctorSession().accountId(),
+              LocalDateTime.of(2026, 9, 5, 9, 0),
+              LocalDateTime.of(2026, 9, 5, 9, 30),
+              AppointmentStatus.CHECKED_OUT);
+      assertEquals(
+          Optional.empty(),
+          service.findForDoctorHistory(fixture.otherDoctorSession(), checkedOut.id()));
     }
   }
 
