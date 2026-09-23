@@ -51,6 +51,7 @@ final class ReceptionistAppointmentPanel {
   private final AppointmentDialog.TimeFields endsAt;
   private final DatePicker appointmentDate;
   private final SelectionState selection = new SelectionState();
+  private final SelectorLoadGeneration patientGenerations = new SelectorLoadGeneration();
   private final VBox view;
   private Runnable refreshCheckout =
       () -> {
@@ -138,7 +139,7 @@ final class ReceptionistAppointmentPanel {
 
   void refreshPatients(long patientId) {
     PatientDirectoryView.refreshAppointmentPatients(
-        services, session, patientSearch, feedback, patientId, taskRunner);
+        services, session, patientSearch, feedback, patientId, taskRunner, patientGenerations);
   }
 
   void refreshDoctors() {
