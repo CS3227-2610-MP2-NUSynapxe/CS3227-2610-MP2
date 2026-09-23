@@ -348,19 +348,17 @@ final class DoctorCalendarTimeOffTest extends DoctorCalendarViewTestSupport {
 
   private static final class CapturingTaskRunner implements ClinicTaskRunner {
     private final ClinicTaskRunner immediateRunner = ClinicTaskRunner.immediate();
-    private final List<PendingSubmission> submissions = new ArrayList<>();
+    private final List<Runnable> tasks = new ArrayList<>();
 
     @Override
-    @SuppressWarnings("unchecked")
     public <T> void submit(
         ClinicTask<T> task, Consumer<T> onSuccess, Consumer<Throwable> onFailure) {
       ClinicTaskRunner.requireCallbacks(task, onSuccess, onFailure);
-      submissions.add(new PendingSubmission(task, (Consumer<Object>) onSuccess, onFailure));
+      tasks.add(() -> immediateRunner.submit(task, onSuccess, onFailure));
     }
 
     void runFirst() {
-      PendingSubmission sub = submissions.removeFirst();
-      immediateRunner.submit(sub.task(), sub.success(), sub.failure());
+      tasks.removeFirst().run();
     }
 
     @Override
@@ -368,7 +366,4 @@ final class DoctorCalendarTimeOffTest extends DoctorCalendarViewTestSupport {
       immediateRunner.close();
     }
   }
-
-  private record PendingSubmission(
-      ClinicTaskRunner.ClinicTask<?> task, Consumer<Object> success, Consumer<Throwable> failure) {}
 }

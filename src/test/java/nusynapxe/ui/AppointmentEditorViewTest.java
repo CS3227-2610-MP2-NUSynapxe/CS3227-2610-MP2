@@ -272,15 +272,16 @@ final class AppointmentEditorViewTest extends ApplicationTest {
     private final List<PendingSubmission> submissions = new ArrayList<>();
 
     @Override
-    @SuppressWarnings("unchecked")
     public <T> void submit(
         ClinicTask<T> task, Consumer<T> onSuccess, Consumer<Throwable> onFailure) {
-      submissions.add(new PendingSubmission(task, (Consumer<Object>) onSuccess, onFailure));
+      ClinicTaskRunner.requireCallbacks(task, onSuccess, onFailure);
+      submissions.add(
+          new PendingSubmission(
+              () -> immediateRunner.submit(task, onSuccess, onFailure), onFailure));
     }
 
     void runSubmission(int index) {
-      PendingSubmission sub = submissions.get(index);
-      immediateRunner.submit(sub.task(), sub.success(), sub.failure());
+      submissions.get(index).execution().run();
     }
 
     void failSubmission(int index, Throwable t) {
@@ -293,6 +294,5 @@ final class AppointmentEditorViewTest extends ApplicationTest {
     }
   }
 
-  private record PendingSubmission(
-      ClinicTaskRunner.ClinicTask<?> task, Consumer<Object> success, Consumer<Throwable> failure) {}
+  private record PendingSubmission(Runnable execution, Consumer<Throwable> failure) {}
 }
