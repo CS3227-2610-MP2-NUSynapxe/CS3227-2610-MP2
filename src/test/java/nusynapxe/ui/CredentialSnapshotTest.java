@@ -26,12 +26,12 @@ import org.testfx.framework.junit5.ApplicationTest;
 
 final class CredentialSnapshotTest extends ApplicationTest {
   private final CapturingTaskRunner taskRunner = new CapturingTaskRunner();
-  private Stage stage;
+  private Scene scene;
 
   @Override
   public void start(Stage stage) {
-    this.stage = stage;
-    stage.setScene(new Scene(new StackPane(), 800, 600));
+    scene = styledScene(new StackPane());
+    stage.setScene(scene);
     stage.show();
   }
 
@@ -102,7 +102,13 @@ final class CredentialSnapshotTest extends ApplicationTest {
   }
 
   private void show(Parent view) {
-    interact(() -> stage.setScene(new Scene(view, 800, 600)));
+    interact(() -> scene.setRoot(view));
+  }
+
+  private static Scene styledScene(Parent root) {
+    Scene scene = new Scene(root, 1200, 760);
+    UiComponents.applyStylesheet(scene);
+    return scene;
   }
 
   private void setText(String selector, String value) {

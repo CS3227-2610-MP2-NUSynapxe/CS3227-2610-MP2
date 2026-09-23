@@ -22,13 +22,13 @@ import org.junit.jupiter.api.Test;
 import org.testfx.framework.junit5.ApplicationTest;
 
 final class PatientDirectoryLifecycleTest extends ApplicationTest {
+  private static final int INITIAL_SUBMISSION_COUNT = 1;
+
   private final CapturingTaskRunner taskRunner = new CapturingTaskRunner();
   private PatientDirectoryView directory;
-  private Stage stage;
 
   @Override
   public void start(Stage stage) throws Exception {
-    this.stage = stage;
     Patient patient = new Patient(42, "Pat", "Patient", "", "555-0100", "", "");
     PatientService patientService = mock(PatientService.class);
     when(patientService.searchAdministrative(
@@ -46,7 +46,9 @@ final class PatientDirectoryLifecycleTest extends ApplicationTest {
             null,
             java.time.Clock.systemUTC(),
             taskRunner);
-    stage.setScene(new Scene(new StackPane(directory.view()), 800, 600));
+    Scene scene = new Scene(new StackPane(directory.view()), 1200, 760);
+    UiComponents.applyStylesheet(scene);
+    stage.setScene(scene);
     stage.show();
   }
 
@@ -70,6 +72,7 @@ final class PatientDirectoryLifecycleTest extends ApplicationTest {
   }
 
   private static final class CapturingTaskRunner implements ClinicTaskRunner {
+    private final ClinicTaskRunner immediateRunner = ClinicTaskRunner.immediate();
     private final java.util.List<PendingSubmission> submissions = new java.util.ArrayList<>();
 
     @Override
@@ -78,18 +81,14 @@ final class PatientDirectoryLifecycleTest extends ApplicationTest {
         ClinicTask<T> task, Consumer<T> onSuccess, Consumer<Throwable> onFailure) {
       ClinicTaskRunner.requireCallbacks(task, onSuccess, onFailure);
       submissions.add(new PendingSubmission(task, value -> onSuccess.accept((T) value), onFailure));
-      if (submissions.size() == 1) {
-        try {
-          onSuccess.accept(task.run());
-        } catch (Exception exception) {
-          onFailure.accept(exception);
-        }
+      if (submissions.size() == INITIAL_SUBMISSION_COUNT) {
+        immediateRunner.submit(task, onSuccess, onFailure);
       }
     }
 
     @Override
     public void close() {
-      // The test runner does not own external resources.
+      immediateRunner.close();
     }
   }
 

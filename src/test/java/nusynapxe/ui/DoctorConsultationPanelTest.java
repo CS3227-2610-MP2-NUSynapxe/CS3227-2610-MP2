@@ -32,7 +32,9 @@ final class DoctorConsultationPanelTest extends ApplicationTest {
             taskRunner,
             () -> 42,
             () -> 1);
-    stage.setScene(new Scene(new StackPane(panel.prescriptionCardView()), 800, 600));
+    Scene scene = new Scene(new StackPane(panel.prescriptionCardView()), 1200, 760);
+    UiComponents.applyStylesheet(scene);
+    stage.setScene(scene);
     stage.show();
   }
 

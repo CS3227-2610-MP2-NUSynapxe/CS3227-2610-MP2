@@ -84,6 +84,14 @@ abstract class DoctorCalendarViewTestSupport extends ApplicationTest {
 
   @AfterEach
   void closeDatabase() throws SQLException {
+    if (lookup("#doctor-workspace").tryQuery().isPresent()) {
+      interact(
+          () -> {
+            Stage stage = (Stage) lookup("#doctor-workspace").query().getScene().getWindow();
+            stage.setWidth(1200);
+            stage.setHeight(760);
+          });
+    }
     if (database != null) {
       database.close();
     }
