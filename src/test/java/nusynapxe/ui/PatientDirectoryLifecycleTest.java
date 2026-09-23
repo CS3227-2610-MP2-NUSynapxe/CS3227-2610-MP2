@@ -88,25 +88,7 @@ final class PatientDirectoryLifecycleTest extends ApplicationTest {
   @Test
   void registrationSubmissionDisablesWorkflowUntilQueuedRequestFinishes() {
     interact(() -> lookup("#test-patient-open-register").queryAs(Button.class).fire());
-    interact(
-        () -> {
-          lookup("#test-register-nric-fin")
-              .queryAs(javafx.scene.control.TextField.class)
-              .setText("S1234567A");
-          lookup("#test-register-first-name")
-              .queryAs(javafx.scene.control.TextField.class)
-              .setText("Jane");
-          lookup("#test-register-last-name")
-              .queryAs(javafx.scene.control.TextField.class)
-              .setText("Doe");
-          lookup("#test-register-date-of-birth")
-              .queryAs(javafx.scene.control.DatePicker.class)
-              .setValue(java.time.LocalDate.of(1995, 5, 20));
-          lookup("#test-register-phone")
-              .queryAs(javafx.scene.control.TextField.class)
-              .setText("91234567");
-          lookup("#test-patient-register").queryAs(Button.class).fire();
-        });
+    interact(() -> lookup("#test-patient-register").queryAs(Button.class).fire());
 
     assertTrue(lookup("#test-patient-register").queryAs(Button.class).isDisable());
     assertTrue(lookup("#test-patient-register-cancel").queryAs(Button.class).isDisable());
