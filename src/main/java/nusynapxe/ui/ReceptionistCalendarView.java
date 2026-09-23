@@ -55,6 +55,8 @@ final class ReceptionistCalendarView {
   private LocalDate scheduleAnchor;
   private CalendarScheduleList scheduleList;
   private long refreshGeneration;
+  private long doctorRefreshGeneration;
+  private long doctorSelectionGeneration;
   private boolean disposed;
 
   ReceptionistCalendarView(
@@ -120,7 +122,13 @@ final class ReceptionistCalendarView {
             root);
     page.setId("reception-calendar-page");
     VBox.setVgrow(root, Priority.ALWAYS);
-    doctor.valueProperty().addListener((observable, previousValue, selected) -> refresh());
+    doctor
+        .valueProperty()
+        .addListener(
+            (observable, previousValue, selected) -> {
+              doctorSelectionGeneration++;
+              refresh();
+            });
     from.setOnAction(event -> refresh());
     to.setOnAction(event -> refresh());
     applyModeVisibility();
@@ -136,20 +144,26 @@ final class ReceptionistCalendarView {
     if (disposed) {
       return;
     }
+    long generation = ++doctorRefreshGeneration;
+    long selectionGeneration = doctorSelectionGeneration;
     Account previousDoctor = doctor.getValue();
     submit(
         () -> services.accountService().listDoctors(session),
         doctors -> {
-          if (disposed) {
+          if (disposed || generation != doctorRefreshGeneration) {
             return;
           }
+          boolean selectionChanged = selectionGeneration != doctorSelectionGeneration;
+          Account currentDoctor = doctor.getValue();
+          Account doctorToRestore = selectionChanged ? currentDoctor : previousDoctor;
+          boolean selectFirst = !selectionChanged && previousDoctor == null;
           doctor.setItems(doctors);
-          if (previousDoctor != null) {
+          if (doctorToRestore != null) {
             doctor.getItems().stream()
-                .filter(account -> account.id() == previousDoctor.id())
+                .filter(account -> account.id() == doctorToRestore.id())
                 .findFirst()
                 .ifPresent(doctor::select);
-          } else if (!doctor.getItems().isEmpty()) {
+          } else if (selectFirst && !doctor.getItems().isEmpty()) {
             doctor.select(doctor.getItems().getFirst());
           }
         },
@@ -231,6 +245,7 @@ final class ReceptionistCalendarView {
   void dispose() {
     disposed = true;
     refreshGeneration++;
+    doctorRefreshGeneration++;
     disposeScheduleList();
   }
 
