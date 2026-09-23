@@ -39,7 +39,6 @@ final class CalendarTimeGrid extends BorderPane {
 
   private final List<LocalDate> dates;
   private final DoctorCalendarWeek data;
-  private final Clock clock;
   private final CalendarTimeGridLayout.Layout layout;
   private final DisplayProfile profile;
 
@@ -69,7 +68,6 @@ final class CalendarTimeGrid extends BorderPane {
     }
     this.dates = List.copyOf(dates);
     this.data = data;
-    this.clock = clock;
     this.profile = Objects.requireNonNull(profile, "profile");
     Objects.requireNonNull(handlers, "handlers");
     setId("doctor-calendar-time-grid");

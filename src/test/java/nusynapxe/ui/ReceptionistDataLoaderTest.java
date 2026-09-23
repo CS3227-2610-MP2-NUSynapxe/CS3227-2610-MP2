@@ -7,6 +7,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -15,7 +17,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import javafx.application.Platform;
 import javafx.scene.control.Label;
+import javafx.scene.control.TableView;
 import nusynapxe.domain.Account;
+import nusynapxe.domain.Appointment;
+import nusynapxe.domain.AppointmentListRow;
+import nusynapxe.domain.AppointmentStatus;
+import nusynapxe.domain.Receipt;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
 import nusynapxe.service.ClinicServices;
@@ -88,10 +95,128 @@ final class ReceptionistDataLoaderTest {
     assertNull(onFx(filterDoctor::getValue));
   }
 
-  private void deliver(int index, List<Account> doctors) throws Exception {
+  @Test
+  void selectorRefreshShowsOnlyCurrentFailuresAndSupportsEmptyNoSelectionResults()
+      throws Exception {
+    SearchSuggestionField<Account> doctor = newField("doctor-failure");
+    Label feedback = onFx(Label::new);
+
+    loader.refreshDoctors(doctor, feedback, true);
+    fail(0);
+    assertEquals("Doctors are temporarily unavailable", onFx(feedback::getText));
+
     onFx(
         () -> {
-          submissions.get(index).success().accept(doctors);
+          feedback.setText("");
+          return null;
+        });
+    loader.refreshDoctors(doctor, feedback, true);
+    loader.refreshDoctors(doctor, feedback, true);
+    fail(1);
+    assertEquals("", onFx(feedback::getText));
+    deliver(2, List.of());
+    assertTrue(onFx(doctor::getItems).isEmpty());
+    assertNull(onFx(doctor::getValue));
+  }
+
+  @Test
+  void appointmentAndReceiptRefreshesIgnoreStaleResultsAndReportCurrentFailures() throws Exception {
+    TableView<AppointmentListRow> checkout = onFx(TableView::new);
+    TableView<Receipt> history = onFx(TableView::new);
+    Label checkoutFeedback = onFx(Label::new);
+    Label receiptFeedback = onFx(Label::new);
+    Label preview = onFx(Label::new);
+    Appointment appointment =
+        new Appointment(
+            7,
+            2,
+            3,
+            LocalDateTime.of(2026, 9, 23, 10, 0),
+            LocalDateTime.of(2026, 9, 23, 10, 30),
+            AppointmentStatus.COMPLETED);
+    AppointmentListRow row = new AppointmentListRow(appointment, "Patient", "Doctor");
+
+    loader.refreshCheckoutReady(checkout, checkoutFeedback, "", null, LocalDate.of(2026, 9, 23));
+    loader.refreshCheckoutReady(checkout, checkoutFeedback, "", null, LocalDate.of(2026, 9, 23));
+    deliver(0, List.of(row));
+    assertTrue(onFx(checkout::getItems).isEmpty());
+    deliver(1, List.of(row));
+    assertEquals(List.of(row), onFx(checkout::getItems));
+    fail(0);
+    assertEquals("", onFx(checkoutFeedback::getText));
+    fail(1);
+    assertEquals(
+        "Checkout appointments are temporarily unavailable", onFx(checkoutFeedback::getText));
+
+    loader.refreshReceiptHistory(
+        history, preview, "", null, LocalDate.of(2026, 9, 23), receiptFeedback);
+    loader.refreshReceiptHistory(
+        history, preview, "", null, LocalDate.of(2026, 9, 23), receiptFeedback);
+    deliver(2, List.of());
+    deliver(3, List.of());
+    fail(2);
+    assertEquals("", onFx(receiptFeedback::getText));
+    fail(3);
+    assertEquals("Receipt history is temporarily unavailable", onFx(receiptFeedback::getText));
+  }
+
+  @Test
+  void scheduleRefreshUpdatesSummaryAndClearsAnEmptySelection() throws Exception {
+    TableView<AppointmentListRow> schedule = onFx(TableView::new);
+    Label feedback = onFx(Label::new);
+    Label summary = onFx(Label::new);
+    ReceptionistAppointmentPanel.SelectionState selection =
+        new ReceptionistAppointmentPanel.SelectionState();
+    selection.appointmentId = 0;
+    AppointmentListRow row =
+        new AppointmentListRow(
+            new Appointment(
+                8,
+                2,
+                3,
+                LocalDateTime.of(2026, 9, 23, 11, 0),
+                LocalDateTime.of(2026, 9, 23, 11, 30),
+                AppointmentStatus.ACCEPTED),
+            "Patient",
+            "Doctor");
+
+    loader.refreshSchedule(
+        schedule,
+        selection,
+        feedback,
+        LocalDate.of(2026, 9, 23),
+        null,
+        "",
+        "All statuses",
+        summary);
+    loader.refreshSchedule(
+        schedule,
+        selection,
+        feedback,
+        LocalDate.of(2026, 9, 23),
+        null,
+        "",
+        "All statuses",
+        summary);
+    deliver(0, List.of(row));
+    assertTrue(onFx(schedule::getItems).isEmpty());
+    deliver(1, List.of(row));
+    assertEquals(List.of(row), onFx(schedule::getItems));
+    assertTrue(onFx(summary::getText).contains("Accepted: 1"));
+  }
+
+  private void deliver(int index, Object value) throws Exception {
+    onFx(
+        () -> {
+          submissions.get(index).success().accept(value);
+          return null;
+        });
+  }
+
+  private void fail(int index) throws Exception {
+    onFx(
+        () -> {
+          submissions.get(index).failure().accept(new IllegalStateException("load failed"));
           return null;
         });
   }
@@ -106,7 +231,7 @@ final class ReceptionistDataLoaderTest {
             new SearchSuggestionField<>(id, "Doctor", Account::displayName, Account::displayName));
   }
 
-  private static <T> T onFx(FxOperation<T> operation) throws Exception {
+  private static <T> T onFx(FxOperation<T> operation) {
     if (Platform.isFxApplicationThread()) {
       return operation.run();
     }
@@ -117,13 +242,18 @@ final class ReceptionistDataLoaderTest {
         () -> {
           try {
             result.set(operation.run());
-          } catch (Throwable exception) {
+          } catch (AssertionError exception) {
             failure.set(exception);
           } finally {
             completed.countDown();
           }
         });
-    assertTrue(completed.await(5, TimeUnit.SECONDS));
+    try {
+      assertTrue(completed.await(5, TimeUnit.SECONDS));
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      throw new AssertionError("JavaFX operation was interrupted", exception);
+    }
     if (failure.get() != null) {
       throw new AssertionError("JavaFX operation failed", failure.get());
     }
@@ -132,7 +262,7 @@ final class ReceptionistDataLoaderTest {
 
   @FunctionalInterface
   private interface FxOperation<T> {
-    T run() throws Exception;
+    T run();
   }
 
   private record PendingSubmission(Consumer<Object> success, Consumer<Throwable> failure) {}

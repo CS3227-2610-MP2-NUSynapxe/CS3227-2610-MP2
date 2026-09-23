@@ -9,6 +9,7 @@ import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 final class ArchitectureTest {
+  private static final int SOURCE_LINE_LIMIT = 500;
   private static final String DOMAIN = "nusynapxe.domain..";
   private static final String PERSISTENCE = "nusynapxe.persistence..";
   private static final String SERVICE = "nusynapxe.service..";
@@ -119,10 +121,10 @@ final class ArchitectureTest {
               path -> {
                 try {
                   long lineCount = Files.readAllLines(path).size();
-                  if (lineCount > 500) {
+                  if (lineCount > SOURCE_LINE_LIMIT) {
                     oversized.add(path + " (" + lineCount + " lines)");
                   }
-                } catch (Exception exception) {
+                } catch (IOException exception) {
                   throw new IllegalStateException("Could not inspect " + path, exception);
                 }
               });

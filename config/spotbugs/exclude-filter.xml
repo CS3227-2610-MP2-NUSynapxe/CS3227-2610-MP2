@@ -23,12 +23,12 @@
     </Match>
     <!-- Dynamic schema identifiers are read from SQLite metadata and quoted before use. -->
     <Match>
-        <Class name="nusynapxe.persistence.PatientRepository"/>
+        <Class name="nusynapxe.persistence.PatientQueryRepository"/>
         <Method name="count"/>
         <Bug pattern="SQL_INJECTION_JDBC"/>
     </Match>
     <Match>
-        <Class name="nusynapxe.persistence.PatientRepository"/>
+        <Class name="nusynapxe.persistence.PatientQueryRepository"/>
         <Method name="countPatientForeignKeys"/>
         <Bug pattern="SQL_INJECTION_JDBC"/>
     </Match>

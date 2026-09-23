@@ -24,8 +24,6 @@ import nusynapxe.service.ValidationException;
 
 /** Builds the shared administrative patient directory for Doctors and Receptionists. */
 final class PatientDirectoryView {
-  private static final String EMAIL_LABEL = "Email";
-
   private final ClinicServices services;
   private final Session session;
   private final String prefix;

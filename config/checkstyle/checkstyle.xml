@@ -11,6 +11,9 @@
         <module name="NeedBraces"/>
         <module name="OneTopLevelClass"/>
         <module name="UnusedImports"/>
-        <module name="WhitespaceAround"/>
+        <module name="WhitespaceAround">
+            <property name="allowEmptyLambdas" value="true"/>
+            <property name="allowEmptyTypes" value="true"/>
+        </module>
     </module>
 </module>

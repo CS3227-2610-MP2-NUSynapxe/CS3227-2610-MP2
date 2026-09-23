@@ -4,9 +4,9 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -26,6 +26,30 @@ final class AppointmentQueryRepository {
   private static final String APPOINTMENT_COLUMNS =
       "id, patient_id, doctor_id, starts_at, ends_at, " + STATUS_COLUMN;
   private static final String TIME_OFF_COLUMNS = "id, doctor_id, starts_at, ends_at";
+  private static final String APPOINTMENT_SEARCH_SQL =
+      "SELECT a.id, a.patient_id, a.doctor_id, a.starts_at, a.ends_at, a.status "
+          + "FROM appointments a JOIN patients p ON p.id = a.patient_id "
+          + "WHERE (? IS NULL OR a.starts_at LIKE ?) "
+          + "AND (? IS NULL OR a.doctor_id = ?) "
+          + "AND (? IS NULL OR a.status = ?) "
+          + "AND (? IS NULL OR (CAST(p.id AS TEXT) LIKE ? "
+          + "OR LOWER(p.first_name) LIKE ? OR LOWER(p.last_name) LIKE ? "
+          + "OR LOWER(p.email) LIKE ?)) "
+          + "ORDER BY a.starts_at, a.id";
+  private static final String APPOINTMENT_LIST_ROW_SEARCH_SQL =
+      "SELECT a.id, a.patient_id, a.doctor_id, a.starts_at, a.ends_at, a.status, "
+          + "p.first_name || ' ' || p.last_name AS patient_display_name, "
+          + "u.display_name AS doctor_display_name "
+          + "FROM appointments a "
+          + "JOIN patients p ON p.id = a.patient_id "
+          + "JOIN users u ON u.id = a.doctor_id "
+          + "WHERE (? IS NULL OR a.starts_at LIKE ?) "
+          + "AND (? IS NULL OR a.doctor_id = ?) "
+          + "AND (? IS NULL OR a.status = ?) "
+          + "AND (? IS NULL OR (CAST(p.id AS TEXT) LIKE ? "
+          + "OR LOWER(p.first_name) LIKE ? OR LOWER(p.last_name) LIKE ? "
+          + "OR LOWER(p.email) LIKE ?)) "
+          + "ORDER BY a.starts_at, a.id";
   private final SqliteDatabase database;
 
   AppointmentQueryRepository(SqliteDatabase database) {
@@ -99,9 +123,12 @@ final class AppointmentQueryRepository {
       SqliteQueries.bindTimestamp(statement, 2, anchor);
       int parameter = 3;
       if (cursor != null) {
-        SqliteQueries.bindTimestamp(statement, parameter++, cursor.startsAt());
-        SqliteQueries.bindTimestamp(statement, parameter++, cursor.startsAt());
-        statement.setLong(parameter++, cursor.appointmentId());
+        SqliteQueries.bindTimestamp(statement, parameter, cursor.startsAt());
+        parameter++;
+        SqliteQueries.bindTimestamp(statement, parameter, cursor.startsAt());
+        parameter++;
+        statement.setLong(parameter, cursor.appointmentId());
+        parameter++;
       }
       statement.setInt(parameter, pageSize + 1);
 
@@ -122,15 +149,9 @@ final class AppointmentQueryRepository {
   List<Appointment> search(
       LocalDate date, Long doctorId, String patientQuery, AppointmentStatus status)
       throws SQLException {
-    StringBuilder sql =
-        new StringBuilder(
-            "SELECT a.id, a.patient_id, a.doctor_id, a.starts_at, a.ends_at, a.status "
-                + "FROM appointments a JOIN patients p ON p.id = a.patient_id WHERE 1 = 1");
-    List<Object> parameters = new ArrayList<>();
-    appendFilters(sql, parameters, date, doctorId, patientQuery, status);
-    sql.append(" ORDER BY a.starts_at, a.id");
-    try (PreparedStatement statement = database.connection().prepareStatement(sql.toString())) {
-      bindSearchParameters(statement, parameters);
+    try (PreparedStatement statement =
+        database.connection().prepareStatement(APPOINTMENT_SEARCH_SQL)) {
+      bindSearchParameters(statement, date, doctorId, patientQuery, status);
       return SqliteQueries.readAll(statement, AppointmentQueryRepository::readAppointment);
     }
   }
@@ -138,19 +159,9 @@ final class AppointmentQueryRepository {
   List<AppointmentListRow> searchListRows(
       LocalDate date, Long doctorId, String patientQuery, AppointmentStatus status)
       throws SQLException {
-    StringBuilder sql =
-        new StringBuilder(
-            "SELECT a.id, a.patient_id, a.doctor_id, a.starts_at, a.ends_at, a.status, "
-                + "p.first_name || ' ' || p.last_name AS patient_display_name, "
-                + "u.display_name AS doctor_display_name "
-                + "FROM appointments a "
-                + "JOIN patients p ON p.id = a.patient_id "
-                + "JOIN users u ON u.id = a.doctor_id WHERE 1 = 1");
-    List<Object> parameters = new ArrayList<>();
-    appendFilters(sql, parameters, date, doctorId, patientQuery, status);
-    sql.append(" ORDER BY a.starts_at, a.id");
-    try (PreparedStatement statement = database.connection().prepareStatement(sql.toString())) {
-      bindSearchParameters(statement, parameters);
+    try (PreparedStatement statement =
+        database.connection().prepareStatement(APPOINTMENT_LIST_ROW_SEARCH_SQL)) {
+      bindSearchParameters(statement, date, doctorId, patientQuery, status);
       return SqliteQueries.readAll(statement, AppointmentQueryRepository::readAppointmentListRow);
     }
   }
@@ -185,46 +196,47 @@ final class AppointmentQueryRepository {
     }
   }
 
-  private static void appendFilters(
-      StringBuilder sql,
-      List<Object> parameters,
+  private static void bindSearchParameters(
+      PreparedStatement statement,
       LocalDate date,
       Long doctorId,
       String patientQuery,
-      AppointmentStatus status) {
-    if (date != null) {
-      sql.append(" AND a.starts_at LIKE ?");
-      parameters.add(date + "%");
-    }
-    if (doctorId != null) {
-      sql.append(" AND a.doctor_id = ?");
-      parameters.add(doctorId);
-    }
-    if (status != null) {
-      sql.append(" AND a.status = ?");
-      parameters.add(status.name());
-    }
-    if (patientQuery != null && !patientQuery.trim().isEmpty()) {
-      sql.append(
-          " AND (CAST(p.id AS TEXT) LIKE ? OR LOWER(p.first_name) LIKE ? "
-              + "OR LOWER(p.last_name) LIKE ? OR LOWER(p.email) LIKE ?)");
-      String pattern = "%" + patientQuery.trim().toLowerCase(Locale.ROOT) + "%";
-      parameters.add(pattern);
-      parameters.add(pattern);
-      parameters.add(pattern);
-      parameters.add(pattern);
+      AppointmentStatus status)
+      throws SQLException {
+    String datePattern = date == null ? null : date + "%";
+    bindNullableString(statement, 1, datePattern);
+    bindNullableString(statement, 2, datePattern);
+    bindNullableLong(statement, 3, doctorId);
+    bindNullableLong(statement, 4, doctorId);
+    String statusValue = status == null ? null : status.name();
+    bindNullableString(statement, 5, statusValue);
+    bindNullableString(statement, 6, statusValue);
+
+    String normalizedPatientQuery = patientQuery == null ? "" : patientQuery.trim();
+    String patientPattern =
+        normalizedPatientQuery.isEmpty()
+            ? null
+            : "%" + normalizedPatientQuery.toLowerCase(Locale.ROOT) + "%";
+    for (int parameter = 7; parameter <= 11; parameter++) {
+      bindNullableString(statement, parameter, patientPattern);
     }
   }
 
-  private static void bindSearchParameters(PreparedStatement statement, List<Object> parameters)
+  private static void bindNullableString(PreparedStatement statement, int parameter, String value)
       throws SQLException {
-    for (int index = 0; index < parameters.size(); index++) {
-      Object parameter = parameters.get(index);
-      if (parameter instanceof Long value) {
-        statement.setLong(index + 1, value);
-      } else {
-        statement.setString(index + 1, parameter.toString());
-      }
+    if (value == null) {
+      statement.setNull(parameter, Types.VARCHAR);
+    } else {
+      statement.setString(parameter, value);
+    }
+  }
+
+  private static void bindNullableLong(PreparedStatement statement, int parameter, Long value)
+      throws SQLException {
+    if (value == null) {
+      statement.setNull(parameter, Types.BIGINT);
+    } else {
+      statement.setLong(parameter, value);
     }
   }
 

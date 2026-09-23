@@ -103,8 +103,7 @@ final class DoctorCalendarToolbar {
     toolbar.setId("doctor-calendar-toolbar");
     toolbar.getStyleClass().add("calendar-toolbar");
     Controls controls =
-        new Controls(
-            toolbar, navigationGroup, actionGroup, trailingGroup, mainRow, actionsRow, refresh);
+        new Controls(toolbar, navigationGroup, actionGroup, trailingGroup, mainRow, actionsRow);
     toolbar.widthProperty().addListener((observable, oldWidth, newWidth) -> updateLayout(controls));
     Label title = UiComponents.pageTitle("Calendar");
     Label supporting =
@@ -117,7 +116,7 @@ final class DoctorCalendarToolbar {
     page.getStyleClass().add("calendar-page");
     page.setPadding(new Insets(4, 0, 0, 0));
     page.setTop(heading);
-    controls.page = page;
+    controls.pageView = page;
     updateLayout(controls);
     return controls;
   }
@@ -153,8 +152,7 @@ final class DoctorCalendarToolbar {
     private final HBox trailingGroup;
     private final HBox mainRow;
     private final HBox actionsRow;
-    private final Runnable refresh;
-    private BorderPane page;
+    private BorderPane pageView;
 
     private Controls(
         VBox toolbar,
@@ -162,19 +160,17 @@ final class DoctorCalendarToolbar {
         HBox actionGroup,
         HBox trailingGroup,
         HBox mainRow,
-        HBox actionsRow,
-        Runnable refresh) {
+        HBox actionsRow) {
       this.toolbar = toolbar;
       this.navigationGroup = navigationGroup;
       this.actionGroup = actionGroup;
       this.trailingGroup = trailingGroup;
       this.mainRow = mainRow;
       this.actionsRow = actionsRow;
-      this.refresh = refresh;
     }
 
     BorderPane page() {
-      return page;
+      return pageView;
     }
   }
 }

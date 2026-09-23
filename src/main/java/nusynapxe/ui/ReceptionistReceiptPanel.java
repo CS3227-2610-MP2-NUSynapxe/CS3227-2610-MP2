@@ -25,7 +25,7 @@ final class ReceptionistReceiptPanel {
   private final TextField receiptPatient;
   private final TableView<Receipt> receiptHistoryList;
   private final Label receiptPreview;
-  private final VBox content;
+  private final VBox contentView;
 
   ReceptionistReceiptPanel(ReceptionistDataLoader dataLoader, Label workspaceFeedback) {
     this.dataLoader = dataLoader;
@@ -48,12 +48,12 @@ final class ReceptionistReceiptPanel {
                 showReceipt(selected);
               }
             });
-    content = buildContent(receiptSearch);
+    contentView = buildContent(receiptSearch);
   }
 
   /** Returns the Receipts subtab content. */
   VBox content() {
-    return content;
+    return contentView;
   }
 
   /** Starts an asynchronous receipt-history refresh with the current filters. */

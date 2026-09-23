@@ -130,36 +130,45 @@ final class PatientDirectoryFormView {
     grid.setVgap(8);
     int row = 0;
     if (includePatientId) {
-      grid.addRow(row++, new Label("Patient ID"), form.patientId());
+      grid.addRow(row, new Label("Patient ID"), form.patientId());
+      row++;
     }
     grid.addRow(
-        row++,
+        row,
         requiredLabel("Identity type"),
         form.identityType(),
         requiredLabel("Identity number"),
         form.identityNumber());
-    grid.addRow(row++, requiredLabel("Issuing country"), form.issuingCountry());
+    row++;
+    grid.addRow(row, requiredLabel("Issuing country"), form.issuingCountry());
+    row++;
     grid.addRow(
-        row++,
+        row,
         requiredLabel("First name"),
         form.firstName(),
         requiredLabel("Last name"),
         form.lastName());
+    row++;
     HBox dateOfBirthControls = new HBox(6, form.birthDay(), form.birthMonth(), form.birthYear());
     grid.addRow(
-        row++, requiredLabel("Date of birth"), dateOfBirthControls, new Label("Age"), form.age());
-    grid.addRow(row++, requiredLabel("Sex"), form.sex());
+        row, requiredLabel("Date of birth"), dateOfBirthControls, new Label("Age"), form.age());
+    row++;
+    grid.addRow(row, requiredLabel("Sex"), form.sex());
+    row++;
     Label phonePlus = new Label("+");
     phonePlus.setId(form.phoneCountryCode().getId().replace("country-code", "plus"));
     HBox phoneCountryCode = new HBox(4, phonePlus, form.phoneCountryCode());
     grid.addRow(
-        row++,
+        row,
         requiredLabel("Phone country code"),
         phoneCountryCode,
         requiredLabel("Phone number"),
         form.phoneNumber());
-    grid.addRow(row++, requiredLabel(EMAIL_LABEL), form.email());
-    grid.addRow(row++, requiredLabel("Address"), form.address());
+    row++;
+    grid.addRow(row, requiredLabel(EMAIL_LABEL), form.email());
+    row++;
+    grid.addRow(row, requiredLabel("Address"), form.address());
+    row++;
     grid.addRow(
         row, new Label("Height (cm)"), form.height(), new Label("Weight (kg)"), form.weight());
     return grid;

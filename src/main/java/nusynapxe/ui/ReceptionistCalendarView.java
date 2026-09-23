@@ -334,12 +334,6 @@ final class ReceptionistCalendarView {
             .getReceptionistSchedulePage(session, doctorId, anchor, cursor, pageSize);
   }
 
-  private List<LocalDate> selectedDates() {
-    LocalDate start = from.getValue();
-    LocalDate end = to.getValue();
-    return selectedDates(validateRange(start, end));
-  }
-
   private List<LocalDate> selectedDates(CalendarRangeSnapshot range) {
     LocalDate start = range.from();
     LocalDate end = range.to();
