@@ -20,7 +20,13 @@ public final class DemoDataSeeder {
     throw new AssertionError("Utility class");
   }
 
-  /** Summary of the records created by one successful seed operation. */
+  /**
+   * Summary of the records created by one successful seed operation.
+   *
+   * @param accounts number of accounts created
+   * @param patients number of patients created
+   * @param appointments number of appointments created
+   */
   public record SeedSummary(int accounts, int patients, int appointments) {
     /** Validates that seed counts are non-negative. */
     public SeedSummary {
@@ -30,7 +36,12 @@ public final class DemoDataSeeder {
     }
   }
 
-  /** Resets a database file and recreates its empty, current schema. */
+  /**
+   * Resets a database file and recreates its empty, current schema.
+   *
+   * @param requestedPath requested database path
+   * @throws SQLException if the database files cannot be removed or opened
+   */
   public static void reset(Path requestedPath) throws SQLException {
     Path databasePath = databasePath(requestedPath);
     List<Path> databaseFiles = databaseFiles(databasePath);
@@ -47,7 +58,13 @@ public final class DemoDataSeeder {
     }
   }
 
-  /** Seeds a fresh database with staff, patients, calendar data, appointments, and history. */
+  /**
+   * Seeds a fresh database with staff, patients, calendar data, appointments, and history.
+   *
+   * @param requestedPath requested database path
+   * @return counts of records created by the seed operation
+   * @throws SQLException if the database cannot be opened or populated
+   */
   public static SeedSummary seed(Path requestedPath) throws SQLException {
     Path databasePath = databasePath(requestedPath);
     try (SqliteDatabase database = new SqliteDatabase(databasePath)) {

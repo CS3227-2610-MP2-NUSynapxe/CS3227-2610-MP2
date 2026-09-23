@@ -44,7 +44,16 @@ public final class SystemAdminView {
     return create(accounts, session, onLogout, ClinicTaskRunner.immediate());
   }
 
-  /** Creates the account workspace with serialized background database work. */
+  /**
+   * Creates the account workspace with serialized background database work.
+   *
+   * @param accounts service used to list and create staff accounts
+   * @param session authenticated System Admin session
+   * @param onLogout callback invoked when the administrator logs out
+   * @param taskRunner runner used for account mutations
+   * @return root node for the System Admin workspace
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public static Parent create(
       AccountService accounts, Session session, Runnable onLogout, ClinicTaskRunner taskRunner) {
     TextField username = new TextField();

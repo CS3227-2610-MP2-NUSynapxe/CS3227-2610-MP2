@@ -48,7 +48,15 @@ public final class ApplicationRouter {
     this(stage, database, clock, ClinicTaskRunner.immediate());
   }
 
-  /** Creates a router with an application-owned task runner. */
+  /**
+   * Creates a router with an application-owned task runner.
+   *
+   * @param stage JavaFX stage to control
+   * @param database opened application database
+   * @param clock clock used for clinic-local dates
+   * @param taskRunner runner used for blocking work
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public ApplicationRouter(
       Stage stage, SqliteDatabase database, Clock clock, ClinicTaskRunner taskRunner) {
     this(

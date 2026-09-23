@@ -39,6 +39,14 @@ public final class BillingService {
     this(payments, appointments, ClinicClock.system());
   }
 
+  /**
+   * Creates billing service with an injectable clock.
+   *
+   * @param payments repository used to persist payments
+   * @param appointments service used to validate appointment state
+   * @param clock clock used for payment timestamps
+   * @throws NullPointerException if a dependency is {@code null}
+   */
   public BillingService(PaymentRepository payments, AppointmentService appointments, Clock clock) {
     this.payments = Objects.requireNonNull(payments, "payments");
     this.appointments = Objects.requireNonNull(appointments, "appointments");

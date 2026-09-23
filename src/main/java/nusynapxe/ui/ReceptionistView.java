@@ -15,7 +15,15 @@ public final class ReceptionistView {
     throw new AssertionError("Utility class");
   }
 
-  /** Creates the Receptionist workspace using deterministic compatibility defaults. */
+  /**
+   * Creates the Receptionist workspace using deterministic compatibility defaults.
+   *
+   * @param services services used by the workspace
+   * @param session authenticated Receptionist session
+   * @param onLogout callback invoked when the Receptionist logs out
+   * @return root node for the Receptionist workspace
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public static Parent create(ClinicServices services, Session session, Runnable onLogout) {
     return create(services, session, onLogout, ClinicClock.system(), ClinicTaskRunner.immediate());
   }

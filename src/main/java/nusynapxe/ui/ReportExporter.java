@@ -20,7 +20,14 @@ public final class ReportExporter {
     throw new AssertionError("Utility class");
   }
 
-  /** Exports a report through the JavaFX file chooser. */
+  /**
+   * Exports a report through the JavaFX file chooser.
+   *
+   * @param report report to export
+   * @param owner window that owns the file chooser
+   * @param json whether to export JSON instead of CSV
+   * @param feedback label used to display the export result
+   */
   public static void export(
       RevenueReport report, Window owner, boolean json, javafx.scene.control.Label feedback) {
     FileChooser chooser = new FileChooser();
@@ -45,7 +52,12 @@ public final class ReportExporter {
     }
   }
 
-  /** Converts a report to the stable CSV export format. */
+  /**
+   * Converts a report to the stable CSV export format.
+   *
+   * @param report report to serialize
+   * @return stable CSV representation
+   */
   public static String toCsv(RevenueReport report) {
     StringBuilder csv =
         new StringBuilder("receipt,dateTime,patientId,patientName,doctor,amount,method\n");
@@ -79,7 +91,12 @@ public final class ReportExporter {
     return csv.toString();
   }
 
-  /** Converts a report to the stable JSON export format. */
+  /**
+   * Converts a report to the stable JSON export format.
+   *
+   * @param report report to serialize
+   * @return stable JSON representation
+   */
   public static String toJson(RevenueReport report) {
     StringBuilder json =
         new StringBuilder("{\"successfulPaymentCount\":")

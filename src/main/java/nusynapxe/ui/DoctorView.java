@@ -12,7 +12,15 @@ public final class DoctorView {
     throw new AssertionError("Utility class");
   }
 
-  /** Creates the Doctor workspace using deterministic compatibility defaults. */
+  /**
+   * Creates the Doctor workspace using deterministic compatibility defaults.
+   *
+   * @param services services used by the workspace
+   * @param session authenticated Doctor session
+   * @param onLogout callback invoked when the Doctor logs out
+   * @return root node for the Doctor workspace
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public static Parent create(ClinicServices services, Session session, Runnable onLogout) {
     return create(services, session, onLogout, ClinicClock.system(), ClinicTaskRunner.immediate());
   }

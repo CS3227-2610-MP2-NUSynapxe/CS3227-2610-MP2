@@ -22,19 +22,36 @@ public final class PatientRepository {
   private final Clock clock;
   private final PatientQueryRepository queries;
 
-  /** Creates a patient repository using the Singapore clinic system clock. */
+  /**
+   * Creates a patient repository using the Singapore clinic system clock.
+   *
+   * @param database opened application database
+   * @throws NullPointerException if {@code database} is {@code null}
+   */
   public PatientRepository(SqliteDatabase database) {
     this(database, ClinicClock.system());
   }
 
-  /** Creates a patient repository using an injectable clinic clock. */
+  /**
+   * Creates a patient repository using an injectable clinic clock.
+   *
+   * @param database opened application database
+   * @param clock clock used for persisted timestamps
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public PatientRepository(SqliteDatabase database, Clock clock) {
     this.database = Objects.requireNonNull(database, "database");
     this.clock = ClinicClock.withClinicZone(clock);
     this.queries = new PatientQueryRepository(database);
   }
 
-  /** Creates a patient and returns its generated Patient ID. */
+  /**
+   * Creates a patient and returns its generated Patient ID.
+   *
+   * @param requestedPatient patient data to persist
+   * @return the persisted patient with its generated identifier
+   * @throws SQLException if the patient cannot be persisted
+   */
   public Patient create(Patient requestedPatient) throws SQLException {
     Objects.requireNonNull(requestedPatient, "patient");
     Patient patient = normalizeIdentity(requestedPatient);
@@ -67,7 +84,13 @@ public final class PatientRepository {
         });
   }
 
-  /** Atomically updates a patient's permitted basic information. */
+  /**
+   * Atomically updates a patient's permitted basic information.
+   *
+   * @param requestedPatient patient data to persist
+   * @return the updated patient
+   * @throws SQLException if the patient does not exist or cannot be updated
+   */
   public Patient update(Patient requestedPatient) throws SQLException {
     Objects.requireNonNull(requestedPatient, "patient");
     Patient patient = normalizeIdentity(requestedPatient);
@@ -96,12 +119,24 @@ public final class PatientRepository {
         });
   }
 
-  /** Deactivates a patient while preserving its history. */
+  /**
+   * Deactivates a patient while preserving its history.
+   *
+   * @param patientId patient identifier
+   * @return the deactivated patient
+   * @throws SQLException if the patient does not exist or cannot be updated
+   */
   public Patient deactivate(long patientId) throws SQLException {
     return setActive(patientId, false);
   }
 
-  /** Reactivates a patient while preserving its history. */
+  /**
+   * Reactivates a patient while preserving its history.
+   *
+   * @param patientId patient identifier
+   * @return the reactivated patient
+   * @throws SQLException if the patient does not exist or cannot be updated
+   */
   public Patient activate(long patientId) throws SQLException {
     return setActive(patientId, true);
   }
@@ -126,24 +161,50 @@ public final class PatientRepository {
         });
   }
 
-  /** Finds one patient's non-clinical basic information. */
+  /**
+   * Finds one patient's non-clinical basic information.
+   *
+   * @param id patient identifier
+   * @return the patient, if found
+   * @throws SQLException if the query fails
+   */
   public Optional<Patient> findById(long id) throws SQLException {
     return queries.findById(id);
   }
 
-  /** Finds a patient by normalized composite document identity. */
+  /**
+   * Finds a patient by normalized composite document identity.
+   *
+   * @param type document type
+   * @param issuingCountry issuing country
+   * @param identityNumber document number
+   * @return the matching patient, if found
+   * @throws SQLException if the query fails
+   */
   public Optional<Patient> findByIdentity(
       IdentityType type, String issuingCountry, String identityNumber) throws SQLException {
     return queries.findByIdentity(type, issuingCountry, identityNumber);
   }
 
-  /** Returns non-sensitive relationship counts for a deletion check. */
+  /**
+   * Returns non-sensitive relationship counts for a deletion check.
+   *
+   * @param patientId patient identifier
+   * @return relationship counts, if the patient exists
+   * @throws SQLException if the query fails
+   */
   public Optional<PatientDeletionBlockers> findDeletionBlockers(long patientId)
       throws SQLException {
     return queries.findDeletionBlockers(patientId);
   }
 
-  /** Deletes an unused patient or returns relationship counts that block deletion. */
+  /**
+   * Deletes an unused patient or returns relationship counts that block deletion.
+   *
+   * @param patientId patient identifier
+   * @return empty when deleted, otherwise the relationship counts that block deletion
+   * @throws SQLException if the query or delete fails
+   */
   public Optional<PatientDeletionBlockers> deleteIfUnrelated(long patientId) throws SQLException {
     return SqliteTransactions.execute(
         database,
@@ -175,12 +236,23 @@ public final class PatientRepository {
         });
   }
 
-  /** Returns all patients in deterministic name and Patient ID order. */
+  /**
+   * Returns all patients in deterministic name and Patient ID order.
+   *
+   * @return all patients
+   * @throws SQLException if the query fails
+   */
   public List<Patient> findAll() throws SQLException {
     return queries.findAll();
   }
 
-  /** Searches non-clinical patient data using one trimmed query. */
+  /**
+   * Searches non-clinical patient data using one trimmed query.
+   *
+   * @param requestedQuery search text
+   * @return matching patients
+   * @throws SQLException if the query fails
+   */
   public List<Patient> search(String requestedQuery) throws SQLException {
     return queries.search(requestedQuery);
   }

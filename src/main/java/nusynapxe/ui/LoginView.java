@@ -28,7 +28,15 @@ public final class LoginView {
     return create(authentication, onSuccess, ClinicTaskRunner.immediate());
   }
 
-  /** Creates a login view whose authentication runs through the supplied task runner. */
+  /**
+   * Creates a login view whose authentication runs through the supplied task runner.
+   *
+   * @param authentication service used to authenticate submitted credentials
+   * @param onSuccess callback invoked with a successful session
+   * @param taskRunner runner used for authentication work
+   * @return root node for the login form
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public static Parent create(
       AuthenticationService authentication, LoginSuccess onSuccess, ClinicTaskRunner taskRunner) {
     TextField username = new TextField();

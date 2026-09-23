@@ -27,19 +27,40 @@ public final class AppointmentRepository {
   private final Clock clock;
   private final AppointmentQueryRepository queries;
 
-  /** Creates an appointment repository using the Singapore clinic system clock. */
+  /**
+   * Creates an appointment repository using the Singapore clinic system clock.
+   *
+   * @param database opened application database
+   * @throws NullPointerException if {@code database} is {@code null}
+   */
   public AppointmentRepository(SqliteDatabase database) {
     this(database, ClinicClock.system());
   }
 
-  /** Creates an appointment repository using an injectable clinic clock. */
+  /**
+   * Creates an appointment repository using an injectable clinic clock.
+   *
+   * @param database opened application database
+   * @param clock clock used for persisted timestamps
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public AppointmentRepository(SqliteDatabase database, Clock clock) {
     this.database = Objects.requireNonNull(database, "database");
     this.clock = ClinicClock.withClinicZone(clock);
     this.queries = new AppointmentQueryRepository(database);
   }
 
-  /** Creates an appointment after checking the Doctor's schedule. */
+  /**
+   * Creates an appointment after checking the Doctor's schedule.
+   *
+   * @param patientId patient identifier
+   * @param doctorId Doctor identifier
+   * @param startsAt appointment start timestamp
+   * @param endsAt appointment end timestamp
+   * @param status initial lifecycle status
+   * @return the created appointment
+   * @throws SQLException if the appointment cannot be persisted or conflicts with the schedule
+   */
   public Appointment create(
       long patientId,
       long doctorId,
@@ -78,14 +99,31 @@ public final class AppointmentRepository {
         });
   }
 
-  /** Reschedules an appointment while preserving its lifecycle status. */
+  /**
+   * Reschedules an appointment while preserving its lifecycle status.
+   *
+   * @param id appointment identifier
+   * @param startsAt new appointment start timestamp
+   * @param endsAt new appointment end timestamp
+   * @return the rescheduled appointment
+   * @throws SQLException if the appointment is missing or the new interval conflicts
+   */
   public Appointment reschedule(long id, LocalDateTime startsAt, LocalDateTime endsAt)
       throws SQLException {
     validateInterval(startsAt, endsAt);
     return rescheduleInternal(id, startsAt, endsAt, null);
   }
 
-  /** Reschedules an appointment and atomically sets its lifecycle status. */
+  /**
+   * Reschedules an appointment and atomically sets its lifecycle status.
+   *
+   * @param id appointment identifier
+   * @param startsAt new appointment start timestamp
+   * @param endsAt new appointment end timestamp
+   * @param status new lifecycle status
+   * @return the rescheduled appointment
+   * @throws SQLException if the appointment is missing or the new interval conflicts
+   */
   public Appointment reschedule(
       long id, LocalDateTime startsAt, LocalDateTime endsAt, AppointmentStatus status)
       throws SQLException {
@@ -128,7 +166,14 @@ public final class AppointmentRepository {
         });
   }
 
-  /** Changes an appointment's lifecycle status. */
+  /**
+   * Changes an appointment's lifecycle status.
+   *
+   * @param id appointment identifier
+   * @param status new lifecycle status
+   * @return the updated appointment
+   * @throws SQLException if the appointment is missing or cannot be updated
+   */
   public Appointment updateStatus(long id, AppointmentStatus status) throws SQLException {
     Objects.requireNonNull(status, STATUS_COLUMN);
     return SqliteTransactions.execute(
@@ -153,24 +198,53 @@ public final class AppointmentRepository {
         });
   }
 
-  /** Finds an appointment by identifier. */
+  /**
+   * Finds an appointment by identifier.
+   *
+   * @param id appointment identifier
+   * @return the matching appointment, if one exists
+   * @throws SQLException if the query fails
+   */
   public Optional<Appointment> findById(long id) throws SQLException {
     return queries.findById(id);
   }
 
-  /** Returns all appointments assigned to one Doctor in chronological order. */
+  /**
+   * Returns all appointments assigned to one Doctor in chronological order.
+   *
+   * @param doctorId Doctor identifier
+   * @return appointments assigned to the Doctor
+   * @throws SQLException if the query fails
+   */
   public List<Appointment> findByDoctor(long doctorId) throws SQLException {
     return queries.findByDoctor(doctorId);
   }
 
-  /** Returns non-clinical appointment projections overlapping a time range. */
+  /**
+   * Returns non-clinical appointment projections overlapping a time range.
+   *
+   * @param doctorId Doctor identifier
+   * @param rangeStart inclusive range start
+   * @param rangeEnd exclusive range end
+   * @return calendar appointment projections in the range
+   * @throws SQLException if the query fails
+   */
   public List<CalendarAppointment> findCalendarByDoctor(
       long doctorId, LocalDateTime rangeStart, LocalDateTime rangeEnd) throws SQLException {
     validateInterval(rangeStart, rangeEnd);
     return queries.findCalendarByDoctor(doctorId, rangeStart, rangeEnd);
   }
 
-  /** Returns one bounded future-schedule page using a stable keyset cursor. */
+  /**
+   * Returns one bounded future-schedule page using a stable keyset cursor.
+   *
+   * @param doctorId Doctor identifier
+   * @param anchor schedule anchor timestamp
+   * @param cursor cursor for the next page, or {@code null} for the first page
+   * @param pageSize maximum number of records to return
+   * @return one schedule page
+   * @throws SQLException if the query fails
+   */
   public CalendarSchedulePage findCalendarPageByDoctor(
       long doctorId, LocalDateTime anchor, CalendarScheduleCursor cursor, int pageSize)
       throws SQLException {
@@ -179,26 +253,57 @@ public final class AppointmentRepository {
     return queries.findCalendarPageByDoctor(doctorId, anchor, cursor, pageSize);
   }
 
-  /** Returns all appointments in chronological order. */
+  /**
+   * Returns all appointments in chronological order.
+   *
+   * @return all persisted appointments
+   * @throws SQLException if the query fails
+   */
   public List<Appointment> findAll() throws SQLException {
     return queries.search(null, null, null, null);
   }
 
-  /** Searches appointments using optional date, Doctor, patient, and status filters. */
+  /**
+   * Searches appointments using optional date, Doctor, patient, and status filters.
+   *
+   * @param date optional appointment date
+   * @param doctorId optional Doctor identifier
+   * @param patientQuery optional patient search text
+   * @param status optional lifecycle status
+   * @return matching appointments
+   * @throws SQLException if the query fails
+   */
   public List<Appointment> search(
       LocalDate date, Long doctorId, String patientQuery, AppointmentStatus status)
       throws SQLException {
     return queries.search(date, doctorId, patientQuery, status);
   }
 
-  /** Searches appointment rows with patient and Doctor names loaded by the same SQL query. */
+  /**
+   * Searches appointment rows with patient and Doctor names loaded by the same SQL query.
+   *
+   * @param date optional appointment date
+   * @param doctorId optional Doctor identifier
+   * @param patientQuery optional patient search text
+   * @param status optional lifecycle status
+   * @return matching appointment table rows
+   * @throws SQLException if the query fails
+   */
   public List<AppointmentListRow> searchListRows(
       LocalDate date, Long doctorId, String patientQuery, AppointmentStatus status)
       throws SQLException {
     return queries.searchListRows(date, doctorId, patientQuery, status);
   }
 
-  /** Adds a Doctor time-off interval after checking existing availability. */
+  /**
+   * Adds a Doctor time-off interval after checking existing availability.
+   *
+   * @param doctorId Doctor identifier
+   * @param startsAt time-off start timestamp
+   * @param endsAt time-off end timestamp
+   * @return the created time-off interval
+   * @throws SQLException if the interval cannot be persisted or conflicts with the schedule
+   */
   public DoctorTimeOff createTimeOff(long doctorId, LocalDateTime startsAt, LocalDateTime endsAt)
       throws SQLException {
     validateInterval(startsAt, endsAt);
@@ -224,19 +329,40 @@ public final class AppointmentRepository {
         });
   }
 
-  /** Returns all time-off intervals for one Doctor. */
+  /**
+   * Returns all time-off intervals for one Doctor.
+   *
+   * @param doctorId Doctor identifier
+   * @return the Doctor's time-off intervals
+   * @throws SQLException if the query fails
+   */
   public List<DoctorTimeOff> findTimeOffByDoctor(long doctorId) throws SQLException {
     return queries.findTimeOffByDoctor(doctorId);
   }
 
-  /** Returns one Doctor's time-off intervals overlapping a half-open range. */
+  /**
+   * Returns one Doctor's time-off intervals overlapping a half-open range.
+   *
+   * @param doctorId Doctor identifier
+   * @param rangeStart inclusive range start
+   * @param rangeEnd exclusive range end
+   * @return overlapping time-off intervals
+   * @throws SQLException if the query fails
+   */
   public List<DoctorTimeOff> findTimeOffByDoctor(
       long doctorId, LocalDateTime rangeStart, LocalDateTime rangeEnd) throws SQLException {
     validateInterval(rangeStart, rangeEnd);
     return queries.findTimeOffByDoctor(doctorId, rangeStart, rangeEnd);
   }
 
-  /** Deletes a time-off interval only when it belongs to the supplied Doctor. */
+  /**
+   * Deletes a time-off interval only when it belongs to the supplied Doctor.
+   *
+   * @param id time-off identifier
+   * @param doctorId Doctor identifier
+   * @return {@code true} when an interval was deleted
+   * @throws SQLException if the delete fails
+   */
   public boolean deleteTimeOff(long id, long doctorId) throws SQLException {
     return SqliteTransactions.execute(
         database,

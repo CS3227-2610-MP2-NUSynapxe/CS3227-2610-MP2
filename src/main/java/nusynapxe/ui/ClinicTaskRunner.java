@@ -6,9 +6,19 @@ import java.util.function.Consumer;
 
 /** Runs blocking clinic work and applies its result through JavaFX-safe callbacks. */
 public interface ClinicTaskRunner extends AutoCloseable {
-  /** A unit of blocking work that may use checked exceptions. */
+  /**
+   * A unit of blocking work that may use checked exceptions.
+   *
+   * @param <T> result type
+   */
   @FunctionalInterface
   interface ClinicTask<T> {
+    /**
+     * Executes the blocking operation.
+     *
+     * @return operation result
+     * @throws Exception if the operation fails
+     */
     T run() throws Exception;
   }
 
@@ -27,12 +37,24 @@ public interface ClinicTaskRunner extends AutoCloseable {
   @Override
   void close();
 
-  /** Creates a deterministic runner intended for tests and compatibility factories. */
+  /**
+   * Creates a deterministic runner intended for tests and compatibility factories.
+   *
+   * @return an immediately executing task runner
+   */
   static ClinicTaskRunner immediate() {
     return new ImmediateClinicTaskRunner();
   }
 
-  /** Validates a task callback bundle before submission. */
+  /**
+   * Validates a task callback bundle before submission.
+   *
+   * @param task blocking task
+   * @param onSuccess callback for a successful result
+   * @param onFailure callback for a failed task
+   * @param <T> result type
+   * @throws NullPointerException if any argument is {@code null}
+   */
   static <T> void requireCallbacks(
       ClinicTask<T> task, Consumer<T> onSuccess, Consumer<Throwable> onFailure) {
     Objects.requireNonNull(task, "task");

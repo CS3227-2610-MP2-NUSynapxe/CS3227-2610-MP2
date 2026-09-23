@@ -28,7 +28,15 @@ public final class SetupView {
     return create(accounts, onSuccess, ClinicTaskRunner.immediate());
   }
 
-  /** Creates a setup view whose account mutation runs through the supplied task runner. */
+  /**
+   * Creates a setup view whose account mutation runs through the supplied task runner.
+   *
+   * @param accounts service used to create the initial administrator
+   * @param onSuccess callback invoked after setup succeeds
+   * @param taskRunner runner used for account creation
+   * @return root node for the setup form
+   * @throws NullPointerException if an argument is {@code null}
+   */
   public static Parent create(
       AccountService accounts, SetupSuccess onSuccess, ClinicTaskRunner taskRunner) {
     TextField username = new TextField();
