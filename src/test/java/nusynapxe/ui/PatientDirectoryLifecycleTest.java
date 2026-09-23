@@ -2,6 +2,7 @@ package nusynapxe.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -69,6 +70,17 @@ final class PatientDirectoryLifecycleTest extends ApplicationTest {
 
     assertEquals(2, taskRunner.submissions.size());
     assertFalse(lookup("#test-patient-delete-confirm-window").tryQuery().isPresent());
+  }
+
+  @Test
+  void patientStatusSubmissionIsDisabledUntilTheQueuedRequestFinishes() {
+    interact(() -> lookup("#test-patient-view-42").queryAs(Button.class).fire());
+    interact(() -> lookup("#test-patient-deactivate").queryAs(Button.class).fire());
+
+    assertTrue(lookup("#test-patient-deactivate").queryAs(Button.class).isDisable());
+    assertEquals(2, taskRunner.submissions.size());
+    interact(() -> lookup("#test-patient-deactivate").queryAs(Button.class).fire());
+    assertEquals(2, taskRunner.submissions.size());
   }
 
   private static final class CapturingTaskRunner implements ClinicTaskRunner {

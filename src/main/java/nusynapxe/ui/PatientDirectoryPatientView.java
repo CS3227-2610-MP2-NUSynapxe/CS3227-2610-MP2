@@ -50,17 +50,24 @@ final class PatientDirectoryPatientView {
 
     edit.setOnAction(event -> showEdit.accept(current[0]));
     status.setOnAction(
-        event ->
-            submitStatusChange(
-                current,
-                services,
-                session,
-                taskRunner,
-                workspaceFeedback,
-                feedback,
-                onPatientChanged,
-                refresh,
-                showView));
+        event -> {
+          long patientId = current[0].id();
+          boolean active = current[0].active();
+          status.setDisable(true);
+          submitStatusChange(
+              current,
+              patientId,
+              active,
+              status,
+              services,
+              session,
+              taskRunner,
+              workspaceFeedback,
+              feedback,
+              onPatientChanged,
+              refresh,
+              showView);
+        });
     delete.setOnAction(
         event ->
             deletePatient(
@@ -162,6 +169,9 @@ final class PatientDirectoryPatientView {
 
   private static void submitStatusChange(
       Patient[] current,
+      long patientId,
+      boolean active,
+      Button status,
       ClinicServices services,
       nusynapxe.domain.Session session,
       ClinicTaskRunner taskRunner,
@@ -173,10 +183,11 @@ final class PatientDirectoryPatientView {
     try {
       taskRunner.submit(
           () ->
-              current[0].active()
-                  ? services.patientService().deactivateAdministrative(session, current[0].id())
-                  : services.patientService().activateAdministrative(session, current[0].id()),
+              active
+                  ? services.patientService().deactivateAdministrative(session, patientId)
+                  : services.patientService().activateAdministrative(session, patientId),
           updated -> {
+            status.setDisable(false);
             UiComponents.showMessage(
                 workspaceFeedback, updated.active() ? "Patient activated" : "Patient deactivated");
             current[0] = updated;
@@ -184,9 +195,12 @@ final class PatientDirectoryPatientView {
             refresh.run();
             showView.accept(updated);
           },
-          failure ->
-              showTaskError(feedback, failure, "Patient status update is temporarily unavailable"));
+          failure -> {
+            status.setDisable(false);
+            showTaskError(feedback, failure, "Patient status update is temporarily unavailable");
+          });
     } catch (java.util.concurrent.RejectedExecutionException exception) {
+      status.setDisable(false);
       showTaskError(feedback, exception, "Patient status update is temporarily unavailable");
     }
   }
