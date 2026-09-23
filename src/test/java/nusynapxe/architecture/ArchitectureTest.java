@@ -11,6 +11,9 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 final class ArchitectureTest {
@@ -103,6 +106,30 @@ final class ArchitectureTest {
     assertLineLimit("src/main/java/nusynapxe/ui/DoctorView.java", 450);
     assertLineLimit("src/main/java/nusynapxe/ui/ReceptionistWorkspace.java", 450);
     assertLineLimit("src/main/java/nusynapxe/ui/DoctorWorkspace.java", 850);
+  }
+
+  @Test
+  void uiSourceFilesRemainWithinTheFiveHundredLineLimit() throws Exception {
+    List<String> oversized = new ArrayList<>();
+    try (Stream<Path> files = Files.walk(Path.of("src/main/java/nusynapxe/ui"))) {
+      files
+          .filter(Files::isRegularFile)
+          .filter(path -> path.toString().endsWith(".java"))
+          .forEach(
+              path -> {
+                try {
+                  long lineCount = Files.readAllLines(path).size();
+                  if (lineCount > 500) {
+                    oversized.add(path + " (" + lineCount + " lines)");
+                  }
+                } catch (Exception exception) {
+                  throw new IllegalStateException("Could not inspect " + path, exception);
+                }
+              });
+    }
+    assertTrue(
+        oversized.isEmpty(),
+        () -> "UI source files exceed the 500-line limit: " + String.join(", ", oversized));
   }
 
   @Test

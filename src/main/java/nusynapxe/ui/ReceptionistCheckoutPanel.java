@@ -25,7 +25,6 @@ import nusynapxe.domain.AppointmentListRow;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.PaymentMethod;
-import nusynapxe.domain.Receipt;
 import nusynapxe.service.AuthorizationException;
 import nusynapxe.service.ValidationException;
 
@@ -54,11 +53,7 @@ final class ReceptionistCheckoutPanel {
   private final SearchSuggestionField<Account> checkoutDoctor;
   private final TextField checkoutPatient;
   private final TableView<AppointmentListRow> checkoutAppointmentList;
-  private final DatePicker receiptDate;
-  private final SearchSuggestionField<Account> receiptDoctor;
-  private final TextField receiptPatient;
-  private final TableView<Receipt> receiptHistoryList;
-  private final Label receiptPreview;
+  private final ReceptionistReceiptPanel receiptPanel;
   private final VBox queueView;
   private final VBox checkoutView;
   private boolean checkoutTabActive;
@@ -97,19 +92,12 @@ final class ReceptionistCheckoutPanel {
         ReceptionistAppointmentView.appointmentTable("reception-checkout-appointment-list");
     Button checkoutSearch = button("Search checkout", "reception-checkout-search");
 
-    receiptDate = UiComponents.compactDatePicker();
-    receiptDate.setId("reception-receipt-date");
-    receiptDoctor = doctorSelector("reception-receipt-doctor", ALL_DOCTORS);
-    receiptPatient = field("reception-receipt-patient", PATIENT_NAME_ID);
-    receiptHistoryList = ReceptionistWorkspace.receiptTable("reception-receipt-history-list");
-    Button receiptSearch = button("Search receipts", "reception-receipt-search");
-    receiptPreview = new Label();
-    receiptPreview.setId("reception-receipt-preview");
+    receiptPanel = new ReceptionistReceiptPanel(dataLoader, workspaceFeedback);
 
     configureQueue(queueSearch);
-    configureCheckout(checkoutSearch, receiptSearch);
+    configureCheckout(checkoutSearch);
     queueView = buildQueueView(queueSearch);
-    checkoutView = buildCheckoutView(checkoutSearch, receiptSearch);
+    checkoutView = buildCheckoutView(checkoutSearch);
   }
 
   VBox queueContent() {
@@ -131,7 +119,7 @@ final class ReceptionistCheckoutPanel {
   void refreshDoctors() {
     dataLoader.refreshDoctors(queueDoctor, workspaceFeedback, false);
     dataLoader.refreshDoctors(checkoutDoctor, workspaceFeedback, false);
-    dataLoader.refreshDoctors(receiptDoctor, workspaceFeedback, false);
+    receiptPanel.refreshDoctors();
   }
 
   void refreshQueue() {
@@ -152,17 +140,11 @@ final class ReceptionistCheckoutPanel {
         checkoutPatient.getText(),
         checkoutDoctor.getValue() == null ? null : checkoutDoctor.getValue().id(),
         checkoutDate.getValue());
-    refreshReceipts();
+    receiptPanel.refresh();
   }
 
   void refreshReceipts() {
-    dataLoader.refreshReceiptHistory(
-        receiptHistoryList,
-        receiptPreview,
-        receiptPatient.getText(),
-        receiptDoctor.getValue() == null ? null : receiptDoctor.getValue().id(),
-        receiptDate.getValue(),
-        workspaceFeedback);
+    receiptPanel.refresh();
   }
 
   private void configureQueue(Button queueSearch) {
@@ -186,7 +168,7 @@ final class ReceptionistCheckoutPanel {
     queueSearch.setOnAction(event -> refreshQueue());
   }
 
-  private void configureCheckout(Button checkoutSearch, Button receiptSearch) {
+  private void configureCheckout(Button checkoutSearch) {
     checkoutAppointmentList
         .getSelectionModel()
         .selectedItemProperty()
@@ -206,17 +188,7 @@ final class ReceptionistCheckoutPanel {
           }
           checkoutMouseSelection = false;
         });
-    receiptHistoryList
-        .getSelectionModel()
-        .selectedItemProperty()
-        .addListener(
-            (observable, previous, selected) -> {
-              if (selected != null) {
-                receiptPreview.setText(ReceptionistCheckoutView.formatReceipt(selected));
-              }
-            });
     checkoutSearch.setOnAction(event -> refreshCheckout());
-    receiptSearch.setOnAction(event -> refreshReceipts());
     checkoutPatient
         .textProperty()
         .addListener((observable, previous, selected) -> refreshReceipts());
@@ -248,7 +220,7 @@ final class ReceptionistCheckoutPanel {
             queueList));
   }
 
-  private VBox buildCheckoutView(Button checkoutSearch, Button receiptSearch) {
+  private VBox buildCheckoutView(Button checkoutSearch) {
     GridPane checkoutFilters = filterGrid("reception-checkout-filter-grid");
     checkoutFilters.getStyleClass().add("spacious-filter-grid");
     addUniformColumns(checkoutFilters, 3, 180, 240, 240);
@@ -257,38 +229,20 @@ final class ReceptionistCheckoutPanel {
     checkoutFilters.add(UiComponents.fieldGroup(DATE_LABEL, checkoutDate), 2, 0);
     checkoutFilters.add(checkoutSearch, 3, 0);
     alignFilterAction(checkoutSearch);
-    GridPane receiptFilters = filterGrid("reception-receipt-filter-grid");
-    receiptFilters.getStyleClass().add("spacious-filter-grid");
-    addUniformColumns(receiptFilters, 3, 180, 240, 240);
-    receiptFilters.add(UiComponents.fieldGroup("Patient", receiptPatient), 0, 0);
-    receiptFilters.add(UiComponents.fieldGroup(DOCTOR_LABEL, receiptDoctor), 1, 0);
-    receiptFilters.add(UiComponents.fieldGroup(DATE_LABEL, receiptDate), 2, 0);
-    receiptFilters.add(receiptSearch, 3, 0);
-    alignFilterAction(receiptSearch);
     VBox ready =
         UiComponents.card(
             "reception-checkout-ready-card",
             UiComponents.sectionHeading("Checkout appointments"),
             checkoutFilters,
             checkoutAppointmentList);
-    VBox receipts =
-        UiComponents.card(
-            "reception-receipts-card",
-            UiComponents.sectionHeading("Issued receipts"),
-            receiptFilters,
-            receiptHistoryList,
-            receiptPreview);
     VBox readyContent = new VBox(ready);
     readyContent.getStyleClass().add("subtab-content");
     readyContent.setPadding(new Insets(22, 0, 0, 0));
     readyContent.setId("reception-checkout-ready-tab");
-    VBox receiptContent = new VBox(receipts);
-    receiptContent.getStyleClass().add("subtab-content");
-    receiptContent.setPadding(new Insets(22, 0, 0, 0));
-    receiptContent.setId("reception-receipts-tab");
     javafx.scene.control.Tab checkout = new javafx.scene.control.Tab("Checkout", readyContent);
     checkout.setClosable(false);
-    javafx.scene.control.Tab receiptsTab = new javafx.scene.control.Tab("Receipts", receiptContent);
+    javafx.scene.control.Tab receiptsTab =
+        new javafx.scene.control.Tab("Receipts", receiptPanel.content());
     receiptsTab.setClosable(false);
     javafx.scene.control.TabPane tabs = new javafx.scene.control.TabPane(checkout, receiptsTab);
     tabs.setId("reception-checkout-tabs");
@@ -428,9 +382,7 @@ final class ReceptionistCheckoutPanel {
                 parseMinor(charge.getText()),
                 method.getValue(),
                 receipt -> {
-                  receipt.ifPresent(
-                      value ->
-                          receiptPreview.setText(ReceptionistCheckoutView.formatReceipt(value)));
+                  receipt.ifPresent(receiptPanel::showReceipt);
                   UiComponents.showMessage(workspaceFeedback, "Checkout completed");
                   onUpdated.run();
                   dialog.close();

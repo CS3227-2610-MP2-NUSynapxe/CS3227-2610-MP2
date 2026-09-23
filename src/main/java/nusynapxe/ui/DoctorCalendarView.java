@@ -10,17 +10,12 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.function.BooleanSupplier;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
-import javafx.geometry.Insets;
-import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 import nusynapxe.domain.AppointmentStatus;
@@ -53,12 +48,7 @@ public final class DoctorCalendarView {
   private final VBox toField;
   private final ComboBox<String> viewMode;
   private final Timeline currentTimeTicker;
-  private VBox toolbar;
-  private HBox toolbarNavigationGroup;
-  private HBox toolbarActionGroup;
-  private HBox toolbarTrailingGroup;
-  private HBox toolbarMainRow;
-  private HBox toolbarActionsRow;
+  private DoctorCalendarToolbar.Controls toolbarControls;
   private LocalDate scheduleAnchor;
   private CalendarTimeGrid grid;
   private CalendarScheduleList scheduleList;
@@ -238,85 +228,29 @@ public final class DoctorCalendarView {
   }
 
   private BorderPane buildRoot() {
-    Button today = UiComponents.secondaryButton("Today", "doctor-calendar-today");
-    today.setAccessibleText("Go to today");
-    today.setOnAction(event -> goToToday());
-    previous.setAccessibleText("Previous");
-    previous.setOnAction(event -> goToPrevious());
-    next.setAccessibleText("Next");
-    next.setOnAction(event -> goToNext());
-    Button addAppointment =
-        UiComponents.primaryButton("Add appointment", "doctor-calendar-add-appointment");
-    addAppointment.setAccessibleText("Add appointment to my schedule");
-    addAppointment.setOnAction(event -> openCreateAppointment(null));
-    Button blockTime = UiComponents.secondaryButton("Block time", "doctor-calendar-block-time");
-    blockTime.setAccessibleText("Block time on my schedule");
-    blockTime.setOnAction(event -> openCreateTimeOff());
-    Button refreshButton = new Button("↻");
-    refreshButton.setId("doctor-calendar-refresh");
-    refreshButton.setAccessibleText("Refresh Calendar");
-    refreshButton.setTooltip(new javafx.scene.control.Tooltip("Refresh Calendar"));
-    refreshButton.getStyleClass().add("calendar-settings-button");
-    refreshButton.setOnAction(event -> refresh());
-    scheduleDate.setAccessibleText("Choose Agenda start date");
-    scheduleDate.setOnAction(event -> selectDate(scheduleDate.getValue()));
-    from.setOnAction(event -> refresh());
-    to.setOnAction(event -> refresh());
-    fromField.setPrefWidth(190);
-    toField.setPrefWidth(190);
-    viewMode.setId("doctor-calendar-view-mode");
-    viewMode.setAccessibleText("Choose Calendar view");
-    viewMode.getItems().addAll(CALENDAR_MODE, AGENDA_MODE);
-    viewMode.setEditable(false);
-    viewMode.setValue(CALENDAR_MODE);
-    viewMode.setOnAction(event -> changeMode(viewMode.getValue()));
-    Button settings = new Button("⚙");
-    settings.setId("doctor-calendar-settings");
-    settings.setAccessibleText("Open Calendar settings");
-    settings.setTooltip(new javafx.scene.control.Tooltip("Calendar settings"));
-    settings.getStyleClass().add("calendar-settings-button");
-    settings.setOnAction(
-        event -> {
-          hide();
-          onSettings.run();
-        });
-    toolbarNavigationGroup =
-        new HBox(8, today, previous, scheduleDate, next, fromField, toField, viewMode);
-    toolbarNavigationGroup.setAlignment(Pos.BOTTOM_LEFT);
-    toolbarNavigationGroup.getStyleClass().add("calendar-toolbar-group");
-    toolbarActionGroup = new HBox(8, addAppointment, blockTime);
-    toolbarActionGroup.setId("doctor-calendar-action-group");
-    toolbarActionGroup.setAlignment(Pos.BOTTOM_LEFT);
-    toolbarActionGroup.getStyleClass().add("calendar-toolbar-actions");
-    toolbarTrailingGroup = new HBox(8, refreshButton, settings);
-    toolbarTrailingGroup.setAlignment(Pos.BOTTOM_LEFT);
-    toolbarTrailingGroup.getStyleClass().add("calendar-toolbar-group");
-    Region spacer = new Region();
-    HBox.setHgrow(spacer, Priority.ALWAYS);
-    toolbarMainRow =
-        new HBox(8, toolbarNavigationGroup, toolbarActionGroup, spacer, toolbarTrailingGroup);
-    toolbarMainRow.setId("doctor-calendar-toolbar-main");
-    toolbarMainRow.setAlignment(Pos.BOTTOM_LEFT);
-    toolbarActionsRow = new HBox(8);
-    toolbarActionsRow.setId("doctor-calendar-toolbar-actions");
-    toolbarActionsRow.setAlignment(Pos.BOTTOM_LEFT);
-    toolbar = new VBox(8, toolbarMainRow);
-    toolbar.setId("doctor-calendar-toolbar");
-    toolbar.getStyleClass().add("calendar-toolbar");
-    toolbar.widthProperty().addListener((observable, oldWidth, newWidth) -> updateToolbarLayout());
-    Label title = UiComponents.pageTitle("Calendar");
-    Label supporting =
-        UiComponents.supportingText(
-            "Working hours and breaks shade the grid only. Appointments outside them remain visible.");
-    VBox heading = new VBox(4, title, supporting, toolbar);
-    heading.setPadding(new Insets(0, 0, 12, 0));
-    BorderPane page = new BorderPane();
-    page.setId("doctor-calendar-page");
-    page.getStyleClass().add("calendar-page");
-    page.setPadding(new Insets(4, 0, 0, 0));
-    page.setTop(heading);
-    updateToolbarLayout();
-    return page;
+    toolbarControls =
+        DoctorCalendarToolbar.create(
+            previous,
+            next,
+            scheduleDate,
+            from,
+            to,
+            fromField,
+            toField,
+            viewMode,
+            this::goToToday,
+            this::goToPrevious,
+            this::goToNext,
+            () -> openCreateAppointment(null),
+            this::openCreateTimeOff,
+            this::refresh,
+            () -> {
+              hide();
+              onSettings.run();
+            },
+            this::selectDate,
+            this::changeMode);
+    return toolbarControls.page();
   }
 
   private void goToToday() {
@@ -415,28 +349,8 @@ public final class DoctorCalendarView {
   }
 
   private void updateToolbarLayout() {
-    if (toolbar == null) {
-      return;
-    }
-    double availableWidth = toolbar.getWidth();
-    double requiredWidth =
-        toolbarNavigationGroup.prefWidth(-1)
-            + toolbarActionGroup.prefWidth(-1)
-            + toolbarTrailingGroup.prefWidth(-1)
-            + toolbarMainRow.getSpacing() * 3;
-    boolean shouldWrap = availableWidth > 0 && availableWidth + 0.5 < requiredWidth;
-    boolean isWrapped = toolbarActionsRow.getChildren().contains(toolbarActionGroup);
-    if (shouldWrap == isWrapped) {
-      return;
-    }
-    if (shouldWrap) {
-      toolbarMainRow.getChildren().remove(toolbarActionGroup);
-      toolbarActionsRow.getChildren().setAll(toolbarActionGroup);
-      toolbar.getChildren().setAll(toolbarMainRow, toolbarActionsRow);
-    } else {
-      toolbarActionsRow.getChildren().clear();
-      toolbarMainRow.getChildren().add(1, toolbarActionGroup);
-      toolbar.getChildren().setAll(toolbarMainRow);
+    if (toolbarControls != null) {
+      DoctorCalendarToolbar.updateLayout(toolbarControls);
     }
   }
 

@@ -2,25 +2,12 @@ package nusynapxe.ui;
 
 import java.time.Clock;
 import java.time.LocalDate;
-import java.time.Month;
-import java.time.Period;
-import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
-import java.util.function.Function;
 import java.util.function.LongConsumer;
-import javafx.beans.property.ReadOnlyObjectWrapper;
-import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
-import javafx.geometry.Insets;
-import javafx.geometry.Pos;
 import javafx.scene.Parent;
-import javafx.scene.Scene;
 import javafx.scene.control.Button;
-import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.TableCell;
-import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
@@ -28,17 +15,11 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.stage.Modality;
-import javafx.stage.Stage;
 import nusynapxe.ClinicClock;
-import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
-import nusynapxe.domain.PatientDeletionBlockers;
 import nusynapxe.domain.Session;
-import nusynapxe.domain.Sex;
 import nusynapxe.service.AuthorizationException;
 import nusynapxe.service.ClinicServices;
-import nusynapxe.service.PatientDeletionBlockedException;
 import nusynapxe.service.ValidationException;
 
 /** Builds the shared administrative patient directory for Doctors and Receptionists. */
@@ -81,21 +62,21 @@ final class PatientDirectoryView {
     this.clock = ClinicClock.withClinicZone(clock);
     this.taskRunner = Objects.requireNonNull(taskRunner, "taskRunner");
 
-    PatientForm registerForm = patientForm(prefix + "-register", false, this.clock);
+    PatientDirectoryFormView.PatientForm registerForm =
+        PatientDirectoryFormView.createForm(prefix + "-register", false, this.clock);
     Button register = button("Register patient", prefix + "-patient-register");
     patientSearch = field(prefix + "-patient-search", "Search by name, NRIC/FIN, phone, or email");
     Button searchPatients = button("Search patients", prefix + "-patient-search-submit");
     Button clearPatientSearch = button("Clear search", prefix + "-patient-search-clear");
-    patientTable = createPatientTable();
-
+    patientTable = PatientDirectoryTableView.create(prefix, this::showPatientView);
     register.setOnAction(
         event -> {
           try {
-            Patient draft = patientFromForm(registerForm, 0, true);
+            Patient draft = PatientDirectoryFormView.fromForm(registerForm, 0, true);
             taskRunner.submit(
                 () -> services.patientService().register(session, draft),
                 patient -> {
-                  clearPatientForm(registerForm);
+                  PatientDirectoryFormView.clear(registerForm);
                   patientSearch.clear();
                   showDirectory();
                   UiComponents.showMessage(workspaceFeedback, "Patient registered");
@@ -112,11 +93,7 @@ final class PatientDirectoryView {
             UiComponents.showError(workspaceFeedback, exception.getMessage());
           }
         });
-
-    searchPatients.setOnAction(
-        event -> {
-          refresh();
-        });
+    searchPatients.setOnAction(event -> refresh());
     clearPatientSearch.setOnAction(
         event -> {
           patientSearch.clear();
@@ -151,23 +128,21 @@ final class PatientDirectoryView {
             10,
             UiComponents.card(
                 prefix + "-patient-register-card",
-                patientGrid(registerForm, false),
+                PatientDirectoryFormView.grid(registerForm, false),
                 registrationActions));
     registrationContent.setId(prefix + "-patient-register-view");
-
     viewingContent = new VBox(10);
     viewingContent.setId(prefix + "-patient-view");
     editingContent = new VBox(10);
     editingContent.setId(prefix + "-patient-edit-view");
-
     openRegistration.setOnAction(
         event -> {
-          clearPatientForm(registerForm);
+          PatientDirectoryFormView.clear(registerForm);
           showRegistration();
         });
     cancelRegistration.setOnAction(
         event -> {
-          clearPatientForm(registerForm);
+          PatientDirectoryFormView.clear(registerForm);
           showDirectory();
           refresh();
         });
@@ -281,50 +256,39 @@ final class PatientDirectoryView {
 
   private void showDirectory() {
     pageTitle.setText("Patient Directory");
-    directoryContent.setManaged(true);
-    directoryContent.setVisible(true);
-    registrationContent.setManaged(false);
-    registrationContent.setVisible(false);
-    viewingContent.setManaged(false);
-    viewingContent.setVisible(false);
-    editingContent.setManaged(false);
-    editingContent.setVisible(false);
+    setPage(directoryContent, true);
+    setPage(registrationContent, false);
+    setPage(viewingContent, false);
+    setPage(editingContent, false);
   }
 
   private void showRegistration() {
     pageTitle.setText("Register new patient");
-    directoryContent.setManaged(false);
-    directoryContent.setVisible(false);
-    registrationContent.setManaged(true);
-    registrationContent.setVisible(true);
-    viewingContent.setManaged(false);
-    viewingContent.setVisible(false);
-    editingContent.setManaged(false);
-    editingContent.setVisible(false);
+    setPage(directoryContent, false);
+    setPage(registrationContent, true);
+    setPage(viewingContent, false);
+    setPage(editingContent, false);
   }
 
   private void showViewing() {
     pageTitle.setText("Patient details");
-    directoryContent.setManaged(false);
-    directoryContent.setVisible(false);
-    registrationContent.setManaged(false);
-    registrationContent.setVisible(false);
-    viewingContent.setManaged(true);
-    viewingContent.setVisible(true);
-    editingContent.setManaged(false);
-    editingContent.setVisible(false);
+    setPage(directoryContent, false);
+    setPage(registrationContent, false);
+    setPage(viewingContent, true);
+    setPage(editingContent, false);
   }
 
   private void showEditing() {
     pageTitle.setText("Edit patient");
-    directoryContent.setManaged(false);
-    directoryContent.setVisible(false);
-    registrationContent.setManaged(false);
-    registrationContent.setVisible(false);
-    viewingContent.setManaged(false);
-    viewingContent.setVisible(false);
-    editingContent.setManaged(true);
-    editingContent.setVisible(true);
+    setPage(directoryContent, false);
+    setPage(registrationContent, false);
+    setPage(viewingContent, false);
+    setPage(editingContent, true);
+  }
+
+  private static void setPage(VBox page, boolean visible) {
+    page.setManaged(visible);
+    page.setVisible(visible);
   }
 
   /** Reloads directory results using the current search query. */
@@ -377,9 +341,7 @@ final class PatientDirectoryView {
                 valueOrEmpty(patient.email())));
   }
 
-  /**
-   * Populates an appointment search field with active patients and retains a preferred selection.
-   */
+  /** Populates an appointment patient selector with active patients. */
   static void refreshAppointmentPatients(
       ClinicServices services,
       Session session,
@@ -411,617 +373,42 @@ final class PatientDirectoryView {
         failure -> UiComponents.showError(feedback, "Patients are temporarily unavailable"));
   }
 
-  private static String patientOptionLabel(Patient patient) {
-    String document =
-        (valueOrEmpty(patient.identityType()) + " " + valueOrEmpty(patient.identityNumber()))
-            .trim();
-    return document.isBlank() ? fullName(patient) : fullName(patient) + " · " + document;
-  }
-
-  private TableView<Patient> createPatientTable() {
-    TableView<Patient> table = new TableView<>();
-    table.setId(prefix + "-patient-table");
-    table.getStyleClass().add("patient-table");
-    table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-    table.setFixedCellSize(52);
-    table.setPrefHeight(96);
-    table.setMinHeight(96);
-    table.setMaxHeight(Double.MAX_VALUE);
-    table.setPlaceholder(
-        UiComponents.emptyState(prefix + "-patient-empty", "No patients match this search."));
-
-    TableColumn<Patient, String> name =
-        textColumn(
-            "Name",
-            patient ->
-                (valueOrEmpty(patient.firstName()) + " " + valueOrEmpty(patient.lastName()))
-                    .trim());
-    TableColumn<Patient, String> dateOfBirth =
-        textColumn("Date of birth", patient -> valueOrEmpty(patient.dateOfBirth()));
-    TableColumn<Patient, String> phone = textColumn("Phone", PatientDirectoryView::displayPhone);
-    TableColumn<Patient, String> email =
-        textColumn(EMAIL_LABEL, patient -> valueOrEmpty(patient.email()));
-    TableColumn<Patient, String> status =
-        textColumn("Status", patient -> patient.active() ? "Active" : "Inactive");
-    status.setCellFactory(
-        column ->
-            new TableCell<>() {
-              @Override
-              protected void updateItem(String value, boolean empty) {
-                super.updateItem(value, empty);
-                setText(null);
-                setGraphic(empty || value == null ? null : UiComponents.statusBadge(value));
-              }
-            });
-    TableColumn<Patient, Patient> actions = editColumn();
-    actions.setMinWidth(108);
-    actions.setPrefWidth(108);
-    actions.setMaxWidth(108);
-    table.getColumns().addAll(List.of(name, dateOfBirth, phone, email, status, actions));
-    return table;
-  }
-
-  private static TableColumn<Patient, String> textColumn(
-      String title, Function<Patient, String> valueProvider) {
-    TableColumn<Patient, String> column = new TableColumn<>(title);
-    column.setCellValueFactory(
-        data -> new ReadOnlyStringWrapper(valueProvider.apply(data.getValue())));
-    return column;
-  }
-
-  private TableColumn<Patient, Patient> editColumn() {
-    TableColumn<Patient, Patient> actions = new TableColumn<>("Actions");
-    actions.setCellValueFactory(data -> new ReadOnlyObjectWrapper<>(data.getValue()));
-    actions.setCellFactory(
-        column ->
-            new TableCell<>() {
-              private final Button view = button("View", prefix + "-patient-view");
-
-              {
-                setAlignment(Pos.CENTER_RIGHT);
-                view.getStyleClass().add("table-row-action");
-                view.setOnAction(
-                    event -> {
-                      Patient patient = getItem();
-                      if (patient != null) {
-                        showPatientView(patient);
-                      }
-                    });
-              }
-
-              @Override
-              protected void updateItem(Patient patient, boolean empty) {
-                super.updateItem(patient, empty);
-                if (empty || patient == null) {
-                  setText(null);
-                  setGraphic(null);
-                } else {
-                  view.setId(prefix + "-patient-view-" + patient.id());
-                  setGraphic(view);
-                }
-              }
-            });
-    return actions;
-  }
-
-  private static String displayPhone(Patient patient) {
-    String countryCode = valueOrEmpty(patient.phoneCountryCode());
-    String number = valueOrEmpty(patient.phoneNumber());
-    if (countryCode.isBlank()) {
-      return number;
-    }
-    if (number.isBlank()) {
-      return "+" + countryCode;
-    }
-    return "+" + countryCode + " " + number;
-  }
-
   private void showPatientView(Patient selected) {
-    Patient[] current = {selected};
-    Label feedback = new Label();
-    feedback.setId(prefix + "-patient-view-feedback");
-    Button edit = button("Edit", prefix + "-patient-edit");
-    Button status = button(patientStatusButtonText(selected), prefix + "-patient-deactivate");
-    Button delete = UiComponents.dangerButton("Delete patient", prefix + "-patient-delete");
-    Button back = UiComponents.secondaryButton("← Back to patients", prefix + "-patient-view-back");
-
-    edit.setOnAction(event -> showPatientEdit(current[0]));
-    status.setOnAction(
-        event -> {
-          try {
-            taskRunner.submit(
-                () ->
-                    current[0].active()
-                        ? services
-                            .patientService()
-                            .deactivateAdministrative(session, current[0].id())
-                        : services
-                            .patientService()
-                            .activateAdministrative(session, current[0].id()),
-                updated -> {
-                  String message = updated.active() ? "Patient activated" : "Patient deactivated";
-                  UiComponents.showMessage(workspaceFeedback, message);
-                  preferredPatientId = updated.id();
-                  onPatientChanged.accept(updated.id());
-                  refresh();
-                  showPatientView(updated);
-                },
-                failure ->
-                    showTaskError(
-                        feedback, failure, "Patient status update is temporarily unavailable"));
-          } catch (java.util.concurrent.RejectedExecutionException exception) {
-            showTaskError(feedback, exception, "Patient status update is temporarily unavailable");
-          }
-        });
-    delete.setOnAction(
-        event -> {
-          Stage owner = (Stage) viewingContent.getScene().getWindow();
-          taskRunner.submit(
-              () -> services.patientService().deletionBlockers(session, current[0].id()),
-              blockers -> {
-                if (!blockers.canDelete()) {
-                  showBlockedDeletionDialog(owner, blockers);
-                  return;
-                }
-                if (!confirmDeletion(owner, current[0])) {
-                  return;
-                }
-                taskRunner.submit(
-                    () -> {
-                      services.patientService().deleteAdministrative(session, current[0].id());
-                      return null;
-                    },
-                    ignored -> {
-                      UiComponents.showMessage(workspaceFeedback, "Patient deleted");
-                      viewingContent.getChildren().clear();
-                      showDirectory();
-                      refresh();
-                      preferredPatientId = 0;
-                      onPatientChanged.accept(0);
-                    },
-                    failure ->
-                        showDeletionError(
-                            owner,
-                            feedback,
-                            failure,
-                            "Patient deletion is temporarily unavailable"));
-              },
-              failure ->
-                  showDeletionError(
-                      owner, feedback, failure, "Patient deletion is temporarily unavailable"));
-        });
-    back.setOnAction(
-        event -> {
-          viewingContent.getChildren().clear();
-          showDirectory();
-          refresh();
-        });
-
-    HBox actions = UiComponents.actionBar(edit, status, delete);
-    viewingContent.setPadding(Insets.EMPTY);
-    VBox detailsCard =
-        UiComponents.card(
-            prefix + "-patient-details-card", patientDetailsGrid(selected), actions, feedback);
-    viewingContent.getChildren().setAll(back, detailsCard);
+    PatientDirectoryPatientView.showView(
+        prefix,
+        selected,
+        viewingContent,
+        services,
+        session,
+        workspaceFeedback,
+        onPatientChanged,
+        taskRunner,
+        this::refresh,
+        this::showDirectory,
+        this::showPatientEdit,
+        this::showPatientView);
     showViewing();
   }
 
   private void showPatientEdit(Patient selected) {
-    PatientForm form = patientForm(prefix + "-patient", false, clock);
-    populatePatientForm(selected, form);
-    Patient[] current = {selected};
-    Label feedback = new Label();
-    feedback.setId(prefix + "-patient-edit-feedback");
-    Button update = button("Save", prefix + "-patient-update");
-    Button cancel = button("Discard changes", prefix + "-patient-edit-cancel");
-
-    update.setOnAction(
-        event -> {
-          try {
-            Patient draft = patientFromForm(form, current[0].id(), current[0].active());
-            taskRunner.submit(
-                () -> services.patientService().updateAdministrative(session, draft),
-                updated -> {
-                  current[0] = updated;
-                  populatePatientForm(updated, form);
-                  UiComponents.showMessage(feedback, "Patient changes saved");
-                  UiComponents.showMessage(workspaceFeedback, "Patient changes saved");
-                  refresh();
-                  preferredPatientId = updated.id();
-                  onPatientChanged.accept(updated.id());
-                  editingContent.getChildren().clear();
-                  showPatientView(updated);
-                },
-                failure ->
-                    showTaskError(feedback, failure, "Patient update is temporarily unavailable"));
-          } catch (ValidationException exception) {
-            UiComponents.showError(feedback, exception.getMessage());
-          }
-        });
-
-    cancel.setOnAction(
-        event -> {
-          clearPatientForm(form);
-          editingContent.getChildren().clear();
-          showPatientView(current[0]);
-        });
-
-    HBox actions = new HBox(8, update, cancel);
-    editingContent.setPadding(Insets.EMPTY);
-    editingContent
-        .getChildren()
-        .setAll(
-            UiComponents.card(
-                prefix + "-patient-edit-card", patientGrid(form, false), actions, feedback));
-    showEditing();
+    PatientDirectoryPatientView.showEdit(
+        prefix,
+        selected,
+        editingContent,
+        clock,
+        services,
+        session,
+        workspaceFeedback,
+        onPatientChanged,
+        taskRunner,
+        this::refresh,
+        this::showEditing,
+        this::showPatientView);
   }
 
   /** Creates a read-only administrative details grid for a patient. */
   static GridPane patientDetailsGrid(Patient patient) {
-    GridPane grid = new GridPane();
-    grid.getStyleClass().add("patient-details-grid");
-    grid.setHgap(18);
-    grid.setVgap(12);
-    addDetail(grid, 0, "Name", fullName(patient));
-    addDetail(
-        grid,
-        1,
-        "Identity document",
-        valueOrEmpty(patient.identityType()) + " " + valueOrEmpty(patient.identityNumber()));
-    addDetail(grid, 2, "Issuing country", valueOrEmpty(patient.issuingCountry()));
-    addDetail(grid, 3, "Date of birth", valueOrEmpty(patient.dateOfBirth()));
-    addDetail(grid, 4, "Sex", valueOrEmpty(patient.sex()));
-    addDetail(grid, 5, "Phone", displayPhone(patient));
-    addDetail(grid, 6, EMAIL_LABEL, valueOrEmpty(patient.email()));
-    addDetail(grid, 7, "Address", valueOrEmpty(patient.address()));
-    addDetail(grid, 8, "Height", measurement(patient.heightCm(), "cm"));
-    addDetail(grid, 9, "Weight", measurement(patient.weightKg(), "kg"));
-    addDetail(grid, 10, "Status", patient.active() ? "Active" : "Inactive");
-    return grid;
-  }
-
-  private static void addDetail(GridPane grid, int row, String heading, String value) {
-    Label headingLabel = new Label(heading);
-    headingLabel.getStyleClass().add("field-label");
-    Label valueLabel = new Label(value.isBlank() ? "—" : value.trim());
-    valueLabel.setWrapText(true);
-    grid.addRow(row, headingLabel, valueLabel);
-  }
-
-  private static String fullName(Patient patient) {
-    return (valueOrEmpty(patient.firstName()) + " " + valueOrEmpty(patient.lastName())).trim();
-  }
-
-  private static String measurement(Double value, String unit) {
-    return value == null ? "" : value + " " + unit;
-  }
-
-  private static String valueOrEmpty(Object value) {
-    return value == null ? "" : value.toString();
-  }
-
-  private static void showTaskError(Label feedback, Throwable failure, String fallback) {
-    if (failure instanceof ValidationException || failure instanceof AuthorizationException) {
-      UiComponents.showError(feedback, failure.getMessage());
-    } else {
-      UiComponents.showError(feedback, fallback);
-    }
-  }
-
-  private void showDeletionError(Stage owner, Label feedback, Throwable failure, String fallback) {
-    if (failure instanceof PatientDeletionBlockedException blocked) {
-      showBlockedDeletionDialog(owner, blocked.blockers());
-    } else {
-      showTaskError(feedback, failure, fallback);
-    }
-  }
-
-  private boolean confirmDeletion(Stage owner, Patient patient) {
-    Label warning =
-        new Label(
-            "Delete "
-                + patient.displayedId()
-                + " permanently? This patient has no related clinic data, and this action cannot be undone.");
-    warning.setWrapText(true);
-    Button confirm =
-        UiComponents.dangerButton("Delete permanently", prefix + "-patient-delete-confirm");
-    Button cancel = UiComponents.secondaryButton("Cancel", prefix + "-patient-delete-cancel");
-    boolean[] confirmed = {false};
-    Stage dialog = new Stage();
-    confirm.setOnAction(
-        event -> {
-          confirmed[0] = true;
-          dialog.close();
-        });
-    cancel.setOnAction(event -> dialog.close());
-    VBox content = new VBox(12, warning, UiComponents.actionBar(confirm, cancel));
-    content.setId(prefix + "-patient-delete-confirm-window");
-    content.setPadding(new Insets(18));
-    dialog.initOwner(owner);
-    dialog.initModality(Modality.WINDOW_MODAL);
-    dialog.setTitle("Confirm patient deletion");
-    dialog.setScene(new Scene(content, 460, 190));
-    dialog.showAndWait();
-    return confirmed[0];
-  }
-
-  private void showBlockedDeletionDialog(Stage owner, PatientDeletionBlockers blockers) {
-    Label explanation =
-        new Label(
-            "This patient cannot be deleted because related clinic data exists. The patient and its history were preserved.");
-    explanation.setId(prefix + "-patient-delete-blocked-explanation");
-    explanation.setWrapText(true);
-    VBox categories = new VBox(6);
-    categories.setId(prefix + "-patient-delete-blocked-categories");
-    for (PatientDeletionBlockers.BlockingRelation relation : blockers.blockingRelations()) {
-      Label category = new Label(relation.label() + ": " + relation.count());
-      category.setId(prefix + "-patient-delete-blocked-" + slug(relation.label()));
-      categories.getChildren().add(category);
-    }
-    Label alternative =
-        new Label(
-            "To retain the history and prevent new bookings, deactivate the patient instead.");
-    alternative.setId(prefix + "-patient-delete-blocked-alternative");
-    alternative.setWrapText(true);
-    Button close = UiComponents.secondaryButton("Close", prefix + "-patient-delete-blocked-close");
-    Stage dialog = new Stage();
-    close.setOnAction(event -> dialog.close());
-    VBox content = new VBox(12, explanation, categories, alternative, close);
-    content.setId(prefix + "-patient-delete-blocked-window");
-    content.setPadding(new Insets(18));
-    dialog.initOwner(owner);
-    dialog.initModality(Modality.WINDOW_MODAL);
-    dialog.setTitle("Patient cannot be deleted");
-    dialog.setScene(new Scene(content, 500, 320));
-    dialog.showAndWait();
-  }
-
-  private static String slug(String label) {
-    return label.toLowerCase(Locale.ROOT).replace(' ', '-');
-  }
-
-  private static String requirePrefix(String value) {
-    if (value == null || value.isBlank()) {
-      throw new IllegalArgumentException("Directory prefix is required");
-    }
-    return value;
-  }
-
-  private static String patientStatusButtonText(Patient patient) {
-    return patient.active() ? "Deactivate patient" : "Activate patient";
-  }
-
-  private static PatientForm patientForm(String prefix, boolean includePatientId, Clock clock) {
-    TextField patientId = includePatientId ? field(prefix + "-id", "Generated Patient ID") : null;
-    if (patientId != null) {
-      patientId.setEditable(false);
-    }
-    ComboBox<IdentityType> identityType = UiComponents.compactSelector();
-    identityType.setItems(FXCollections.observableArrayList(IdentityType.values()));
-    identityType.setId(prefix + "-identity-type");
-    ComboBox<CountryOption> issuingCountry = UiComponents.compactSelector();
-    issuingCountry.setItems(FXCollections.observableArrayList(CountryOption.allCountries()));
-    issuingCountry.setId(prefix + "-issuing-country");
-    TextField phoneCountryCode = field(prefix + "-phone-country-code", "65");
-    issuingCountry
-        .valueProperty()
-        .addListener(
-            (observable, previous, selected) -> {
-              if (selected != null) {
-                phoneCountryCode.setText(selected.callingCode());
-              }
-            });
-    identityType
-        .valueProperty()
-        .addListener(
-            (observable, previous, selected) -> {
-              boolean singaporeIdentity =
-                  selected == IdentityType.NRIC || selected == IdentityType.FIN;
-              if (singaporeIdentity) {
-                CountryOption.fromCode("SG")
-                    .ifPresent(country -> issuingCountry.getSelectionModel().select(country));
-              }
-              issuingCountry.setDisable(singaporeIdentity);
-            });
-    identityType.getSelectionModel().select(IdentityType.NRIC);
-    ComboBox<Sex> sex = UiComponents.compactSelector();
-    sex.setItems(FXCollections.observableArrayList(Sex.MALE, Sex.FEMALE));
-    sex.setId(prefix + "-sex");
-    ComboBox<Integer> birthDay = UiComponents.compactSelector();
-    birthDay.setId(prefix + "-date-of-birth-day");
-    birthDay.setPromptText("Day");
-    for (int day = 1; day <= 31; day++) {
-      birthDay.getItems().add(day);
-    }
-    ComboBox<Month> birthMonth = UiComponents.compactSelector();
-    birthMonth.setItems(FXCollections.observableArrayList(Month.values()));
-    birthMonth.setId(prefix + "-date-of-birth-month");
-    birthMonth.setPromptText("Month");
-    ComboBox<Integer> birthYear = UiComponents.compactSelector();
-    birthYear.setId(prefix + "-date-of-birth-year");
-    birthYear.setPromptText("Year");
-    int currentYear = ClinicClock.today(clock).getYear();
-    for (int year = currentYear; year >= 1900; year--) {
-      birthYear.getItems().add(year);
-    }
-    TextField age = field(prefix + "-age", "");
-    age.setEditable(false);
-    Runnable updateAgeDisplay =
-        () -> {
-          if (birthDay.getValue() != null
-              && birthMonth.getValue() != null
-              && birthYear.getValue() != null) {
-            try {
-              LocalDate dateOfBirth =
-                  LocalDate.of(birthYear.getValue(), birthMonth.getValue(), birthDay.getValue());
-              age.setText(calculateAgeText(dateOfBirth, clock));
-            } catch (java.time.DateTimeException exception) {
-              age.setText("");
-            }
-          } else {
-            age.setText("");
-          }
-        };
-    birthDay
-        .valueProperty()
-        .addListener((observable, previous, selected) -> updateAgeDisplay.run());
-    birthMonth
-        .valueProperty()
-        .addListener((observable, previous, selected) -> updateAgeDisplay.run());
-    birthYear
-        .valueProperty()
-        .addListener((observable, previous, selected) -> updateAgeDisplay.run());
-    return new PatientForm(
-        patientId,
-        identityType,
-        field(prefix + "-identity-number", "Identity document number"),
-        issuingCountry,
-        field(prefix + "-first-name", "First name"),
-        field(prefix + "-last-name", "Last name"),
-        birthDay,
-        birthMonth,
-        birthYear,
-        age,
-        sex,
-        phoneCountryCode,
-        field(prefix + "-phone-number", "Digits only"),
-        field(prefix + "-email", EMAIL_LABEL),
-        field(prefix + "-address", "Address"),
-        field(prefix + "-height", "Height (cm), optional"),
-        field(prefix + "-weight", "Weight (kg), optional"));
-  }
-
-  private static GridPane patientGrid(PatientForm form, boolean includePatientId) {
-    GridPane grid = new GridPane();
-    grid.setHgap(8);
-    grid.setVgap(8);
-    int row = 0;
-    if (includePatientId) {
-      grid.addRow(row, new Label("Patient ID"), form.patientId());
-      row++;
-    }
-    grid.addRow(
-        row,
-        requiredLabel("Identity type"),
-        form.identityType(),
-        requiredLabel("Identity number"),
-        form.identityNumber());
-    row++;
-    grid.addRow(row, requiredLabel("Issuing country"), form.issuingCountry());
-    row++;
-    grid.addRow(
-        row,
-        requiredLabel("First name"),
-        form.firstName(),
-        requiredLabel("Last name"),
-        form.lastName());
-    row++;
-    HBox dateOfBirthControls = new HBox(6, form.birthDay(), form.birthMonth(), form.birthYear());
-    grid.addRow(
-        row, requiredLabel("Date of birth"), dateOfBirthControls, new Label("Age"), form.age());
-    row++;
-    grid.addRow(row, requiredLabel("Sex"), form.sex());
-    row++;
-    Label phonePlus = new Label("+");
-    phonePlus.setId(form.phoneCountryCode().getId().replace("country-code", "plus"));
-    HBox phoneCountryCode = new HBox(4, phonePlus, form.phoneCountryCode());
-    grid.addRow(
-        row,
-        requiredLabel("Phone country code"),
-        phoneCountryCode,
-        requiredLabel("Phone number"),
-        form.phoneNumber());
-    row++;
-    grid.addRow(row, requiredLabel(EMAIL_LABEL), form.email());
-    row++;
-    grid.addRow(row, requiredLabel("Address"), form.address());
-    row++;
-    grid.addRow(
-        row, new Label("Height (cm)"), form.height(), new Label("Weight (kg)"), form.weight());
-    return grid;
-  }
-
-  private static Patient patientFromForm(PatientForm form, long id, boolean active) {
-    CountryOption country = form.issuingCountry().getValue();
-    LocalDate dateOfBirth = null;
-    if (form.birthDay().getValue() != null
-        && form.birthMonth().getValue() != null
-        && form.birthYear().getValue() != null) {
-      try {
-        dateOfBirth =
-            LocalDate.of(
-                form.birthYear().getValue(),
-                form.birthMonth().getValue(),
-                form.birthDay().getValue());
-      } catch (java.time.DateTimeException exception) {
-        throw new ValidationException("Date of birth must be valid", exception);
-      }
-    }
-    return new Patient(
-        id,
-        form.identityType().getValue(),
-        form.identityNumber().getText(),
-        country == null ? null : country.code(),
-        form.firstName().getText(),
-        form.lastName().getText(),
-        dateOfBirth == null ? null : dateOfBirth.toString(),
-        form.sex().getValue(),
-        form.phoneCountryCode().getText(),
-        form.phoneNumber().getText(),
-        form.email().getText(),
-        form.address().getText(),
-        parseOptionalMeasurement(form.height().getText(), "Height"),
-        parseOptionalMeasurement(form.weight().getText(), "Weight"),
-        active);
-  }
-
-  private static void populatePatientForm(Patient patient, PatientForm form) {
-    if (form.patientId() != null) {
-      form.patientId().setText(patient.displayedId());
-    }
-    form.identityType().setValue(patient.identityType());
-    form.identityNumber().setText(valueOrEmpty(patient.identityNumber()));
-    if (patient.identityType() != IdentityType.NRIC && patient.identityType() != IdentityType.FIN) {
-      form.issuingCountry().setValue(CountryOption.fromCode(patient.issuingCountry()).orElse(null));
-    }
-    form.firstName().setText(valueOrEmpty(patient.firstName()));
-    form.lastName().setText(valueOrEmpty(patient.lastName()));
-    if (patient.dateOfBirth() != null && !patient.dateOfBirth().isBlank()) {
-      LocalDate dob = LocalDate.parse(patient.dateOfBirth());
-      form.birthDay().setValue(dob.getDayOfMonth());
-      form.birthMonth().setValue(dob.getMonth());
-      form.birthYear().setValue(dob.getYear());
-    }
-    form.sex().setValue(patient.sex());
-    form.phoneCountryCode().setText(valueOrEmpty(patient.phoneCountryCode()));
-    form.phoneNumber().setText(valueOrEmpty(patient.phoneNumber()));
-    form.email().setText(valueOrEmpty(patient.email()));
-    form.address().setText(valueOrEmpty(patient.address()));
-    form.height().setText(patient.heightCm() == null ? "" : patient.heightCm().toString());
-    form.weight().setText(patient.weightKg() == null ? "" : patient.weightKg().toString());
-  }
-
-  private static void clearPatientForm(PatientForm form) {
-    clear(
-        form.identityNumber(),
-        form.firstName(),
-        form.lastName(),
-        form.age(),
-        form.phoneCountryCode(),
-        form.phoneNumber(),
-        form.email(),
-        form.address(),
-        form.height(),
-        form.weight());
-    if (form.patientId() != null) {
-      form.patientId().clear();
-    }
-    form.birthDay().getSelectionModel().clearSelection();
-    form.birthMonth().getSelectionModel().clearSelection();
-    form.birthYear().getSelectionModel().clearSelection();
-    form.identityType().getSelectionModel().clearSelection();
-    form.issuingCountry().getSelectionModel().clearSelection();
-    form.sex().getSelectionModel().clearSelection();
+    return PatientDirectoryTableView.details(patient);
   }
 
   static String calculateAgeText(LocalDate dateOfBirth) {
@@ -1029,17 +416,44 @@ final class PatientDirectoryView {
   }
 
   static String calculateAgeText(LocalDate dateOfBirth, Clock clock) {
-    if (dateOfBirth == null) {
-      return "";
-    }
-    LocalDate today = ClinicClock.today(clock);
-    return dateOfBirth.isAfter(today)
-        ? ""
-        : Integer.toString(Period.between(dateOfBirth, today).getYears());
+    return PatientDirectoryFormView.calculateAgeText(dateOfBirth, clock);
   }
 
-  private static Label requiredLabel(String text) {
-    return new Label(text + " *");
+  private static String patientOptionLabel(Patient patient) {
+    String document =
+        (valueOrEmpty(patient.identityType()) + " " + valueOrEmpty(patient.identityNumber()))
+            .trim();
+    return document.isBlank() ? fullName(patient) : fullName(patient) + " · " + document;
+  }
+
+  private static String fullName(Patient patient) {
+    return PatientDirectoryTableView.fullName(patient);
+  }
+
+  private static String displayPhone(Patient patient) {
+    return PatientDirectoryTableView.displayPhone(patient);
+  }
+
+  private static String valueOrEmpty(Object value) {
+    return PatientDirectoryTableView.valueOrEmpty(value);
+  }
+
+  private static boolean selectPatient(SearchSuggestionField<Patient> selector, long id) {
+    for (Patient patient : selector.getItems()) {
+      if (patient.id() == id) {
+        selector.select(patient);
+        return true;
+      }
+    }
+    selector.clearSelection();
+    return false;
+  }
+
+  private static String requirePrefix(String value) {
+    if (value == null || value.isBlank()) {
+      throw new IllegalArgumentException("Directory prefix is required");
+    }
+    return value;
   }
 
   private static TextField field(String id, String prompt) {
@@ -1055,60 +469,11 @@ final class PatientDirectoryView {
     return button;
   }
 
-  private static Double parseOptionalMeasurement(String value, String fieldName) {
-    if (value == null || value.isBlank()) {
-      return null;
+  private static void showTaskError(Label feedback, Throwable failure, String fallback) {
+    if (failure instanceof ValidationException || failure instanceof AuthorizationException) {
+      UiComponents.showError(feedback, failure.getMessage());
+    } else {
+      UiComponents.showError(feedback, fallback);
     }
-    try {
-      double measurement = Double.parseDouble(value.trim());
-      if (!Double.isFinite(measurement) || measurement <= 0) {
-        throw new ValidationException(fieldName + " must be a positive number");
-      }
-      return measurement;
-    } catch (NumberFormatException exception) {
-      throw new ValidationException(fieldName + " must be a positive number", exception);
-    }
-  }
-
-  private static boolean selectPatient(SearchSuggestionField<Patient> selector, long id) {
-    for (Patient patient : selector.getItems()) {
-      if (patient.id() == id) {
-        selector.select(patient);
-        return true;
-      }
-    }
-    selector.clearSelection();
-    return false;
-  }
-
-  private static String valueOrEmpty(String value) {
-    return value == null ? "" : value;
-  }
-
-  private static void clear(TextField... fields) {
-    for (TextField field : fields) {
-      field.clear();
-    }
-  }
-
-  private record PatientForm(
-      TextField patientId,
-      ComboBox<IdentityType> identityType,
-      TextField identityNumber,
-      ComboBox<CountryOption> issuingCountry,
-      TextField firstName,
-      TextField lastName,
-      ComboBox<Integer> birthDay,
-      ComboBox<Month> birthMonth,
-      ComboBox<Integer> birthYear,
-      TextField age,
-      ComboBox<Sex> sex,
-      TextField phoneCountryCode,
-      TextField phoneNumber,
-      TextField email,
-      TextField address,
-      TextField height,
-      TextField weight) {
-    // Groups one independent registration or details form's controls.
   }
 }
