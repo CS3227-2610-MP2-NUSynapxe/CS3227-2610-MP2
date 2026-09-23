@@ -268,6 +268,7 @@ final class AppointmentEditorViewTest extends ApplicationTest {
   }
 
   private static final class CapturingTaskRunner implements ClinicTaskRunner {
+    private final ClinicTaskRunner immediateRunner = ClinicTaskRunner.immediate();
     private final List<PendingSubmission> submissions = new ArrayList<>();
 
     @Override
@@ -279,12 +280,7 @@ final class AppointmentEditorViewTest extends ApplicationTest {
 
     void runSubmission(int index) {
       PendingSubmission sub = submissions.get(index);
-      try {
-        Object res = sub.task().run();
-        sub.success().accept(res);
-      } catch (Throwable t) {
-        sub.failure().accept(t);
-      }
+      immediateRunner.submit(sub.task(), sub.success(), sub.failure());
     }
 
     void failSubmission(int index, Throwable t) {
@@ -293,7 +289,7 @@ final class AppointmentEditorViewTest extends ApplicationTest {
 
     @Override
     public void close() {
-      // The test runner does not own external resources.
+      immediateRunner.close();
     }
   }
 

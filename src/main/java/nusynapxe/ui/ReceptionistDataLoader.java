@@ -426,7 +426,10 @@ final class ReceptionistDataLoader {
   }
 
   private static boolean sameAccount(Account left, Account right) {
-    return left == right || (left != null && right != null && left.id() == right.id());
+    if (left == null || right == null) {
+      return left == null && right == null;
+    }
+    return left.id() == right.id();
   }
 
   private static void selectAppointment(TableView<AppointmentListRow> list, long appointmentId) {

@@ -327,43 +327,48 @@ final class DoctorCalendarTimeOffTest extends DoctorCalendarViewTestSupport {
   @Test
   void settingsReloadDisablesDayEditorsWhileQueued() {
     Session doctorSession = new Session(doctorId, "doctor", Role.DOCTOR);
-    CapturingTaskRunner capturingRunner = new CapturingTaskRunner();
-    DoctorCalendarSettingsView[] settingsHolder = new DoctorCalendarSettingsView[1];
-    interact(
-        () -> {
-          settingsHolder[0] =
-              new DoctorCalendarSettingsView(
-                  services, doctorSession, () -> {}, () -> {}, new Label(), capturingRunner);
-          Stage stage = (Stage) lookup("#login-view").query().getScene().getWindow();
-          stage.getScene().setRoot(settingsHolder[0].view());
-        });
+    try (CapturingTaskRunner capturingRunner = new CapturingTaskRunner()) {
+      DoctorCalendarSettingsView[] settingsHolder = new DoctorCalendarSettingsView[1];
+      interact(
+          () -> {
+            settingsHolder[0] =
+                new DoctorCalendarSettingsView(
+                    services, doctorSession, () -> {}, () -> {}, new Label(), capturingRunner);
+            Stage stage = (Stage) lookup("#login-view").query().getScene().getWindow();
+            stage.getScene().setRoot(settingsHolder[0].view());
+          });
 
-    Node days = lookup("#doctor-calendar-settings-days").query();
-    assertTrue(days.isDisabled(), "Day editors must be disabled while settings reload is queued");
+      Node days = lookup("#doctor-calendar-settings-days").query();
+      assertTrue(days.isDisabled(), "Day editors must be disabled while settings reload is queued");
 
-    interact(() -> capturingRunner.tasks.getFirst().run());
-    assertFalse(days.isDisabled(), "Day editors must be enabled after settings reload completes");
+      interact(capturingRunner::runFirst);
+      assertFalse(days.isDisabled(), "Day editors must be enabled after settings reload completes");
+    }
   }
 
   private static final class CapturingTaskRunner implements ClinicTaskRunner {
-    private final List<Runnable> tasks = new ArrayList<>();
+    private final ClinicTaskRunner immediateRunner = ClinicTaskRunner.immediate();
+    private final List<PendingSubmission> submissions = new ArrayList<>();
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> void submit(
         ClinicTask<T> task, Consumer<T> onSuccess, Consumer<Throwable> onFailure) {
-      tasks.add(
-          () -> {
-            try {
-              onSuccess.accept(task.run());
-            } catch (Exception exception) {
-              onFailure.accept(exception);
-            }
-          });
+      ClinicTaskRunner.requireCallbacks(task, onSuccess, onFailure);
+      submissions.add(new PendingSubmission(task, (Consumer<Object>) onSuccess, onFailure));
+    }
+
+    void runFirst() {
+      PendingSubmission sub = submissions.removeFirst();
+      immediateRunner.submit(sub.task(), sub.success(), sub.failure());
     }
 
     @Override
     public void close() {
-      // The test runner does not own external resources.
+      immediateRunner.close();
     }
   }
+
+  private record PendingSubmission(
+      ClinicTaskRunner.ClinicTask<?> task, Consumer<Object> success, Consumer<Throwable> failure) {}
 }
