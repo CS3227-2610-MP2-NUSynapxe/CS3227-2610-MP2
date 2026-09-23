@@ -1,6 +1,7 @@
 package nusynapxe.ui;
 
 import java.util.Objects;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import javafx.scene.control.Button;
@@ -234,6 +235,9 @@ final class DoctorConsultationPanel {
   }
 
   private void submitPrescription() {
+    if (addPrescription.isDisable()) {
+      return;
+    }
     try {
       long selectedAppointmentId = requireAppointment();
       long generation = selectionGeneration.getAsLong();
@@ -242,6 +246,7 @@ final class DoctorConsultationPanel {
       String frequencyValue = frequency.getText();
       String durationValue = duration.getText();
       String instructionsValue = instructions.getText();
+      addPrescription.setDisable(true);
       taskRunner.submit(
           () -> {
             services
@@ -257,6 +262,7 @@ final class DoctorConsultationPanel {
             return services.appointmentService().get(selectedAppointmentId);
           },
           appointment -> {
+            addPrescription.setDisable(false);
             if (generation != selectionGeneration.getAsLong()) {
               return;
             }
@@ -264,7 +270,13 @@ final class DoctorConsultationPanel {
             clear(medication, dosage, frequency, duration, instructions);
             load(appointment, generation);
           },
-          failure -> showError(failure, "Prescription could not be added"));
+          failure -> {
+            addPrescription.setDisable(false);
+            showError(failure, "Prescription could not be added");
+          });
+    } catch (RejectedExecutionException exception) {
+      addPrescription.setDisable(false);
+      showError(exception, "Prescription could not be added");
     } catch (ValidationException exception) {
       showError(exception, "Prescription could not be added");
     }
