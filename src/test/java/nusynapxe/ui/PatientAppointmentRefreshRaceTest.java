@@ -43,7 +43,7 @@ final class PatientAppointmentRefreshRaceTest extends ApplicationTest {
 
     interact(
         () ->
-            PatientDirectoryView.refreshAppointmentPatients(
+            AppointmentPatientSelector.refreshAppointmentPatients(
                 mock(ClinicServices.class),
                 new Session(7, "reception", Role.RECEPTIONIST),
                 selector,

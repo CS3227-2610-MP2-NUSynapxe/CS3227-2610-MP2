@@ -138,7 +138,7 @@ final class ReceptionistAppointmentPanel {
   }
 
   void refreshPatients(long patientId) {
-    PatientDirectoryView.refreshAppointmentPatients(
+    AppointmentPatientSelector.refreshAppointmentPatients(
         services, session, patientSearch, feedback, patientId, taskRunner, patientGenerations);
   }
 
