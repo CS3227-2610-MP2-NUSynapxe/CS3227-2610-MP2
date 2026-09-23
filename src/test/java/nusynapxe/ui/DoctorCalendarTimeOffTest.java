@@ -330,13 +330,15 @@ final class DoctorCalendarTimeOffTest extends DoctorCalendarViewTestSupport {
     CapturingTaskRunner capturingRunner = new CapturingTaskRunner();
     DoctorCalendarSettingsView[] settingsHolder = new DoctorCalendarSettingsView[1];
     interact(
-        () ->
-            settingsHolder[0] =
-                new DoctorCalendarSettingsView(
-                    services, doctorSession, () -> {}, () -> {}, new Label(), capturingRunner));
-    DoctorCalendarSettingsView settings = settingsHolder[0];
+        () -> {
+          settingsHolder[0] =
+              new DoctorCalendarSettingsView(
+                  services, doctorSession, () -> {}, () -> {}, new Label(), capturingRunner);
+          Stage stage = (Stage) lookup("#login-view").query().getScene().getWindow();
+          stage.getScene().setRoot(settingsHolder[0].view());
+        });
 
-    Node days = settings.view().lookup("#doctor-calendar-settings-days");
+    Node days = lookup("#doctor-calendar-settings-days").query();
     assertTrue(days.isDisabled(), "Day editors must be disabled while settings reload is queued");
 
     interact(() -> capturingRunner.tasks.getFirst().run());
