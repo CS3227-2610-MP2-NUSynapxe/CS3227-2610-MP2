@@ -222,6 +222,10 @@ final class DoctorCalendarNavigationTest extends DoctorCalendarViewTestSupport {
         () -> {
           Stage stage = (Stage) lookup("#doctor-calendar-toolbar").query().getScene().getWindow();
           stage.setWidth(980);
+        });
+    WaitForAsyncUtils.waitForFxEvents();
+    interact(
+        () -> {
           lookup("#doctor-calendar-toolbar").query().applyCss();
           lookup("#doctor-calendar-toolbar").queryAs(VBox.class).layout();
         });
@@ -231,6 +235,10 @@ final class DoctorCalendarNavigationTest extends DoctorCalendarViewTestSupport {
         () -> {
           Stage stage = (Stage) lookup("#doctor-calendar-toolbar").query().getScene().getWindow();
           stage.setWidth(1400);
+        });
+    WaitForAsyncUtils.waitForFxEvents();
+    interact(
+        () -> {
           lookup("#doctor-calendar-toolbar").query().applyCss();
           lookup("#doctor-calendar-toolbar").queryAs(VBox.class).layout();
         });

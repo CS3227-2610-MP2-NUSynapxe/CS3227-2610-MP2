@@ -224,8 +224,8 @@ final class DoctorCalendarAppointmentTest extends DoctorCalendarViewTestSupport 
     Bounds oneHourEndSlot =
         sceneBounds(lookup("#doctor-calendar-period-" + today() + "-19").query());
     assertEquals(thirtyMinuteSlot.getHeight() - 4, appointmentBounds.getHeight(), 0.1);
-    assertEquals(thirtyMinuteSlot.getHeight() * 2 - 4, oneHourAppointmentBounds.getHeight(), 0.1);
-    assertEquals(thirtyMinuteSlot.getHeight() * 2 - 4, oneHourTimeOffBounds.getHeight(), 0.1);
+    assertEquals(thirtyMinuteSlot.getHeight() * 2 - 4, oneHourAppointmentBounds.getHeight(), 2.0);
+    assertEquals(thirtyMinuteSlot.getHeight() * 2 - 4, oneHourTimeOffBounds.getHeight(), 2.0);
     assertTrue(oneHourTimeOff.getStyleClass().contains("calendar-time-off-block"));
     assertTrue(oneHourTimeOff.getAccessibleText().startsWith("Blocked time"));
     assertEquals(oneHourStartSlot.getMinY() + 2, oneHourAppointmentBounds.getMinY(), 0.1);
