@@ -1,6 +1,7 @@
 package nusynapxe.ui;
 
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicLong;
 import javafx.geometry.Insets;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
@@ -48,9 +49,11 @@ public final class LoginView {
     var password = passwordInput.field();
     Label feedback = UiComponents.feedback("login-feedback");
     Button submit = UiComponents.primaryButton("Log in", "login-submit");
+    AtomicLong loginGeneration = new AtomicLong();
     submit.setDefaultButton(true);
     submit.setOnAction(
         event -> {
+          long generation = loginGeneration.incrementAndGet();
           String submittedUsername = username.getText();
           char[] submittedPassword = password.getText().toCharArray();
           taskRunner.submit(
@@ -62,6 +65,9 @@ public final class LoginView {
                 }
               },
               session -> {
+                if (generation != loginGeneration.get()) {
+                  return;
+                }
                 if (session.isPresent()) {
                   feedback.setText("");
                   onSuccess.accept(session.orElseThrow());
@@ -69,7 +75,11 @@ public final class LoginView {
                   UiComponents.showError(feedback, "Invalid username or password");
                 }
               },
-              failure -> UiComponents.showError(feedback, "Login is temporarily unavailable"));
+              failure -> {
+                if (generation == loginGeneration.get()) {
+                  UiComponents.showError(feedback, "Login is temporarily unavailable");
+                }
+              });
         });
 
     Label brand = new Label("NUSynapxe");

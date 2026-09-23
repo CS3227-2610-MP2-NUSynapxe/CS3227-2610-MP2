@@ -2,6 +2,7 @@ package nusynapxe.ui;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
@@ -101,6 +102,31 @@ final class CredentialSnapshotTest extends ApplicationTest {
     assertArrayEquals("before-pass".toCharArray(), submittedPassword.get());
   }
 
+  @Test
+  void loginIgnoresAStaleSuccessfulCallbackAfterANewerSubmission() {
+    AuthenticationService authentication = mock(AuthenticationService.class);
+    List<Session> acceptedSessions = new ArrayList<>();
+    show(LoginView.create(authentication, acceptedSessions::add, taskRunner));
+
+    setText("#login-username", "first-user");
+    setText("#login-password", "first-pass");
+    fire("#login-submit");
+    setText("#login-username", "second-user");
+    setText("#login-password", "second-pass");
+    fire("#login-submit");
+
+    interact(
+        () ->
+            taskRunner
+                .submissions
+                .getFirst()
+                .success()
+                .accept(Optional.of(new Session(9, "first-user", Role.DOCTOR))));
+    assertTrue(acceptedSessions.isEmpty());
+    interact(() -> taskRunner.submissions.getLast().success().accept(Optional.empty()));
+    assertTrue(acceptedSessions.isEmpty());
+  }
+
   private void show(Parent view) {
     interact(() -> scene.setRoot(view));
   }
@@ -121,14 +147,17 @@ final class CredentialSnapshotTest extends ApplicationTest {
 
   private static final class CapturingTaskRunner implements ClinicTaskRunner {
     private final List<ClinicTask<?>> tasks = new ArrayList<>();
+    private final List<PendingSubmission> submissions = new ArrayList<>();
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> void submit(
         ClinicTask<T> task,
         java.util.function.Consumer<T> onSuccess,
         java.util.function.Consumer<Throwable> onFailure) {
       ClinicTaskRunner.requireCallbacks(task, onSuccess, onFailure);
       tasks.add(task);
+      submissions.add(new PendingSubmission(value -> onSuccess.accept((T) value), onFailure));
     }
 
     @Override
@@ -136,4 +165,8 @@ final class CredentialSnapshotTest extends ApplicationTest {
       // The test runner does not own external resources.
     }
   }
+
+  private record PendingSubmission(
+      java.util.function.Consumer<Object> success,
+      java.util.function.Consumer<Throwable> failure) {}
 }
