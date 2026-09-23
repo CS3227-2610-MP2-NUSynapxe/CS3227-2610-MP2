@@ -44,6 +44,8 @@ public final class DoctorCalendarSettingsView {
   private final BorderPane root;
   private VBox daysContainer;
   private Button saveButton;
+  private Button backButton;
+  private Button cancelButton;
   private DayOfWeek firstDayOfWeek = DayOfWeek.SUNDAY;
   private boolean settingsLoaded;
   private long operationGeneration;
@@ -137,10 +139,10 @@ public final class DoctorCalendarSettingsView {
   }
 
   private BorderPane buildRoot() {
-    Button back = UiComponents.secondaryButton("Back to Calendar", "doctor-calendar-settings-back");
-    back.setAccessibleText("Return to Calendar");
-    back.setOnAction(event -> onBack.run());
-    HBox toolbar = new HBox(12, back, UiComponents.pageTitle("Calendar settings"));
+    backButton = UiComponents.secondaryButton("Back to Calendar", "doctor-calendar-settings-back");
+    backButton.setAccessibleText("Return to Calendar");
+    backButton.setOnAction(event -> onBack.run());
+    HBox toolbar = new HBox(12, backButton, UiComponents.pageTitle("Calendar settings"));
     toolbar.setAlignment(Pos.CENTER_LEFT);
     toolbar.getStyleClass().add("calendar-settings-toolbar");
 
@@ -167,10 +169,10 @@ public final class DoctorCalendarSettingsView {
     saveButton.setAccessibleText("Save Calendar settings");
     saveButton.setDisable(true);
     saveButton.setOnAction(event -> save());
-    Button cancel = UiComponents.secondaryButton("Cancel", "doctor-calendar-settings-cancel");
-    cancel.setAccessibleText("Cancel Calendar setting edits");
-    cancel.setOnAction(event -> onBack.run());
-    HBox actions = UiComponents.actionBar(saveButton, cancel);
+    cancelButton = UiComponents.secondaryButton("Cancel", "doctor-calendar-settings-cancel");
+    cancelButton.setAccessibleText("Cancel Calendar setting edits");
+    cancelButton.setOnAction(event -> onBack.run());
+    HBox actions = UiComponents.actionBar(saveButton, cancelButton);
 
     VBox content = new VBox(16, workingHours, actions);
     content.setPadding(new Insets(0, 4, 24, 4));
@@ -202,8 +204,10 @@ public final class DoctorCalendarSettingsView {
   }
 
   private void save() {
-    if (!settingsLoaded) {
-      feedback.setText("Calendar settings are not loaded");
+    if (!settingsLoaded || (saveButton != null && saveButton.isDisable())) {
+      if (!settingsLoaded) {
+        feedback.setText("Calendar settings are not loaded");
+      }
       return;
     }
     try {
@@ -215,6 +219,7 @@ public final class DoctorCalendarSettingsView {
           new DoctorCalendarSettings(session.accountId(), firstDayOfWeek, intervals);
       operationGeneration++;
       long generation = operationGeneration;
+      setSaving(true);
       taskRunner.submit(
           () -> {
             services.calendarService().saveSettings(session, settings);
@@ -224,16 +229,33 @@ public final class DoctorCalendarSettingsView {
             if (disposed || generation != operationGeneration) {
               return;
             }
+            setSaving(false);
             feedback.setText("Calendar settings saved");
             onSaved.run();
           },
           failure -> {
             if (!disposed && generation == operationGeneration) {
+              setSaving(false);
               feedback.setText(userMessage(failure, "Calendar settings could not be saved"));
             }
           });
     } catch (ValidationException | IllegalArgumentException exception) {
       feedback.setText(userMessage(exception, "Calendar settings could not be saved"));
+    }
+  }
+
+  private void setSaving(boolean saving) {
+    if (daysContainer != null) {
+      daysContainer.setDisable(saving);
+    }
+    if (saveButton != null) {
+      saveButton.setDisable(saving);
+    }
+    if (cancelButton != null) {
+      cancelButton.setDisable(saving);
+    }
+    if (backButton != null) {
+      backButton.setDisable(saving);
     }
   }
 

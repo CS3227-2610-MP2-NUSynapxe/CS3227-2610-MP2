@@ -3,6 +3,7 @@ package nusynapxe.ui;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Objects;
+import java.util.function.BooleanSupplier;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -54,7 +55,20 @@ final class TimeOffDialog {
       Label workspaceFeedback,
       Runnable onUpdated,
       ClinicTaskRunner taskRunner) {
+    showCreate(
+        services, session, initialStart, workspaceFeedback, onUpdated, taskRunner, () -> true);
+  }
+
+  static void showCreate(
+      ClinicServices services,
+      Session session,
+      LocalDateTime initialStart,
+      Label workspaceFeedback,
+      Runnable onUpdated,
+      ClinicTaskRunner taskRunner,
+      BooleanSupplier workspaceActive) {
     Objects.requireNonNull(initialStart, "initialStart");
+    Objects.requireNonNull(workspaceActive, "workspaceActive");
     DatePicker date = UiComponents.compactDatePicker(initialStart.toLocalDate());
     date.setId(PREFIX + "-date");
     AppointmentDialog.TimeFields start = AppointmentDialog.timeSelector(PREFIX + "-start");
@@ -65,6 +79,13 @@ final class TimeOffDialog {
     Button submit = UiComponents.primaryButton("Block time", PREFIX + "-submit");
     Button cancel = UiComponents.secondaryButton("Cancel", PREFIX + "-cancel");
     Stage dialog = dialogStage(workspaceFeedback, "Block time");
+    boolean[] pending = {false};
+    dialog.setOnCloseRequest(
+        event -> {
+          if (pending[0]) {
+            event.consume();
+          }
+        });
     submit.setOnAction(
         event -> {
           try {
@@ -73,29 +94,44 @@ final class TimeOffDialog {
             if (!endsAt.isAfter(startsAt)) {
               throw new ValidationException("End time must be after start time");
             }
+            pending[0] = true;
+            submit.setDisable(true);
+            cancel.setDisable(true);
             taskRunner.submit(
                 () -> {
                   services.appointmentService().blockTimeOff(session, startsAt, endsAt);
                   return null;
                 },
                 ignored -> {
-                  UiComponents.showMessage(workspaceFeedback, "Time blocked");
-                  onUpdated.run();
+                  pending[0] = false;
                   dialog.close();
+                  if (workspaceActive.getAsBoolean()) {
+                    UiComponents.showMessage(workspaceFeedback, "Time blocked");
+                    onUpdated.run();
+                  }
                 },
-                failure ->
-                    showError(
-                        feedback,
-                        failure instanceof ValidationException
-                                || failure instanceof AuthorizationException
-                            ? failure.getMessage()
-                            : null,
-                        "Time off is temporarily unavailable"));
+                failure -> {
+                  pending[0] = false;
+                  submit.setDisable(false);
+                  cancel.setDisable(false);
+                  showError(
+                      feedback,
+                      failure instanceof ValidationException
+                              || failure instanceof AuthorizationException
+                          ? failure.getMessage()
+                          : null,
+                      "Time off is temporarily unavailable");
+                });
           } catch (ValidationException exception) {
             showError(feedback, exception.getMessage(), "The interval could not be blocked");
           }
         });
-    cancel.setOnAction(event -> dialog.close());
+    cancel.setOnAction(
+        event -> {
+          if (!pending[0]) {
+            dialog.close();
+          }
+        });
     HBox actions = new HBox(8, cancel, submit);
     actions.setAlignment(Pos.CENTER_RIGHT);
     VBox content =
@@ -133,6 +169,18 @@ final class TimeOffDialog {
       Label workspaceFeedback,
       Runnable onUpdated,
       ClinicTaskRunner taskRunner) {
+    showDetails(services, session, timeOff, workspaceFeedback, onUpdated, taskRunner, () -> true);
+  }
+
+  static void showDetails(
+      ClinicServices services,
+      Session session,
+      DoctorTimeOff timeOff,
+      Label workspaceFeedback,
+      Runnable onUpdated,
+      ClinicTaskRunner taskRunner,
+      BooleanSupplier workspaceActive) {
+    Objects.requireNonNull(workspaceActive, "workspaceActive");
     Stage dialog = dialogStage(workspaceFeedback, "Blocked time");
     Label interval =
         new Label(
@@ -143,6 +191,13 @@ final class TimeOffDialog {
     Button remove =
         UiComponents.dangerButton("Remove blocked time", "doctor-calendar-time-off-remove");
     Button close = UiComponents.secondaryButton("Close", "doctor-calendar-time-off-close");
+    boolean[] pending = {false};
+    dialog.setOnCloseRequest(
+        event -> {
+          if (pending[0]) {
+            event.consume();
+          }
+        });
     remove.setOnAction(
         event -> {
           Alert confirmation =
@@ -165,26 +220,41 @@ final class TimeOffDialog {
           if (confirmation.showAndWait().filter(ButtonType.OK::equals).isEmpty()) {
             return;
           }
+          pending[0] = true;
+          remove.setDisable(true);
+          close.setDisable(true);
           taskRunner.submit(
               () -> {
                 services.appointmentService().removeTimeOff(session, timeOff.id());
                 return null;
               },
               ignored -> {
-                UiComponents.showMessage(workspaceFeedback, "Blocked time removed");
-                onUpdated.run();
+                pending[0] = false;
                 dialog.close();
+                if (workspaceActive.getAsBoolean()) {
+                  UiComponents.showMessage(workspaceFeedback, "Blocked time removed");
+                  onUpdated.run();
+                }
               },
-              failure ->
-                  showError(
-                      workspaceFeedback,
-                      failure instanceof ValidationException
-                              || failure instanceof AuthorizationException
-                          ? failure.getMessage()
-                          : null,
-                      "Blocked time could not be removed"));
+              failure -> {
+                pending[0] = false;
+                remove.setDisable(false);
+                close.setDisable(false);
+                showError(
+                    workspaceFeedback,
+                    failure instanceof ValidationException
+                            || failure instanceof AuthorizationException
+                        ? failure.getMessage()
+                        : null,
+                    "Blocked time could not be removed");
+              });
         });
-    close.setOnAction(event -> dialog.close());
+    close.setOnAction(
+        event -> {
+          if (!pending[0]) {
+            dialog.close();
+          }
+        });
     HBox actions = new HBox(8, close, remove);
     actions.setAlignment(Pos.CENTER_RIGHT);
     VBox content = new VBox(12, UiComponents.sectionHeading("Blocked time"), interval, actions);

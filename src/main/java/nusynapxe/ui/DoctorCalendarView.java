@@ -403,14 +403,21 @@ public final class DoctorCalendarView {
         minute = 0;
       }
       TimeOffDialog.showCreate(
-          services, session, date.atTime(hour, minute), feedback, this::refresh, taskRunner);
+          services,
+          session,
+          date.atTime(hour, minute),
+          feedback,
+          this::refresh,
+          taskRunner,
+          workspaceActive);
     } catch (ValidationException | IllegalArgumentException exception) {
       UiComponents.showError(feedback, userMessage(exception, "Select a valid calendar range"));
     }
   }
 
   private void openTimeOff(nusynapxe.domain.DoctorTimeOff timeOff) {
-    TimeOffDialog.showDetails(services, session, timeOff, feedback, this::refresh, taskRunner);
+    TimeOffDialog.showDetails(
+        services, session, timeOff, feedback, this::refresh, taskRunner, workspaceActive);
   }
 
   private void openAppointment(CalendarAppointment appointment) {

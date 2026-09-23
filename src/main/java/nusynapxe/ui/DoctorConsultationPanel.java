@@ -134,6 +134,7 @@ final class DoctorConsultationPanel {
   }
 
   void clear() {
+    setConsultationDisabled(false);
     DoctorConsultationView.clearClinical(
         diagnosis, consultationNotes, followUpNotes, prescriptions);
   }
@@ -203,12 +204,16 @@ final class DoctorConsultationPanel {
   }
 
   private void save() {
+    if (saveConsultation.isDisable()) {
+      return;
+    }
     try {
       long selectedAppointmentId = requireAppointment();
       long generation = selectionGeneration.getAsLong();
       String diagnosisValue = diagnosis.getText();
       String consultationValue = consultationNotes.getText();
       String followUpValue = followUpNotes.getText();
+      setConsultationDisabled(true);
       taskRunner.submit(
           () -> {
             services
@@ -225,13 +230,26 @@ final class DoctorConsultationPanel {
             if (generation != selectionGeneration.getAsLong()) {
               return;
             }
+            setConsultationDisabled(false);
             feedback.setText("Consultation saved");
             load(appointment, generation);
           },
-          failure -> showError(failure, "Consultation could not be saved"));
+          failure -> {
+            if (generation == selectionGeneration.getAsLong()) {
+              setConsultationDisabled(false);
+            }
+            showError(failure, "Consultation could not be saved");
+          });
     } catch (ValidationException exception) {
       showError(exception, "Consultation could not be saved");
     }
+  }
+
+  private void setConsultationDisabled(boolean disabled) {
+    saveConsultation.setDisable(disabled);
+    diagnosis.setDisable(disabled);
+    consultationNotes.setDisable(disabled);
+    followUpNotes.setDisable(disabled);
   }
 
   private void submitPrescription() {

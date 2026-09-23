@@ -67,13 +67,28 @@ final class PatientDirectoryView {
     Button searchPatients = button("Search patients", prefix + "-patient-search-submit");
     Button clearPatientSearch = button("Clear search", prefix + "-patient-search-clear");
     patientTable = PatientDirectoryTableView.create(prefix, this::showPatientView);
+    long[] registrationGeneration = {0};
+    Button cancelRegistration = button("Cancel", prefix + "-patient-register-cancel");
     register.setOnAction(
         event -> {
+          if (register.isDisable()) {
+            return;
+          }
           try {
             Patient draft = PatientDirectoryFormView.fromForm(registerForm, 0, true);
+            registrationGeneration[0]++;
+            long generation = registrationGeneration[0];
+            register.setDisable(true);
+            cancelRegistration.setDisable(true);
             taskRunner.submit(
                 () -> services.patientService().register(session, draft),
                 patient -> {
+                  register.setDisable(false);
+                  cancelRegistration.setDisable(false);
+                  if (generation != registrationGeneration[0]) {
+                    refresh();
+                    return;
+                  }
                   PatientDirectoryFormView.clear(registerForm);
                   patientSearch.clear();
                   showDirectory();
@@ -82,11 +97,14 @@ final class PatientDirectoryView {
                   preferredPatientId = patient.id();
                   onPatientChanged.accept(patient.id());
                 },
-                failure ->
-                    showTaskError(
-                        workspaceFeedback,
-                        failure,
-                        "Patient registration is temporarily unavailable"));
+                failure -> {
+                  register.setDisable(false);
+                  cancelRegistration.setDisable(false);
+                  showTaskError(
+                      workspaceFeedback,
+                      failure,
+                      "Patient registration is temporarily unavailable");
+                });
           } catch (ValidationException exception) {
             UiComponents.showError(workspaceFeedback, exception.getMessage());
           }
@@ -119,7 +137,6 @@ final class PatientDirectoryView {
     directoryContent.setMaxHeight(Double.MAX_VALUE);
     VBox.setVgrow(patientTable, Priority.ALWAYS);
 
-    Button cancelRegistration = button("Cancel", prefix + "-patient-register-cancel");
     HBox registrationActions = new HBox(8, register, cancelRegistration);
     registrationContent =
         new VBox(
@@ -135,11 +152,18 @@ final class PatientDirectoryView {
     editingContent.setId(prefix + "-patient-edit-view");
     openRegistration.setOnAction(
         event -> {
+          registrationGeneration[0]++;
+          register.setDisable(false);
+          cancelRegistration.setDisable(false);
           PatientDirectoryFormView.clear(registerForm);
           showRegistration();
         });
     cancelRegistration.setOnAction(
         event -> {
+          if (cancelRegistration.isDisable()) {
+            return;
+          }
+          registrationGeneration[0]++;
           PatientDirectoryFormView.clear(registerForm);
           showDirectory();
           refresh();

@@ -346,6 +346,68 @@ final class DoctorCalendarTimeOffTest extends DoctorCalendarViewTestSupport {
     }
   }
 
+  @Test
+  void settingsSaveDisablesControlsWhileQueued() {
+    Session doctorSession = new Session(doctorId, "doctor", Role.DOCTOR);
+    try (CapturingTaskRunner capturingRunner = new CapturingTaskRunner()) {
+      DoctorCalendarSettingsView[] settingsHolder = new DoctorCalendarSettingsView[1];
+      interact(
+          () -> {
+            settingsHolder[0] =
+                new DoctorCalendarSettingsView(
+                    services, doctorSession, () -> {}, () -> {}, new Label(), capturingRunner);
+            Stage stage = (Stage) lookup("#login-view").query().getScene().getWindow();
+            stage.getScene().setRoot(settingsHolder[0].view());
+          });
+
+      interact(capturingRunner::runFirst);
+      Button save = lookup("#doctor-calendar-settings-save").queryAs(Button.class);
+      Button cancel = lookup("#doctor-calendar-settings-cancel").queryAs(Button.class);
+      Button back = lookup("#doctor-calendar-settings-back").queryAs(Button.class);
+      Node days = lookup("#doctor-calendar-settings-days").query();
+
+      assertFalse(save.isDisabled());
+      assertFalse(cancel.isDisabled());
+      assertFalse(back.isDisabled());
+      assertFalse(days.isDisabled());
+
+      interact(save::fire);
+
+      assertTrue(save.isDisabled(), "Save button must be disabled while saving is queued");
+      assertTrue(cancel.isDisabled(), "Cancel button must be disabled while saving is queued");
+      assertTrue(back.isDisabled(), "Back button must be disabled while saving is queued");
+      assertTrue(days.isDisabled(), "Day editors must be disabled while saving is queued");
+
+      interact(capturingRunner::runFirst);
+    }
+  }
+
+  @Test
+  void timeOffDialogDisablesControlsWhilePending() {
+    Session doctorSession = new Session(doctorId, "doctor", Role.DOCTOR);
+    try (CapturingTaskRunner capturingRunner = new CapturingTaskRunner()) {
+      interact(
+          () ->
+              TimeOffDialog.showCreate(
+                  services,
+                  doctorSession,
+                  today().atTime(10, 0),
+                  new Label(),
+                  () -> {},
+                  capturingRunner));
+
+      Button submit = lookup("#doctor-calendar-time-off-dialog-submit").queryAs(Button.class);
+      Button cancel = lookup("#doctor-calendar-time-off-dialog-cancel").queryAs(Button.class);
+
+      interact(submit::fire);
+
+      assertTrue(submit.isDisabled());
+      assertTrue(cancel.isDisabled());
+
+      interact(capturingRunner::runFirst);
+    }
+  }
+
   private static final class CapturingTaskRunner implements ClinicTaskRunner {
     private final ClinicTaskRunner immediateRunner = ClinicTaskRunner.immediate();
     private final List<Runnable> tasks = new ArrayList<>();

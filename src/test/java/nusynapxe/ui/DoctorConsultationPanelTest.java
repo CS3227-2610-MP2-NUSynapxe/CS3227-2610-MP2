@@ -32,10 +32,36 @@ final class DoctorConsultationPanelTest extends ApplicationTest {
             taskRunner,
             () -> 42,
             () -> 1);
-    Scene scene = new Scene(new StackPane(panel.prescriptionCardView()), 1200, 760);
+    Scene scene =
+        new Scene(
+            new StackPane(panel.consultationCardView(), panel.prescriptionCardView()), 1200, 760);
     UiComponents.applyStylesheet(scene);
     stage.setScene(scene);
     stage.show();
+  }
+
+  @Test
+  void disablesConsultationEditsWhileSaveIsQueued() {
+    interact(
+        () -> {
+          panel.diagnosisField().setText("Diagnosis");
+          panel.consultationNotesArea().setText("Notes");
+          panel.followUpNotesArea().setText("Follow up");
+          panel.saveButton().fire();
+        });
+
+    assertTrue(panel.saveButton().isDisable());
+    assertTrue(panel.diagnosisField().isDisable());
+    assertTrue(panel.consultationNotesArea().isDisable());
+    assertTrue(panel.followUpNotesArea().isDisable());
+
+    interact(
+        () -> taskRunner.submissions.getLast().failure().accept(new RuntimeException("failed")));
+
+    assertFalse(panel.saveButton().isDisable());
+    assertFalse(panel.diagnosisField().isDisable());
+    assertFalse(panel.consultationNotesArea().isDisable());
+    assertFalse(panel.followUpNotesArea().isDisable());
   }
 
   @Test
