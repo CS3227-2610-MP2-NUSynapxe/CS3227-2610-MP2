@@ -201,6 +201,9 @@ final class ReceptionistCalendarView {
         disposeScheduleList();
         CalendarRangeSnapshot range = selectedRange();
         List<LocalDate> dates = selectedDates(range);
+        if (root.getCenter() != null) {
+          root.getCenter().setDisable(true);
+        }
         submit(
             () ->
                 services
@@ -225,6 +228,9 @@ final class ReceptionistCalendarView {
             },
             failure -> {
               if (!disposed && generation == refreshGeneration) {
+                root.setCenter(
+                    UiComponents.emptyState(
+                        "reception-calendar-unavailable", "Calendar is temporarily unavailable."));
                 UiComponents.showError(
                     feedback,
                     failure.getMessage() == null
