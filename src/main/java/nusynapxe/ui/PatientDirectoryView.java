@@ -41,6 +41,7 @@ final class PatientDirectoryView {
   private final VBox root;
   private long preferredPatientId;
   private long refreshGeneration;
+  private long patientViewGeneration;
   private boolean disposed;
 
   private PatientDirectoryView(
@@ -274,9 +275,11 @@ final class PatientDirectoryView {
   void dispose() {
     disposed = true;
     refreshGeneration++;
+    patientViewGeneration++;
   }
 
   private void showDirectory() {
+    patientViewGeneration++;
     pageTitle.setText("Patient Directory");
     setPage(directoryContent, true);
     setPage(registrationContent, false);
@@ -285,6 +288,7 @@ final class PatientDirectoryView {
   }
 
   private void showRegistration() {
+    patientViewGeneration++;
     pageTitle.setText("Register new patient");
     setPage(directoryContent, false);
     setPage(registrationContent, true);
@@ -301,6 +305,7 @@ final class PatientDirectoryView {
   }
 
   private void showEditing() {
+    patientViewGeneration++;
     pageTitle.setText("Edit patient");
     setPage(directoryContent, false);
     setPage(registrationContent, false);
@@ -364,6 +369,8 @@ final class PatientDirectoryView {
   }
 
   private void showPatientView(Patient selected) {
+    patientViewGeneration++;
+    long generation = patientViewGeneration;
     PatientDirectoryPatientView.showView(
         prefix,
         selected,
@@ -374,6 +381,7 @@ final class PatientDirectoryView {
         onPatientChanged,
         taskRunner,
         this::isActive,
+        () -> isActive() && generation == patientViewGeneration && viewingContent.isVisible(),
         this::refresh,
         this::showDirectory,
         this::showPatientEdit,

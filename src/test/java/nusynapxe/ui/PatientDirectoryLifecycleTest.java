@@ -21,6 +21,7 @@ import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
 import nusynapxe.service.ClinicServices;
 import nusynapxe.service.PatientService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.testfx.framework.junit5.ApplicationTest;
 
@@ -32,10 +33,13 @@ final class PatientDirectoryLifecycleTest extends ApplicationTest {
 
   @Override
   public void start(Stage stage) throws Exception {
-    Patient patient =
+    Patient patient1 =
         new Patient(42, "Alex", "Tan", "1990-01-01", "555-0100", "alex@example.com", "Address");
+    Patient patient2 =
+        new Patient(43, "Bob", "Lee", "1992-02-02", "555-0200", "bob@example.com", "Address 2");
     PatientService patientService = mock(PatientService.class);
-    when(patientService.searchAdministrative(any(), anyString())).thenReturn(List.of(patient));
+    when(patientService.searchAdministrative(any(), anyString()))
+        .thenReturn(List.of(patient1, patient2));
     ClinicServices services = mock(ClinicServices.class);
     when(services.patientService()).thenReturn(patientService);
 
@@ -53,6 +57,45 @@ final class PatientDirectoryLifecycleTest extends ApplicationTest {
     UiComponents.applyStylesheet(scene);
     stage.setScene(scene);
     stage.show();
+  }
+
+  @AfterEach
+  void tearDown() {
+    taskRunner.close();
+  }
+
+  @Test
+  void leavingPatientViewIgnoresSubsequentStatusCallback() {
+    interact(() -> lookup("#test-patient-view-42").queryAs(Button.class).fire());
+    interact(() -> lookup("#test-patient-deactivate").queryAs(Button.class).fire());
+    assertEquals(2, taskRunner.submissions.size());
+
+    interact(() -> lookup("#test-patient-view-back").queryAs(Button.class).fire());
+
+    interact(() -> lookup("#test-patient-view-43").queryAs(Button.class).fire());
+    Button statusButton = lookup("#test-patient-deactivate").queryAs(Button.class);
+    assertEquals("Deactivate patient", statusButton.getText());
+
+    Patient deactivatedPatient =
+        new Patient(
+            42,
+            null,
+            null,
+            null,
+            "Alex",
+            "Tan",
+            "1990-01-01",
+            null,
+            null,
+            "555-0100",
+            "alex@example.com",
+            "Address",
+            null,
+            null,
+            false);
+    interact(() -> taskRunner.submissions.get(1).success().accept(deactivatedPatient));
+
+    assertEquals("Deactivate patient", statusButton.getText());
   }
 
   @Test

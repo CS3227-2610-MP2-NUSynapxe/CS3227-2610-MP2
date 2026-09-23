@@ -36,6 +36,7 @@ final class PatientDirectoryPatientView {
       LongConsumer onPatientChanged,
       ClinicTaskRunner taskRunner,
       BooleanSupplier directoryActive,
+      BooleanSupplier viewActive,
       Runnable refresh,
       Runnable showDirectory,
       Consumer<Patient> showEdit,
@@ -65,6 +66,7 @@ final class PatientDirectoryPatientView {
               workspaceFeedback,
               feedback,
               onPatientChanged,
+              viewActive,
               refresh,
               showView);
         });
@@ -189,6 +191,7 @@ final class PatientDirectoryPatientView {
       Label workspaceFeedback,
       Label feedback,
       LongConsumer onPatientChanged,
+      BooleanSupplier viewActive,
       Runnable refresh,
       Consumer<Patient> showView) {
     try {
@@ -198,6 +201,10 @@ final class PatientDirectoryPatientView {
                   ? services.patientService().deactivateAdministrative(session, patientId)
                   : services.patientService().activateAdministrative(session, patientId),
           updated -> {
+            if (!viewActive.getAsBoolean()) {
+              refresh.run();
+              return;
+            }
             status.setDisable(false);
             UiComponents.showMessage(
                 workspaceFeedback, updated.active() ? "Patient activated" : "Patient deactivated");
@@ -207,12 +214,16 @@ final class PatientDirectoryPatientView {
             showView.accept(updated);
           },
           failure -> {
-            status.setDisable(false);
-            showTaskError(feedback, failure, "Patient status update is temporarily unavailable");
+            if (viewActive.getAsBoolean()) {
+              status.setDisable(false);
+              showTaskError(feedback, failure, "Patient status update is temporarily unavailable");
+            }
           });
     } catch (java.util.concurrent.RejectedExecutionException exception) {
-      status.setDisable(false);
-      showTaskError(feedback, exception, "Patient status update is temporarily unavailable");
+      if (viewActive.getAsBoolean()) {
+        status.setDisable(false);
+        showTaskError(feedback, exception, "Patient status update is temporarily unavailable");
+      }
     }
   }
 

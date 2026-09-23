@@ -20,6 +20,7 @@ import nusynapxe.domain.Patient;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
 import nusynapxe.service.ClinicServices;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.testfx.framework.junit5.ApplicationTest;
 
@@ -39,6 +40,40 @@ final class ClinicalHistoryRaceTest extends ApplicationTest {
     UiComponents.applyStylesheet(scene);
     stage.setScene(scene);
     stage.show();
+  }
+
+  @AfterEach
+  void tearDown() {
+    taskRunner.close();
+  }
+
+  @Test
+  void clearingInvalidatesPendingHistoryLoad() {
+    Patient firstPatient = patient(1, "First");
+    succeed(0, List.of(firstPatient));
+
+    interact(() -> historyView.showPatient(firstPatient.id()));
+    succeed(1, firstPatient);
+    interact(
+        () -> lookup("#doctor-history-clear").queryAs(javafx.scene.control.Button.class).fire());
+    assertTrue(historyList().getItems().isEmpty());
+
+    succeed(2, List.of(historyEntry(firstPatient.id())));
+    assertTrue(historyList().getItems().isEmpty());
+  }
+
+  @Test
+  void clearingInvalidatesPendingPatientLookup() {
+    Patient firstPatient = patient(1, "First");
+    succeed(0, List.of(firstPatient));
+
+    interact(() -> historyView.showPatient(firstPatient.id()));
+    interact(
+        () -> lookup("#doctor-history-clear").queryAs(javafx.scene.control.Button.class).fire());
+
+    succeed(1, firstPatient);
+    assertEquals(2, taskRunner.submissions.size());
+    assertTrue(historyList().getItems().isEmpty());
   }
 
   @Test

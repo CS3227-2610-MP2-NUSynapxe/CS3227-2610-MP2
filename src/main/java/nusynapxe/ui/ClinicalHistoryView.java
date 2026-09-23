@@ -67,6 +67,7 @@ final class ClinicalHistoryView {
     load.setOnAction(event -> loadSelectedPatient());
     clear.setOnAction(
         event -> {
+          historyGeneration++;
           patientSelector.clearSelection();
           clearHistory();
           state.setText("Select a patient to view completed consultation history.");
@@ -194,7 +195,7 @@ final class ClinicalHistoryView {
           loadHistory(patient);
         },
         failure -> {
-          if (!disposed) {
+          if (!disposed && generation == historyGeneration) {
             showError(userMessage(failure, "Patient history is temporarily unavailable"));
           }
         });
