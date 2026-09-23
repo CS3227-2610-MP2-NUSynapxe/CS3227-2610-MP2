@@ -34,4 +34,4 @@ Task 8: complete (commit d2586a5; public API JavaDocs completed and native `java
 
 Task 9: complete (coverage tests added, branch minimum raised to 70%, source-file limit enforced at 500 lines, and full native `check` passed)
 
-Task 10: pending (final diff review, GitHub issue creation, review replies/thread resolution, and PR update)
+Task 10: complete (final diff review; commits 38ed84d, 8f8d3b6, and f8d0b3f; GitHub issues #74–#97 recorded; all 20 PR review threads answered and resolved; PR #73 updated; merge left to the reviewer)
