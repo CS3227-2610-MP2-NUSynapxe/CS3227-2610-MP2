@@ -39,6 +39,7 @@ final class ReceptionistDataLoader {
   private long queueGeneration;
   private long checkoutGeneration;
   private long receiptGeneration;
+  private long appointmentDetailsGeneration;
   private final SelectorLoadGeneration doctorGenerations = new SelectorLoadGeneration();
   private boolean disposed;
 
@@ -54,6 +55,11 @@ final class ReceptionistDataLoader {
     queueGeneration++;
     checkoutGeneration++;
     receiptGeneration++;
+    appointmentDetailsGeneration++;
+  }
+
+  void invalidateAppointmentDetails() {
+    appointmentDetailsGeneration++;
   }
 
   void loadCheckInDetails(
@@ -143,6 +149,7 @@ final class ReceptionistDataLoader {
 
   private void loadAppointmentDetails(
       long appointmentId, Consumer<AppointmentDetails> onSuccess, Consumer<Throwable> onFailure) {
+    long generation = ++appointmentDetailsGeneration;
     submit(
         () -> {
           Appointment appointment = services.appointmentService().get(appointmentId);
@@ -156,8 +163,16 @@ final class ReceptionistDataLoader {
                   .orElse("Doctor unavailable");
           return new AppointmentDetails(appointment, patient, doctorName);
         },
-        onSuccess,
-        onFailure);
+        details -> {
+          if (generation == appointmentDetailsGeneration) {
+            onSuccess.accept(details);
+          }
+        },
+        failure -> {
+          if (generation == appointmentDetailsGeneration) {
+            onFailure.accept(failure);
+          }
+        });
   }
 
   void refreshDoctors(

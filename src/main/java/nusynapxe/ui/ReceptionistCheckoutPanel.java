@@ -114,6 +114,9 @@ final class ReceptionistCheckoutPanel {
 
   void setCheckoutTabActive(boolean active) {
     checkoutTabActive = active;
+    if (!active) {
+      dataLoader.invalidateAppointmentDetails();
+    }
   }
 
   void refreshDoctors() {
@@ -251,7 +254,7 @@ final class ReceptionistCheckoutPanel {
         .selectedItemProperty()
         .addListener(
             (observable, previous, selected) -> {
-              checkoutTabActive = selected == checkout;
+              setCheckoutTabActive(selected == checkout);
             });
     return new VBox(
         12,

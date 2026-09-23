@@ -22,6 +22,7 @@ import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentListRow;
 import nusynapxe.domain.AppointmentStatus;
+import nusynapxe.domain.Patient;
 import nusynapxe.domain.Receipt;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
@@ -161,6 +162,26 @@ final class ReceptionistDataLoaderTest {
   }
 
   @Test
+  void appointmentDetailLoadsIgnoreSupersededRequests() throws Exception {
+    List<ReceptionistDataLoader.AppointmentDetails> loaded = new ArrayList<>();
+    ReceptionistDataLoader.AppointmentDetails first = appointmentDetails(7);
+    ReceptionistDataLoader.AppointmentDetails second = appointmentDetails(8);
+
+    loader.loadCheckInDetails(7, loaded::add, failure -> {});
+    loader.loadCheckoutDetails(8, loaded::add, failure -> {});
+    deliver(0, first);
+    assertTrue(loaded.isEmpty());
+    deliver(1, second);
+
+    assertEquals(List.of(second), loaded);
+
+    loader.loadCheckInDetails(9, loaded::add, failure -> {});
+    loader.invalidateAppointmentDetails();
+    deliver(2, appointmentDetails(9));
+    assertEquals(List.of(second), loaded);
+  }
+
+  @Test
   void scheduleRefreshUpdatesSummaryAndClearsAnEmptySelection() throws Exception {
     TableView<AppointmentListRow> schedule = onFx(TableView::new);
     Label feedback = onFx(Label::new);
@@ -223,6 +244,19 @@ final class ReceptionistDataLoaderTest {
 
   private static Account account(long id, String displayName) {
     return new Account(id, "doctor" + id, displayName, Role.DOCTOR, true);
+  }
+
+  private static ReceptionistDataLoader.AppointmentDetails appointmentDetails(long id) {
+    Appointment appointment =
+        new Appointment(
+            id,
+            2,
+            3,
+            LocalDateTime.of(2026, 9, 23, 10, 0),
+            LocalDateTime.of(2026, 9, 23, 10, 30),
+            AppointmentStatus.COMPLETED);
+    return new ReceptionistDataLoader.AppointmentDetails(
+        appointment, new Patient(2, "Patient", "Example", "", "555-0100", "", ""), "Doctor");
   }
 
   private static SearchSuggestionField<Account> newField(String id) throws Exception {
