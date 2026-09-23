@@ -381,6 +381,7 @@ final class PatientDirectoryView {
         workspaceFeedback,
         onPatientChanged,
         taskRunner,
+        this::isActive,
         this::refresh,
         this::showDirectory,
         this::showPatientEdit,
@@ -402,6 +403,10 @@ final class PatientDirectoryView {
         this::refresh,
         this::showEditing,
         this::showPatientView);
+  }
+
+  private boolean isActive() {
+    return !disposed;
   }
 
   /** Creates a read-only administrative details grid for a patient. */

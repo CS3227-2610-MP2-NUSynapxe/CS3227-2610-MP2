@@ -1,6 +1,7 @@
 package nusynapxe.ui;
 
 import java.time.Clock;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.LongConsumer;
 import javafx.geometry.Insets;
@@ -34,6 +35,7 @@ final class PatientDirectoryPatientView {
       Label workspaceFeedback,
       LongConsumer onPatientChanged,
       ClinicTaskRunner taskRunner,
+      BooleanSupplier directoryActive,
       Runnable refresh,
       Runnable showDirectory,
       Consumer<Patient> showEdit,
@@ -71,6 +73,7 @@ final class PatientDirectoryPatientView {
                 workspaceFeedback,
                 feedback,
                 onPatientChanged,
+                directoryActive,
                 refresh,
                 showDirectory));
     back.setOnAction(
@@ -198,17 +201,27 @@ final class PatientDirectoryPatientView {
       Label workspaceFeedback,
       Label feedback,
       LongConsumer onPatientChanged,
+      BooleanSupplier directoryActive,
       Runnable refresh,
       Runnable showDirectory) {
     Stage owner = (Stage) viewingContent.getScene().getWindow();
+    if (!directoryActive.getAsBoolean()) {
+      return;
+    }
     taskRunner.submit(
         () -> services.patientService().deletionBlockers(session, patient.id()),
         blockers -> {
+          if (!directoryActive.getAsBoolean()) {
+            return;
+          }
           if (!blockers.canDelete()) {
             showBlockedDeletionDialog(prefix, owner, blockers);
             return;
           }
           if (!confirmDeletion(prefix, owner, patient)) {
+            return;
+          }
+          if (!directoryActive.getAsBoolean()) {
             return;
           }
           taskRunner.submit(
@@ -217,6 +230,9 @@ final class PatientDirectoryPatientView {
                 return null;
               },
               ignored -> {
+                if (!directoryActive.getAsBoolean()) {
+                  return;
+                }
                 UiComponents.showMessage(workspaceFeedback, "Patient deleted");
                 viewingContent.getChildren().clear();
                 showDirectory.run();
@@ -224,7 +240,8 @@ final class PatientDirectoryPatientView {
                 onPatientChanged.accept(0);
               },
               failure ->
-                  showDeletionError(
+                  showDeletionErrorIfActive(
+                      directoryActive,
                       prefix,
                       owner,
                       feedback,
@@ -232,8 +249,21 @@ final class PatientDirectoryPatientView {
                       "Patient deletion is temporarily unavailable"));
         },
         failure ->
-            showDeletionError(
+            showDeletionErrorIfActive(
+                directoryActive,
                 prefix, owner, feedback, failure, "Patient deletion is temporarily unavailable"));
+  }
+
+  private static void showDeletionErrorIfActive(
+      BooleanSupplier directoryActive,
+      String prefix,
+      Stage owner,
+      Label feedback,
+      Throwable failure,
+      String fallback) {
+    if (directoryActive.getAsBoolean()) {
+      showDeletionError(prefix, owner, feedback, failure, fallback);
+    }
   }
 
   private static void showDeletionError(
