@@ -1,5 +1,6 @@
 package nusynapxe.ui;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
 import javafx.beans.property.ReadOnlyStringWrapper;
@@ -81,15 +82,23 @@ public final class SystemAdminView {
             UiComponents.showError(feedback, "Passwords do not match");
             return;
           }
+          String submittedUsername = username.getText();
+          String submittedDisplayName = displayName.getText();
+          Role submittedRole = role.getValue();
+          char[] submittedPassword = password.getText().toCharArray();
           taskRunner.submit(
               () -> {
-                accounts.createStaff(
-                    session,
-                    username.getText(),
-                    displayName.getText(),
-                    role.getValue(),
-                    password.getText().toCharArray());
-                return null;
+                try {
+                  accounts.createStaff(
+                      session,
+                      submittedUsername,
+                      submittedDisplayName,
+                      submittedRole,
+                      submittedPassword);
+                  return null;
+                } finally {
+                  Arrays.fill(submittedPassword, '\0');
+                }
               },
               ignored -> {
                 UiComponents.showMessage(feedback, "Account created");
