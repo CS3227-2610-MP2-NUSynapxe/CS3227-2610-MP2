@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.concurrent.RejectedExecutionException;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
@@ -46,39 +47,40 @@ final class DoctorAppointmentActions {
       ClinicTaskRunner taskRunner,
       Runnable refreshDashboard,
       WorkspaceLifecycle lifecycle) {
+    Button[] actions = {accept, decline, checkIn, reschedule, complete};
     accept.setOnAction(
         event ->
             runAppointmentAction(
                 selection,
                 feedback,
                 taskRunner,
-                id -> {
-                  services.appointmentService().accept(session, id);
-                },
+                id -> services.appointmentService().accept(session, id),
                 "Appointment accepted",
-                refreshDashboard));
+                refreshDashboard,
+                lifecycle,
+                actions));
     decline.setOnAction(
         event ->
             runAppointmentAction(
                 selection,
                 feedback,
                 taskRunner,
-                id -> {
-                  services.appointmentService().decline(session, id);
-                },
+                id -> services.appointmentService().decline(session, id),
                 "Appointment declined",
-                refreshDashboard));
+                refreshDashboard,
+                lifecycle,
+                actions));
     checkIn.setOnAction(
         event ->
             runAppointmentAction(
                 selection,
                 feedback,
                 taskRunner,
-                id -> {
-                  services.appointmentService().checkIn(session, id);
-                },
+                id -> services.appointmentService().checkIn(session, id),
                 "Patient checked in",
-                refreshDashboard));
+                refreshDashboard,
+                lifecycle,
+                actions));
     reschedule.setOnAction(
         event -> {
           DoctorAppointmentTarget target;
@@ -107,11 +109,11 @@ final class DoctorAppointmentActions {
                 selection,
                 feedback,
                 taskRunner,
-                id -> {
-                  services.appointmentService().complete(session, id);
-                },
+                id -> services.appointmentService().complete(session, id),
                 "Appointment marked completed",
-                refreshDashboard));
+                refreshDashboard,
+                lifecycle,
+                actions));
   }
 
   static void updateSelectionState(
@@ -324,24 +326,46 @@ final class DoctorAppointmentActions {
       ClinicTaskRunner taskRunner,
       AppointmentOperation operation,
       String successMessage,
-      Runnable refreshDashboard) {
+      Runnable refreshDashboard,
+      WorkspaceLifecycle lifecycle,
+      Button... actionButtons) {
     try {
       DoctorAppointmentTarget target = captureSelection(selection);
+      setActionsDisabled(true, actionButtons);
       taskRunner.submit(
           () -> {
             operation.run(target.appointmentId());
             return null;
           },
           ignored -> {
-            if (!target.isCurrent(selection.appointmentId, selection.generation)) {
+            setActionsDisabled(false, actionButtons);
+            if (!lifecycle.isActive()
+                || !target.isCurrent(selection.appointmentId, selection.generation)) {
               return;
             }
             feedback.setText(successMessage);
             refreshDashboard.run();
           },
-          failure -> showOperationError(feedback, failure));
+          failure -> {
+            setActionsDisabled(false, actionButtons);
+            if (lifecycle.isActive()) {
+              showOperationError(feedback, failure);
+            }
+          });
     } catch (ValidationException exception) {
+      setActionsDisabled(false, actionButtons);
       UiComponents.showError(feedback, exception.getMessage());
+    } catch (RejectedExecutionException exception) {
+      setActionsDisabled(false, actionButtons);
+      showOperationError(feedback, exception);
+    }
+  }
+
+  private static void setActionsDisabled(boolean disabled, Button... buttons) {
+    for (Button button : buttons) {
+      if (button != null) {
+        button.setDisable(disabled);
+      }
     }
   }
 
@@ -428,7 +452,7 @@ final class DoctorAppointmentActions {
       TextArea followUpNotes,
       ListView<Prescription> prescriptions,
       Button viewPatientHistory) {
-    // Record components define the complete selected-pane node bundle.
+    /* Record components define the complete selected-pane node bundle. */
   }
 
   static final class SelectionState {

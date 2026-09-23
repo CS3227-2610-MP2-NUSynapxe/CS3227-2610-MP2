@@ -118,6 +118,78 @@ final class PatientDirectoryLifecycleTest extends ApplicationTest {
   }
 
   @Test
+  void leavingPatientViewIgnoresSubsequentDeletionBlockersCallback() {
+    interact(() -> lookup("#test-patient-view-42").queryAs(Button.class).fire());
+    interact(() -> lookup("#test-patient-delete").queryAs(Button.class).fire());
+    assertEquals(2, taskRunner.submissions.size());
+
+    interact(() -> lookup("#test-patient-view-back").queryAs(Button.class).fire());
+    assertEquals(3, taskRunner.submissions.size());
+
+    interact(
+        () ->
+            taskRunner
+                .submissions
+                .get(1)
+                .success()
+                .accept(new PatientDeletionBlockers(42, 0, 0, 0, 0, 0, 0)));
+
+    assertFalse(lookup("#test-patient-delete-confirm-window").tryQuery().isPresent());
+  }
+
+  @Test
+  void patientDeleteButtonIsDisabledWhileBlockerCheckIsQueued() {
+    interact(() -> lookup("#test-patient-view-42").queryAs(Button.class).fire());
+    Button deleteButton = lookup("#test-patient-delete").queryAs(Button.class);
+    assertFalse(deleteButton.isDisable());
+
+    interact(deleteButton::fire);
+    assertTrue(deleteButton.isDisable());
+
+    interact(
+        () -> taskRunner.submissions.getLast().failure().accept(new RuntimeException("failed")));
+    assertFalse(deleteButton.isDisable());
+  }
+
+  @Test
+  void patientMutationsUpdatePreferredPatientId() {
+    interact(() -> lookup("#test-patient-view-42").queryAs(Button.class).fire());
+    assertEquals(42, directory.selectedPatientId());
+
+    interact(() -> lookup("#test-patient-view-back").queryAs(Button.class).fire());
+    interact(() -> lookup("#test-patient-view-43").queryAs(Button.class).fire());
+    assertEquals(43, directory.selectedPatientId());
+
+    interact(() -> lookup("#test-patient-edit").queryAs(Button.class).fire());
+    interact(() -> lookup("#test-patient-update").queryAs(Button.class).fire());
+    Patient updatedPatient =
+        new Patient(43, "Bob", "Lee", "1992-02-02", "555-0200", "bob@example.com", "Address 2");
+    interact(() -> taskRunner.submissions.getLast().success().accept(updatedPatient));
+    assertEquals(43, directory.selectedPatientId());
+
+    interact(() -> lookup("#test-patient-deactivate").queryAs(Button.class).fire());
+    Patient deactivatedPatient =
+        new Patient(
+            43,
+            null,
+            null,
+            null,
+            "Bob",
+            "Lee",
+            "1992-02-02",
+            null,
+            null,
+            "555-0200",
+            "bob@example.com",
+            "Address 2",
+            null,
+            null,
+            false);
+    interact(() -> taskRunner.submissions.getLast().success().accept(deactivatedPatient));
+    assertEquals(43, directory.selectedPatientId());
+  }
+
+  @Test
   void patientStatusSubmissionIsDisabledUntilTheQueuedRequestFinishes() {
     interact(() -> lookup("#test-patient-view-42").queryAs(Button.class).fire());
     interact(() -> lookup("#test-patient-deactivate").queryAs(Button.class).fire());

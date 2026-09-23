@@ -95,8 +95,7 @@ final class PatientDirectoryView {
                   showDirectory();
                   UiComponents.showMessage(workspaceFeedback, "Patient registered");
                   refresh();
-                  preferredPatientId = patient.id();
-                  onPatientChanged.accept(patient.id());
+                  handlePatientChanged(patient.id());
                 },
                 failure -> {
                   register.setDisable(false);
@@ -369,6 +368,10 @@ final class PatientDirectoryView {
   }
 
   private void showPatientView(Patient selected) {
+    if (selected == null) {
+      return;
+    }
+    preferredPatientId = selected.id();
     patientViewGeneration++;
     long generation = patientViewGeneration;
     PatientDirectoryPatientView.showView(
@@ -378,7 +381,7 @@ final class PatientDirectoryView {
         services,
         session,
         workspaceFeedback,
-        onPatientChanged,
+        this::handlePatientChanged,
         taskRunner,
         this::isActive,
         () -> isActive() && generation == patientViewGeneration && viewingContent.isVisible(),
@@ -398,11 +401,16 @@ final class PatientDirectoryView {
         services,
         session,
         workspaceFeedback,
-        onPatientChanged,
+        this::handlePatientChanged,
         taskRunner,
         this::refresh,
         this::showEditing,
         this::showPatientView);
+  }
+
+  private void handlePatientChanged(long patientId) {
+    preferredPatientId = patientId;
+    onPatientChanged.accept(patientId);
   }
 
   private boolean isActive() {

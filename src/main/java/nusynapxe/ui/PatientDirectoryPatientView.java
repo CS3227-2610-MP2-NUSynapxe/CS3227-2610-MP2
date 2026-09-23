@@ -1,6 +1,7 @@
 package nusynapxe.ui;
 
 import java.time.Clock;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.LongConsumer;
@@ -22,6 +23,8 @@ import nusynapxe.service.ValidationException;
 
 /** Composes the selected-patient details, status, deletion, and edit flows. */
 final class PatientDirectoryPatientView {
+  private static final String DELETION_UNAVAILABLE = "Patient deletion is temporarily unavailable";
+
   private PatientDirectoryPatientView() {
     throw new AssertionError("Utility class");
   }
@@ -75,6 +78,7 @@ final class PatientDirectoryPatientView {
             deletePatient(
                 prefix,
                 current[0],
+                delete,
                 viewingContent,
                 services,
                 session,
@@ -83,6 +87,7 @@ final class PatientDirectoryPatientView {
                 feedback,
                 onPatientChanged,
                 directoryActive,
+                viewActive,
                 refresh,
                 showDirectory));
     back.setOnAction(
@@ -219,7 +224,7 @@ final class PatientDirectoryPatientView {
               showTaskError(feedback, failure, "Patient status update is temporarily unavailable");
             }
           });
-    } catch (java.util.concurrent.RejectedExecutionException exception) {
+    } catch (RejectedExecutionException exception) {
       if (viewActive.getAsBoolean()) {
         status.setDisable(false);
         showTaskError(feedback, exception, "Patient status update is temporarily unavailable");
@@ -230,6 +235,7 @@ final class PatientDirectoryPatientView {
   private static void deletePatient(
       String prefix,
       Patient patient,
+      Button delete,
       VBox viewingContent,
       ClinicServices services,
       nusynapxe.domain.Session session,
@@ -238,70 +244,101 @@ final class PatientDirectoryPatientView {
       Label feedback,
       LongConsumer onPatientChanged,
       BooleanSupplier directoryActive,
+      BooleanSupplier viewActive,
       Runnable refresh,
       Runnable showDirectory) {
     Stage owner = (Stage) viewingContent.getScene().getWindow();
-    if (!directoryActive.getAsBoolean()) {
+    if (!directoryActive.getAsBoolean() || !viewActive.getAsBoolean()) {
       return;
     }
-    taskRunner.submit(
-        () -> services.patientService().deletionBlockers(session, patient.id()),
-        blockers -> {
-          if (!directoryActive.getAsBoolean()) {
-            return;
-          }
-          if (!blockers.canDelete()) {
-            showBlockedDeletionDialog(prefix, owner, blockers);
-            return;
-          }
-          if (!confirmDeletion(prefix, owner, patient)) {
-            return;
-          }
-          if (!directoryActive.getAsBoolean()) {
-            return;
-          }
-          taskRunner.submit(
-              () -> {
-                services.patientService().deleteAdministrative(session, patient.id());
-                return null;
-              },
-              ignored -> {
-                if (!directoryActive.getAsBoolean()) {
-                  return;
-                }
-                UiComponents.showMessage(workspaceFeedback, "Patient deleted");
-                viewingContent.getChildren().clear();
-                showDirectory.run();
-                refresh.run();
-                onPatientChanged.accept(0);
-              },
-              failure ->
-                  showDeletionErrorIfActive(
-                      directoryActive,
-                      prefix,
-                      owner,
-                      feedback,
-                      failure,
-                      "Patient deletion is temporarily unavailable"));
-        },
-        failure ->
+    delete.setDisable(true);
+    try {
+      taskRunner.submit(
+          () -> services.patientService().deletionBlockers(session, patient.id()),
+          blockers -> {
+            if (!directoryActive.getAsBoolean() || !viewActive.getAsBoolean()) {
+              delete.setDisable(false);
+              return;
+            }
+            if (!blockers.canDelete()) {
+              delete.setDisable(false);
+              showBlockedDeletionDialog(prefix, owner, blockers);
+              return;
+            }
+            if (!confirmDeletion(prefix, owner, patient)) {
+              delete.setDisable(false);
+              return;
+            }
+            if (!directoryActive.getAsBoolean() || !viewActive.getAsBoolean()) {
+              delete.setDisable(false);
+              return;
+            }
+            try {
+              taskRunner.submit(
+                  () -> {
+                    services.patientService().deleteAdministrative(session, patient.id());
+                    return null;
+                  },
+                  ignored -> {
+                    if (!directoryActive.getAsBoolean()) {
+                      return;
+                    }
+                    UiComponents.showMessage(workspaceFeedback, "Patient deleted");
+                    viewingContent.getChildren().clear();
+                    showDirectory.run();
+                    refresh.run();
+                    onPatientChanged.accept(0);
+                  },
+                  failure -> {
+                    delete.setDisable(false);
+                    showDeletionErrorIfActive(
+                        directoryActive,
+                        viewActive,
+                        prefix,
+                        owner,
+                        feedback,
+                        failure,
+                        DELETION_UNAVAILABLE);
+                  });
+            } catch (RejectedExecutionException exception) {
+              delete.setDisable(false);
+              showDeletionErrorIfActive(
+                  directoryActive,
+                  viewActive,
+                  prefix,
+                  owner,
+                  feedback,
+                  exception,
+                  DELETION_UNAVAILABLE);
+            }
+          },
+          failure -> {
+            delete.setDisable(false);
             showDeletionErrorIfActive(
                 directoryActive,
+                viewActive,
                 prefix,
                 owner,
                 feedback,
                 failure,
-                "Patient deletion is temporarily unavailable"));
+                DELETION_UNAVAILABLE);
+          });
+    } catch (RejectedExecutionException exception) {
+      delete.setDisable(false);
+      showDeletionErrorIfActive(
+          directoryActive, viewActive, prefix, owner, feedback, exception, DELETION_UNAVAILABLE);
+    }
   }
 
   private static void showDeletionErrorIfActive(
       BooleanSupplier directoryActive,
+      BooleanSupplier viewActive,
       String prefix,
       Stage owner,
       Label feedback,
       Throwable failure,
       String fallback) {
-    if (directoryActive.getAsBoolean()) {
+    if (directoryActive.getAsBoolean() && viewActive.getAsBoolean()) {
       showDeletionError(prefix, owner, feedback, failure, fallback);
     }
   }
