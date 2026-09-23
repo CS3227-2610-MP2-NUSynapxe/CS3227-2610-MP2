@@ -58,7 +58,7 @@ final class ReceptionistWorkspace {
     ReceptionistDataLoader dataLoader = new ReceptionistDataLoader(services, session, taskRunner);
     ReceptionistAppointmentPanel appointmentPanel =
         new ReceptionistAppointmentPanel(
-            services, session, dataLoader, feedback, taskRunner, lifecycle::isActive);
+            services, session, dataLoader, feedback, taskRunner, clinicClock, lifecycle::isActive);
     ReceptionistCheckoutPanel checkoutPanel =
         new ReceptionistCheckoutPanel(dataLoader, feedback, clinicClock);
     appointmentPanel.setRefreshCheckout(checkoutPanel::refreshCheckout);

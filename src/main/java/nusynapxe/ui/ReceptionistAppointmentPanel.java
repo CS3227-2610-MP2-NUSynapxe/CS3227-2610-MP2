@@ -1,5 +1,6 @@
 package nusynapxe.ui;
 
+import java.time.Clock;
 import java.util.function.BooleanSupplier;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
@@ -10,6 +11,7 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.VBox;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentListRow;
@@ -61,7 +63,7 @@ final class ReceptionistAppointmentPanel {
       ReceptionistDataLoader dataLoader,
       Label feedback,
       ClinicTaskRunner taskRunner) {
-    this(services, session, dataLoader, feedback, taskRunner, () -> true);
+    this(services, session, dataLoader, feedback, taskRunner, ClinicClock.system(), () -> true);
   }
 
   ReceptionistAppointmentPanel(
@@ -70,6 +72,18 @@ final class ReceptionistAppointmentPanel {
       ReceptionistDataLoader dataLoader,
       Label feedback,
       ClinicTaskRunner taskRunner,
+      BooleanSupplier workspaceActive) {
+    this(
+        services, session, dataLoader, feedback, taskRunner, ClinicClock.system(), workspaceActive);
+  }
+
+  ReceptionistAppointmentPanel(
+      ClinicServices services,
+      Session session,
+      ReceptionistDataLoader dataLoader,
+      Label feedback,
+      ClinicTaskRunner taskRunner,
+      Clock clock,
       BooleanSupplier workspaceActive) {
     this.services = services;
     this.session = session;
@@ -81,7 +95,7 @@ final class ReceptionistAppointmentPanel {
     doctor = doctorSelector("reception-doctor", "Search doctors by name or username");
     startsAt = AppointmentDialog.timeSelector("reception-start");
     endsAt = AppointmentDialog.timeSelector("reception-end");
-    appointmentDate = UiComponents.compactDatePicker();
+    appointmentDate = UiComponents.compactDatePicker(ClinicClock.today(clock));
     appointmentDate.setId("reception-appointment-date");
     appointmentDate.setPromptText("Appointment date");
     scheduleDate = UiComponents.compactDatePicker();

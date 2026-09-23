@@ -22,6 +22,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.VBox;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.IdentityType;
@@ -35,6 +36,15 @@ import org.junit.jupiter.api.Test;
 import org.testfx.util.WaitForAsyncUtils;
 
 final class ReceptionistBookingTest extends ReceptionistViewTestSupport {
+  @Test
+  void bookingDateDefaultsToTheClinicDate() {
+    loginAsReceptionist();
+
+    assertEquals(
+        ClinicClock.today(ClinicClock.system()),
+        lookup("#reception-appointment-date").queryAs(DatePicker.class).getValue());
+  }
+
   @Test
   void receptionistBooksChecksInChecksOutAndViewsRevenue() throws SQLException {
     loginAsReceptionist();

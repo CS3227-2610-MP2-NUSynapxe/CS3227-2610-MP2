@@ -1,5 +1,6 @@
 package nusynapxe.ui;
 
+import java.util.Arrays;
 import javafx.geometry.Insets;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
@@ -57,10 +58,16 @@ public final class SetupView {
             UiComponents.showError(feedback, "Passwords do not match");
             return;
           }
+          String submittedUsername = username.getText();
+          char[] submittedPassword = password.getText().toCharArray();
           taskRunner.submit(
               () -> {
-                accounts.createInitialAdmin(username.getText(), password.getText().toCharArray());
-                return null;
+                try {
+                  accounts.createInitialAdmin(submittedUsername, submittedPassword);
+                  return null;
+                } finally {
+                  Arrays.fill(submittedPassword, '\0');
+                }
               },
               ignored -> {
                 feedback.setText("");
