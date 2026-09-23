@@ -2,6 +2,7 @@ package nusynapxe.ui;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -22,6 +23,7 @@ import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
 import nusynapxe.service.AccountService;
 import nusynapxe.service.AuthenticationService;
+import nusynapxe.service.ValidationException;
 import org.junit.jupiter.api.Test;
 import org.testfx.framework.junit5.ApplicationTest;
 
@@ -63,6 +65,8 @@ final class CredentialSnapshotTest extends ApplicationTest {
     setText("#admin-account-confirm-password", "before-pass");
     fire("#admin-account-submit");
 
+    assertTrue(lookup("#admin-account-submit").queryAs(Button.class).isDisable());
+
     setText("#admin-account-username", "doctor-after-queue");
     setText("#admin-account-display-name", "Dr. After Queue");
     setText("#admin-account-password", "after-pass");
@@ -73,6 +77,68 @@ final class CredentialSnapshotTest extends ApplicationTest {
     assertEquals("Dr. Before Queue", submittedDisplayName.get());
     assertEquals(Role.DOCTOR, submittedRole.get());
     assertArrayEquals("before-pass".toCharArray(), submittedPassword.get());
+
+    interact(() -> taskRunner.submissions.getLast().success().accept(null));
+    assertFalse(lookup("#admin-account-submit").queryAs(Button.class).isDisable());
+    assertEquals(
+        "doctor-after-queue",
+        lookup("#admin-account-username").queryAs(TextInputControl.class).getText());
+    assertEquals(
+        "Dr. After Queue",
+        lookup("#admin-account-display-name").queryAs(TextInputControl.class).getText());
+    assertEquals(
+        "after-pass", lookup("#admin-account-password").queryAs(TextInputControl.class).getText());
+    assertEquals(
+        "after-pass",
+        lookup("#admin-account-confirm-password").queryAs(TextInputControl.class).getText());
+  }
+
+  @Test
+  void systemAdminClearsMatchingFieldsOnSuccessfulCreation() {
+    AccountService accounts = mock(AccountService.class);
+    show(
+        SystemAdminView.create(
+            accounts, new Session(1, "admin", Role.SYSTEM_ADMIN), () -> {}, taskRunner));
+
+    setText("#admin-account-username", "doctor-clean");
+    setText("#admin-account-display-name", "Dr. Clean");
+    setText("#admin-account-password", "clean-pass");
+    setText("#admin-account-confirm-password", "clean-pass");
+    fire("#admin-account-submit");
+
+    interact(() -> taskRunner.submissions.getLast().success().accept(null));
+
+    assertEquals("", lookup("#admin-account-username").queryAs(TextInputControl.class).getText());
+    assertEquals(
+        "", lookup("#admin-account-display-name").queryAs(TextInputControl.class).getText());
+    assertEquals("", lookup("#admin-account-password").queryAs(TextInputControl.class).getText());
+    assertEquals(
+        "", lookup("#admin-account-confirm-password").queryAs(TextInputControl.class).getText());
+    assertFalse(lookup("#admin-account-submit").queryAs(Button.class).isDisable());
+  }
+
+  @Test
+  void systemAdminReenablesSubmitOnFailure() {
+    AccountService accounts = mock(AccountService.class);
+    show(
+        SystemAdminView.create(
+            accounts, new Session(1, "admin", Role.SYSTEM_ADMIN), () -> {}, taskRunner));
+
+    setText("#admin-account-username", "doctor-fail");
+    setText("#admin-account-display-name", "Dr. Fail");
+    setText("#admin-account-password", "fail-pass");
+    setText("#admin-account-confirm-password", "fail-pass");
+    fire("#admin-account-submit");
+
+    assertTrue(lookup("#admin-account-submit").queryAs(Button.class).isDisable());
+    interact(
+        () ->
+            taskRunner
+                .submissions
+                .getLast()
+                .failure()
+                .accept(new ValidationException("Username already exists")));
+    assertFalse(lookup("#admin-account-submit").queryAs(Button.class).isDisable());
   }
 
   @Test

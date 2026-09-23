@@ -85,7 +85,9 @@ public final class SystemAdminView {
           String submittedUsername = username.getText();
           String submittedDisplayName = displayName.getText();
           Role submittedRole = role.getValue();
-          char[] submittedPassword = password.getText().toCharArray();
+          String submittedPasswordText = password.getText();
+          char[] submittedPassword = submittedPasswordText.toCharArray();
+          create.setDisable(true);
           taskRunner.submit(
               () -> {
                 try {
@@ -101,14 +103,26 @@ public final class SystemAdminView {
                 }
               },
               ignored -> {
+                create.setDisable(false);
                 UiComponents.showMessage(feedback, "Account created");
-                username.clear();
-                displayName.clear();
-                password.clear();
-                confirmation.clear();
+                if (username.getText().equals(submittedUsername)) {
+                  username.clear();
+                }
+                if (displayName.getText().equals(submittedDisplayName)) {
+                  displayName.clear();
+                }
+                if (password.getText().equals(submittedPasswordText)) {
+                  password.clear();
+                }
+                if (confirmation.getText().equals(submittedPasswordText)) {
+                  confirmation.clear();
+                }
                 refreshAccounts(accounts, session, accountTable, feedback, taskRunner);
               },
-              failure -> showAccountError(feedback, failure));
+              failure -> {
+                create.setDisable(false);
+                showAccountError(feedback, failure);
+              });
         });
     Button logout = new Button("Log out");
     logout.setId("logout-button");

@@ -56,6 +56,84 @@ final class PatientAppointmentRefreshRaceTest extends ApplicationTest {
     assertEquals(secondPatient, selectedPatient());
   }
 
+  @Test
+  void patientRefreshRestoresThePreferredPatientWhenSelectionIsUnchanged() {
+    Patient firstPatient = patient(1, "First");
+    Patient preferredPatient = patient(2, "Preferred");
+    interact(
+        () -> {
+          selector.setItems(List.of(firstPatient, preferredPatient));
+          selector.select(firstPatient);
+          AppointmentPatientSelector.refreshAppointmentPatients(
+              mock(ClinicServices.class),
+              new Session(7, "reception", Role.RECEPTIONIST),
+              selector,
+              new Label(),
+              preferredPatient.id(),
+              taskRunner);
+        });
+    succeed(0, List.of(firstPatient, preferredPatient));
+
+    assertEquals(preferredPatient, selectedPatient());
+  }
+
+  @Test
+  void patientRefreshSelectsTheFirstPatientWhenThePreferredPatientIsUnavailable() {
+    Patient firstPatient = patient(1, "First");
+    Patient secondPatient = patient(2, "Second");
+    interact(
+        () -> {
+          selector.clearSelection();
+          AppointmentPatientSelector.refreshAppointmentPatients(
+              mock(ClinicServices.class),
+              new Session(7, "reception", Role.RECEPTIONIST),
+              selector,
+              new Label(),
+              99,
+              taskRunner);
+        });
+    succeed(0, List.of(firstPatient, secondPatient));
+
+    assertEquals(firstPatient, selectedPatient());
+  }
+
+  @Test
+  void patientRefreshIgnoresSupersededResultsAndFailures() {
+    Patient firstPatient = patient(1, "First");
+    Patient secondPatient = patient(2, "Second");
+    Label feedback = new Label();
+    SelectorLoadGeneration generations = new SelectorLoadGeneration();
+    interact(
+        () -> {
+          selector.setItems(List.of(firstPatient));
+          selector.select(firstPatient);
+          AppointmentPatientSelector.refreshAppointmentPatients(
+              mock(ClinicServices.class),
+              new Session(7, "reception", Role.RECEPTIONIST),
+              selector,
+              feedback,
+              firstPatient.id(),
+              taskRunner,
+              generations);
+          AppointmentPatientSelector.refreshAppointmentPatients(
+              mock(ClinicServices.class),
+              new Session(7, "reception", Role.RECEPTIONIST),
+              selector,
+              feedback,
+              firstPatient.id(),
+              taskRunner,
+              generations);
+        });
+
+    succeed(0, List.of(secondPatient));
+    fail(0);
+    assertEquals(firstPatient, selectedPatient());
+    assertEquals("", feedback.getText());
+    succeed(1, List.of(secondPatient));
+
+    assertEquals(secondPatient, selectedPatient());
+  }
+
   private Patient selectedPatient() {
     AtomicReference<Patient> selected = new AtomicReference<>();
     interact(() -> selected.set(selector.getValue()));
@@ -64,6 +142,16 @@ final class PatientAppointmentRefreshRaceTest extends ApplicationTest {
 
   private void succeed(int index, Object value) {
     interact(() -> taskRunner.submissions.get(index).success().accept(value));
+  }
+
+  private void fail(int index) {
+    interact(
+        () ->
+            taskRunner
+                .submissions
+                .get(index)
+                .failure()
+                .accept(new IllegalStateException("stale request")));
   }
 
   private static Patient patient(long id, String firstName) {

@@ -42,6 +42,7 @@ public final class DoctorCalendarSettingsView {
   private final ClinicTaskRunner taskRunner;
   private final Map<DayOfWeek, DayEditor> dayEditors = new EnumMap<>(DayOfWeek.class);
   private final BorderPane root;
+  private VBox daysContainer;
   private Button saveButton;
   private DayOfWeek firstDayOfWeek = DayOfWeek.SUNDAY;
   private boolean settingsLoaded;
@@ -49,7 +50,7 @@ public final class DoctorCalendarSettingsView {
   private boolean disposed;
 
   /**
-   * Creates a Calendar settings page for one authenticated Doctor.
+   * Creates a Calendar settings page for one authenticated Doctor.\n *
    *
    * @param services application services used to load and save settings
    * @param session authenticated Doctor session
@@ -102,6 +103,9 @@ public final class DoctorCalendarSettingsView {
     }
     operationGeneration++;
     long generation = operationGeneration;
+    if (daysContainer != null) {
+      daysContainer.setDisable(true);
+    }
     taskRunner.submit(
         () -> services.calendarService().getSettings(session),
         settings -> {
@@ -110,6 +114,9 @@ public final class DoctorCalendarSettingsView {
           }
           populate(settings);
           settingsLoaded = true;
+          if (daysContainer != null) {
+            daysContainer.setDisable(false);
+          }
           if (saveButton != null) {
             saveButton.setDisable(false);
           }
@@ -119,6 +126,9 @@ public final class DoctorCalendarSettingsView {
             return;
           }
           settingsLoaded = false;
+          if (daysContainer != null) {
+            daysContainer.setDisable(false);
+          }
           if (saveButton != null) {
             saveButton.setDisable(true);
           }
@@ -137,6 +147,8 @@ public final class DoctorCalendarSettingsView {
     VBox days = new VBox(10);
     days.setId("doctor-calendar-settings-days");
     days.getStyleClass().add("calendar-settings-days");
+    days.setDisable(true);
+    daysContainer = days;
     for (DayOfWeek day : DayOfWeek.values()) {
       DayEditor editor = new DayEditor(day);
       dayEditors.put(day, editor);

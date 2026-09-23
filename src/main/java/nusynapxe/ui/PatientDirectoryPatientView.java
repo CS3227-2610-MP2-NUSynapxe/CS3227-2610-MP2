@@ -122,15 +122,21 @@ final class PatientDirectoryPatientView {
     feedback.setId(prefix + "-patient-edit-feedback");
     Button update = button("Save", prefix + "-patient-update");
     Button cancel = button("Discard changes", prefix + "-patient-edit-cancel");
+    boolean[] editActive = {true};
 
     update.setOnAction(
         event -> {
           try {
             Patient draft =
                 PatientDirectoryFormView.fromForm(form, current[0].id(), current[0].active());
+            update.setDisable(true);
             taskRunner.submit(
                 () -> services.patientService().updateAdministrative(session, draft),
                 updated -> {
+                  if (!editActive[0] || !editingContent.isVisible()) {
+                    refresh.run();
+                    return;
+                  }
                   current[0] = updated;
                   PatientDirectoryFormView.populate(updated, form);
                   UiComponents.showMessage(feedback, "Patient changes saved");
@@ -140,14 +146,19 @@ final class PatientDirectoryPatientView {
                   editingContent.getChildren().clear();
                   showView.accept(updated);
                 },
-                failure ->
-                    showTaskError(feedback, failure, "Patient update is temporarily unavailable"));
+                failure -> {
+                  if (editActive[0] && editingContent.isVisible()) {
+                    update.setDisable(false);
+                    showTaskError(feedback, failure, "Patient update is temporarily unavailable");
+                  }
+                });
           } catch (ValidationException exception) {
             UiComponents.showError(feedback, exception.getMessage());
           }
         });
     cancel.setOnAction(
         event -> {
+          editActive[0] = false;
           PatientDirectoryFormView.clear(form);
           editingContent.getChildren().clear();
           showView.accept(current[0]);

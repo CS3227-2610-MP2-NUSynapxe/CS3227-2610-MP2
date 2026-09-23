@@ -9,8 +9,10 @@ import static org.testfx.matcher.base.NodeMatchers.isVisible;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.DatePicker;
@@ -307,10 +309,7 @@ final class DoctorCalendarTimeOffTest extends DoctorCalendarViewTestSupport {
   @Test
   void settingsSaveStaysDisabledWhenInitialLoadFails() {
     Session invalidSession = new Session(doctorId, "doctor", Role.RECEPTIONIST);
-    Runnable noOp =
-        () -> {
-          // No callback is needed for this load-failure test.
-        };
+    Runnable noOp = () -> {};
     DoctorCalendarSettingsView settings =
         new DoctorCalendarSettingsView(services, invalidSession, noOp, noOp, new Label());
 
@@ -323,5 +322,46 @@ final class DoctorCalendarTimeOffTest extends DoctorCalendarViewTestSupport {
     assertTrue(
         lookup("#doctor-calendar-settings-save").queryAs(Button.class).isDisabled(),
         "Settings must not be saved when the initial snapshot was unavailable");
+  }
+
+  @Test
+  void settingsReloadDisablesDayEditorsWhileQueued() {
+    Session doctorSession = new Session(doctorId, "doctor", Role.DOCTOR);
+    CapturingTaskRunner capturingRunner = new CapturingTaskRunner();
+    DoctorCalendarSettingsView[] settingsHolder = new DoctorCalendarSettingsView[1];
+    interact(
+        () ->
+            settingsHolder[0] =
+                new DoctorCalendarSettingsView(
+                    services, doctorSession, () -> {}, () -> {}, new Label(), capturingRunner));
+    DoctorCalendarSettingsView settings = settingsHolder[0];
+
+    Node days = settings.view().lookup("#doctor-calendar-settings-days");
+    assertTrue(days.isDisabled(), "Day editors must be disabled while settings reload is queued");
+
+    interact(() -> capturingRunner.tasks.getFirst().run());
+    assertFalse(days.isDisabled(), "Day editors must be enabled after settings reload completes");
+  }
+
+  private static final class CapturingTaskRunner implements ClinicTaskRunner {
+    private final List<Runnable> tasks = new ArrayList<>();
+
+    @Override
+    public <T> void submit(
+        ClinicTask<T> task, Consumer<T> onSuccess, Consumer<Throwable> onFailure) {
+      tasks.add(
+          () -> {
+            try {
+              onSuccess.accept(task.run());
+            } catch (Exception exception) {
+              onFailure.accept(exception);
+            }
+          });
+    }
+
+    @Override
+    public void close() {
+      // The test runner does not own external resources.
+    }
   }
 }

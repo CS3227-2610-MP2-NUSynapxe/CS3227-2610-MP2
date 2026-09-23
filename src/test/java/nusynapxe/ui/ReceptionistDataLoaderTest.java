@@ -41,7 +41,7 @@ final class ReceptionistDataLoaderTest {
     try {
       Platform.startup(() -> {});
     } catch (IllegalStateException ignored) {
-      // Another JavaFX test may have started the toolkit already.
+      // Another JavaFX test may have started the toolkit already.\n    }
     }
   }
 
@@ -118,6 +118,44 @@ final class ReceptionistDataLoaderTest {
     deliver(2, List.of());
     assertTrue(onFx(doctor::getItems).isEmpty());
     assertNull(onFx(doctor::getValue));
+  }
+
+  @Test
+  void doctorRefreshPreservesDoctorSelectedWhileLoadWasQueued() throws Exception {
+    SearchSuggestionField<Account> doctor = newField("doctor-preserved");
+    Label feedback = onFx(Label::new);
+    Account first = account(1, "Dr First");
+    Account second = account(2, "Dr Second");
+
+    loader.refreshDoctors(doctor, feedback, true);
+    onFx(
+        () -> {
+          doctor.select(second);
+          return null;
+        });
+    deliver(0, List.of(first, second));
+
+    assertEquals(second, onFx(doctor::getValue));
+  }
+
+  @Test
+  void doctorRefreshRestoresPreviousDoctorWhenSelectionUnchanged() throws Exception {
+    SearchSuggestionField<Account> doctor = newField("doctor-restored");
+    Label feedback = onFx(Label::new);
+    Account first = account(1, "Dr First");
+    Account second = account(2, "Dr Second");
+
+    onFx(
+        () -> {
+          doctor.getItems().setAll(first, second);
+          doctor.select(second);
+          return null;
+        });
+
+    loader.refreshDoctors(doctor, feedback, false);
+    deliver(0, List.of(first, second));
+
+    assertEquals(second, onFx(doctor::getValue));
   }
 
   @Test

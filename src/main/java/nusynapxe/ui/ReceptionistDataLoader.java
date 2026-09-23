@@ -176,28 +176,30 @@ final class ReceptionistDataLoader {
         });
   }
 
-  void refreshDoctors(
-      ClinicServices ignoredServices,
-      Session ignoredSession,
-      SearchSuggestionField<Account> doctor,
-      Label feedback) {
-    refreshDoctors(doctor, feedback, true);
-  }
-
   void refreshDoctors(SearchSuggestionField<Account> doctor, Label feedback) {
     refreshDoctors(doctor, feedback, true);
   }
 
   void refreshDoctors(SearchSuggestionField<Account> doctor, Label feedback, boolean selectFirst) {
     long generation = doctorGenerations.next(doctor);
+    Account previousDoctor = doctor.getValue();
     submit(
         () -> services.accountService().listDoctors(session),
         doctors -> {
           if (disposed || !doctorGenerations.isCurrent(doctor, generation)) {
             return;
           }
+          Account currentDoctor = doctor.getValue();
+          boolean selectionChanged = !sameAccount(previousDoctor, currentDoctor);
           doctor.setItems(doctors);
-          if (selectFirst && !doctor.getItems().isEmpty()) {
+          if (selectionChanged) {
+            if (currentDoctor != null) {
+              selectDoctor(doctor, currentDoctor.id());
+            }
+            return;
+          }
+          boolean restored = previousDoctor != null && selectDoctor(doctor, previousDoctor.id());
+          if (!restored && selectFirst && !doctor.getItems().isEmpty()) {
             doctor.select(doctor.getItems().getFirst());
           }
         },
@@ -234,17 +236,6 @@ final class ReceptionistDataLoader {
         });
   }
 
-  void refreshCheckoutReady(
-      ClinicServices ignoredServices,
-      Session ignoredSession,
-      TableView<AppointmentListRow> list,
-      Label feedback,
-      String patientQuery,
-      Long doctorId,
-      LocalDate date) {
-    refreshCheckoutReady(list, feedback, patientQuery, doctorId, date);
-  }
-
   void refreshReceiptHistory(
       TableView<Receipt> history,
       Label preview,
@@ -267,18 +258,6 @@ final class ReceptionistDataLoader {
             UiComponents.showError(feedback, "Receipt history is temporarily unavailable");
           }
         });
-  }
-
-  void refreshReceiptHistory(
-      ClinicServices ignoredServices,
-      Session ignoredSession,
-      TableView<Receipt> history,
-      Label preview,
-      String patientQuery,
-      Long doctorId,
-      LocalDate date,
-      Label feedback) {
-    refreshReceiptHistory(history, preview, patientQuery, doctorId, date, feedback);
   }
 
   void refreshSchedule(
@@ -311,21 +290,6 @@ final class ReceptionistDataLoader {
             UiComponents.showError(feedback, "Appointments are temporarily unavailable");
           }
         });
-  }
-
-  void refreshSchedule(
-      ClinicServices ignoredServices,
-      Session ignoredSession,
-      TableView<AppointmentListRow> appointmentList,
-      ReceptionistAppointmentPanel.SelectionState selection,
-      Label feedback,
-      LocalDate date,
-      Long doctorId,
-      String patientQuery,
-      String status,
-      Label summary) {
-    refreshSchedule(
-        appointmentList, selection, feedback, date, doctorId, patientQuery, status, summary);
   }
 
   void refreshQueue(
@@ -390,19 +354,6 @@ final class ReceptionistDataLoader {
         });
   }
 
-  void refreshQueue(
-      ClinicServices ignoredServices,
-      Session ignoredSession,
-      TableView<AppointmentListRow> queue,
-      Label feedback,
-      LocalDate date,
-      Long doctorId,
-      String patientQuery,
-      String status,
-      Label summary) {
-    refreshQueue(queue, feedback, date, doctorId, patientQuery, status, summary);
-  }
-
   private <T> void submit(
       ClinicTaskRunner.ClinicTask<T> task,
       java.util.function.Consumer<T> onSuccess,
@@ -442,26 +393,40 @@ final class ReceptionistDataLoader {
   }
 
   private static String scheduleSummary(List<AppointmentListRow> appointments) {
-    long pending = count(appointments, AppointmentStatus.PENDING);
-    long accepted = count(appointments, AppointmentStatus.ACCEPTED);
-    long declined = count(appointments, AppointmentStatus.DECLINED);
-    long checkedIn = count(appointments, AppointmentStatus.CHECKED_IN);
-    long completed = count(appointments, AppointmentStatus.COMPLETED);
     return appointments.size()
         + " appointment(s) | Pending: "
-        + pending
+        + count(appointments, AppointmentStatus.PENDING)
         + " | Accepted: "
-        + accepted
+        + count(appointments, AppointmentStatus.ACCEPTED)
         + " | Declined: "
-        + declined
+        + count(appointments, AppointmentStatus.DECLINED)
         + " | Checked in: "
-        + checkedIn
+        + count(appointments, AppointmentStatus.CHECKED_IN)
         + " | Completed: "
-        + completed;
+        + count(appointments, AppointmentStatus.COMPLETED);
   }
 
   private static long count(List<AppointmentListRow> appointments, AppointmentStatus status) {
     return appointments.stream().filter(row -> row.appointment().status() == status).count();
+  }
+
+  private static boolean selectDoctor(SearchSuggestionField<Account> doctor, long doctorId) {
+    if (doctorId <= 0) {
+      return false;
+    }
+    return doctor.getItems().stream()
+        .filter(account -> account.id() == doctorId)
+        .findFirst()
+        .map(
+            account -> {
+              doctor.select(account);
+              return true;
+            })
+        .orElse(false);
+  }
+
+  private static boolean sameAccount(Account left, Account right) {
+    return left == right || (left != null && right != null && left.id() == right.id());
   }
 
   private static void selectAppointment(TableView<AppointmentListRow> list, long appointmentId) {

@@ -3,6 +3,8 @@ package nusynapxe.ui;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -30,13 +32,13 @@ final class PatientDirectoryLifecycleTest extends ApplicationTest {
 
   @Override
   public void start(Stage stage) throws Exception {
-    Patient patient = new Patient(42, "Pat", "Patient", "", "555-0100", "", "");
+    Patient patient =
+        new Patient(42, "Alex", "Tan", "1990-01-01", "555-0100", "alex@example.com", "Address");
     PatientService patientService = mock(PatientService.class);
-    when(patientService.searchAdministrative(
-            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
-        .thenReturn(List.of(patient));
+    when(patientService.searchAdministrative(any(), anyString())).thenReturn(List.of(patient));
     ClinicServices services = mock(ClinicServices.class);
     when(services.patientService()).thenReturn(patientService);
+
     directory =
         PatientDirectoryView.create(
             services,
@@ -81,6 +83,25 @@ final class PatientDirectoryLifecycleTest extends ApplicationTest {
     assertEquals(2, taskRunner.submissions.size());
     interact(() -> lookup("#test-patient-deactivate").queryAs(Button.class).fire());
     assertEquals(2, taskRunner.submissions.size());
+  }
+
+  @Test
+  void discardedPatientEditIgnoresSubsequentUpdateCallback() {
+    interact(() -> lookup("#test-patient-view-42").queryAs(Button.class).fire());
+    interact(() -> lookup("#test-patient-edit").queryAs(Button.class).fire());
+    interact(() -> lookup("#test-patient-update").queryAs(Button.class).fire());
+    assertEquals(2, taskRunner.submissions.size());
+
+    // User discards changes before background update finishes
+    interact(() -> lookup("#test-patient-edit-cancel").queryAs(Button.class).fire());
+    assertFalse(lookup("#test-patient-edit-card").tryQuery().isPresent());
+
+    // When update finishes, it should not resurrect or replace with the edit callback
+    Patient updatedPatient =
+        new Patient(42, "Updated", "Name", "1990-01-01", "555-0100", "test@example.com", "Address");
+    interact(() -> taskRunner.submissions.getLast().success().accept(updatedPatient));
+
+    assertFalse(lookup("#test-patient-edit-card").tryQuery().isPresent());
   }
 
   private static final class CapturingTaskRunner implements ClinicTaskRunner {

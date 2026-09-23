@@ -2,6 +2,7 @@ package nusynapxe.ui;
 
 import java.time.LocalDateTime;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -95,11 +96,25 @@ final class AppointmentEditorView {
     decline.setVisible(decisionVisible);
     decline.setManaged(decisionVisible);
     Stage dialog = new Stage();
-    BooleanSupplier isActive =
+    boolean[] pending = {false};
+    dialog.setOnCloseRequest(
+        event -> {
+          if (pending[0]) {
+            event.consume();
+          }
+        });
+    Consumer<Boolean> setBusy =
+        busy -> {
+          pending[0] = busy;
+          submit.setDisable(busy);
+          cancel.setDisable(busy);
+          accept.setDisable(
+              busy || (appointment != null && appointment.status() == AppointmentStatus.ACCEPTED));
+          decline.setDisable(busy);
+        };
+    BooleanSupplier isWorkspaceCurrent =
         () ->
-            workspaceActive.getAsBoolean()
-                && AppointmentDialogLoader.isCurrent(prefix, generation)
-                && dialog.isShowing();
+            workspaceActive.getAsBoolean() && AppointmentDialogLoader.isCurrent(prefix, generation);
     submit.setOnAction(
         event ->
             save(
@@ -116,9 +131,13 @@ final class AppointmentEditorView {
                 onUpdated,
                 dialog,
                 taskRunner,
-                isActive));
+                isWorkspaceCurrent,
+                setBusy));
     cancel.setOnAction(
         event -> {
+          if (pending[0]) {
+            return;
+          }
           if (appointment == null) {
             dialog.close();
           } else {
@@ -131,7 +150,8 @@ final class AppointmentEditorView {
                 onUpdated,
                 dialog,
                 taskRunner,
-                isActive);
+                isWorkspaceCurrent,
+                setBusy);
           }
         });
     accept.setOnAction(
@@ -146,7 +166,8 @@ final class AppointmentEditorView {
                 onUpdated,
                 dialog,
                 taskRunner,
-                isActive));
+                isWorkspaceCurrent,
+                setBusy));
     decline.setOnAction(
         event ->
             decide(
@@ -159,7 +180,8 @@ final class AppointmentEditorView {
                 onUpdated,
                 dialog,
                 taskRunner,
-                isActive));
+                isWorkspaceCurrent,
+                setBusy));
 
     GridPane interval = new GridPane();
     interval.setHgap(8);
@@ -225,7 +247,8 @@ final class AppointmentEditorView {
       Runnable onUpdated,
       Stage dialog,
       ClinicTaskRunner taskRunner,
-      BooleanSupplier isActive) {
+      BooleanSupplier isWorkspaceCurrent,
+      Consumer<Boolean> setBusy) {
     try {
       Patient patient = patients.getValue();
       if (patient == null) {
@@ -233,6 +256,7 @@ final class AppointmentEditorView {
       }
       LocalDateTime startsAt = AppointmentDialog.parseDateTime(date, start, "Start time");
       LocalDateTime endsAt = AppointmentDialog.parseDateTime(date, end, "End time");
+      setBusy.accept(true);
       taskRunner.submit(
           () -> {
             if (appointment == null) {
@@ -243,7 +267,11 @@ final class AppointmentEditorView {
             return null;
           },
           ignored -> {
-            if (!isActive.getAsBoolean()) {
+            setBusy.accept(false);
+            if (!isWorkspaceCurrent.getAsBoolean()) {
+              if (dialog.isShowing()) {
+                dialog.close();
+              }
               return;
             }
             if (appointment == null) {
@@ -256,10 +284,13 @@ final class AppointmentEditorView {
               workspaceFeedback.setText("Appointment rescheduled");
             }
             onUpdated.run();
-            dialog.close();
+            if (dialog.isShowing()) {
+              dialog.close();
+            }
           },
           failure -> {
-            if (isActive.getAsBoolean()) {
+            setBusy.accept(false);
+            if (isWorkspaceCurrent.getAsBoolean() && dialog.isShowing()) {
               showOperationError(
                   feedback, failure, "Appointment changes are temporarily unavailable");
             }
@@ -278,22 +309,31 @@ final class AppointmentEditorView {
       Runnable onUpdated,
       Stage dialog,
       ClinicTaskRunner taskRunner,
-      BooleanSupplier isActive) {
+      BooleanSupplier isWorkspaceCurrent,
+      Consumer<Boolean> setBusy) {
+    setBusy.accept(true);
     taskRunner.submit(
         () -> {
           services.appointmentService().cancel(session, appointment.id());
           return null;
         },
         ignored -> {
-          if (!isActive.getAsBoolean()) {
+          setBusy.accept(false);
+          if (!isWorkspaceCurrent.getAsBoolean()) {
+            if (dialog.isShowing()) {
+              dialog.close();
+            }
             return;
           }
           workspaceFeedback.setText("Appointment cancelled");
           onUpdated.run();
-          dialog.close();
+          if (dialog.isShowing()) {
+            dialog.close();
+          }
         },
         failure -> {
-          if (isActive.getAsBoolean()) {
+          setBusy.accept(false);
+          if (isWorkspaceCurrent.getAsBoolean() && dialog.isShowing()) {
             showOperationError(
                 feedback, failure, "Appointment cancellation is temporarily unavailable");
           }
@@ -310,7 +350,9 @@ final class AppointmentEditorView {
       Runnable onUpdated,
       Stage dialog,
       ClinicTaskRunner taskRunner,
-      BooleanSupplier isActive) {
+      BooleanSupplier isWorkspaceCurrent,
+      Consumer<Boolean> setBusy) {
+    setBusy.accept(true);
     taskRunner.submit(
         () -> {
           if (decision == AppointmentStatus.ACCEPTED) {
@@ -321,7 +363,11 @@ final class AppointmentEditorView {
           return null;
         },
         ignored -> {
-          if (!isActive.getAsBoolean()) {
+          setBusy.accept(false);
+          if (!isWorkspaceCurrent.getAsBoolean()) {
+            if (dialog.isShowing()) {
+              dialog.close();
+            }
             return;
           }
           workspaceFeedback.setText(
@@ -329,10 +375,13 @@ final class AppointmentEditorView {
                   ? "Appointment accepted"
                   : "Appointment declined");
           onUpdated.run();
-          dialog.close();
+          if (dialog.isShowing()) {
+            dialog.close();
+          }
         },
         failure -> {
-          if (isActive.getAsBoolean()) {
+          setBusy.accept(false);
+          if (isWorkspaceCurrent.getAsBoolean() && dialog.isShowing()) {
             showOperationError(
                 feedback, failure, "Appointment decision is temporarily unavailable");
           }
