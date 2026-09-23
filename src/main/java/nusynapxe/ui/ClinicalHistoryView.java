@@ -176,10 +176,15 @@ final class ClinicalHistoryView {
 
   /** Opens history for a patient selected from another Doctor workflow. */
   void showPatient(long patientId) {
+    historyGeneration++;
+    long generation = historyGeneration;
+    patientSelector.clearSelection();
+    clearHistory();
+    state.setText("Loading consultation history...");
     submit(
         () -> services.patientService().getAdministrative(session, patientId),
         patient -> {
-          if (disposed) {
+          if (disposed || generation != historyGeneration) {
             return;
           }
           if (patientSelector.getItems().stream().noneMatch(value -> value.id() == patient.id())) {
