@@ -11,8 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
-import javafx.scene.Scene;
 import javafx.scene.Parent;
+import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.TextInputControl;
 import javafx.scene.layout.StackPane;
@@ -52,7 +52,9 @@ final class CredentialSnapshotTest extends ApplicationTest {
             })
         .when(accounts)
         .createStaff(any(), anyString(), anyString(), any(), any(char[].class));
-    show(SystemAdminView.create(accounts, new Session(1, "admin", Role.SYSTEM_ADMIN), () -> {}, taskRunner));
+    show(
+        SystemAdminView.create(
+            accounts, new Session(1, "admin", Role.SYSTEM_ADMIN), () -> {}, taskRunner));
 
     setText("#admin-account-username", "doctor-before-queue");
     setText("#admin-account-display-name", "Dr. Before Queue");
@@ -116,7 +118,9 @@ final class CredentialSnapshotTest extends ApplicationTest {
 
     @Override
     public <T> void submit(
-        ClinicTask<T> task, java.util.function.Consumer<T> onSuccess, java.util.function.Consumer<Throwable> onFailure) {
+        ClinicTask<T> task,
+        java.util.function.Consumer<T> onSuccess,
+        java.util.function.Consumer<Throwable> onFailure) {
       ClinicTaskRunner.requireCallbacks(task, onSuccess, onFailure);
       tasks.add(task);
     }

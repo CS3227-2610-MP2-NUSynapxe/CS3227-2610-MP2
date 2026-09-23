@@ -251,7 +251,11 @@ final class PatientDirectoryPatientView {
         failure ->
             showDeletionErrorIfActive(
                 directoryActive,
-                prefix, owner, feedback, failure, "Patient deletion is temporarily unavailable"));
+                prefix,
+                owner,
+                feedback,
+                failure,
+                "Patient deletion is temporarily unavailable"));
   }
 
   private static void showDeletionErrorIfActive(

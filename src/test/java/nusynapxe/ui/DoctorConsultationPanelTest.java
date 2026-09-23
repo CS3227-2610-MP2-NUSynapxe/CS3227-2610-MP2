@@ -53,7 +53,8 @@ final class DoctorConsultationPanelTest extends ApplicationTest {
     interact(() -> panel.addPrescriptionButton().fire());
     assertEquals(1, taskRunner.submissions.size());
 
-    interact(() -> taskRunner.submissions.getFirst().failure().accept(new RuntimeException("failed")));
+    interact(
+        () -> taskRunner.submissions.getFirst().failure().accept(new RuntimeException("failed")));
     assertFalse(panel.addPrescriptionButton().isDisable());
   }
 
@@ -65,9 +66,7 @@ final class DoctorConsultationPanelTest extends ApplicationTest {
     public <T> void submit(
         ClinicTask<T> task, Consumer<T> onSuccess, Consumer<Throwable> onFailure) {
       ClinicTaskRunner.requireCallbacks(task, onSuccess, onFailure);
-      submissions.add(
-          new PendingSubmission(
-              task, value -> onSuccess.accept((T) value), onFailure));
+      submissions.add(new PendingSubmission(task, value -> onSuccess.accept((T) value), onFailure));
     }
 
     @Override
@@ -77,7 +76,5 @@ final class DoctorConsultationPanelTest extends ApplicationTest {
   }
 
   private record PendingSubmission(
-      ClinicTaskRunner.ClinicTask<?> task,
-      Consumer<Object> success,
-      Consumer<Throwable> failure) {}
+      ClinicTaskRunner.ClinicTask<?> task, Consumer<Object> success, Consumer<Throwable> failure) {}
 }

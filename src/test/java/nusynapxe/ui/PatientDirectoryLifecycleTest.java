@@ -31,7 +31,8 @@ final class PatientDirectoryLifecycleTest extends ApplicationTest {
     this.stage = stage;
     Patient patient = new Patient(42, "Pat", "Patient", "", "555-0100", "", "");
     PatientService patientService = mock(PatientService.class);
-    when(patientService.searchAdministrative(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
+    when(patientService.searchAdministrative(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
         .thenReturn(List.of(patient));
     ClinicServices services = mock(ClinicServices.class);
     when(services.patientService()).thenReturn(patientService);
@@ -58,7 +59,8 @@ final class PatientDirectoryLifecycleTest extends ApplicationTest {
     directory.dispose();
     interact(
         () ->
-            taskRunner.submissions
+            taskRunner
+                .submissions
                 .getLast()
                 .success()
                 .accept(new PatientDeletionBlockers(42, 0, 0, 0, 0, 0, 0)));
@@ -75,8 +77,7 @@ final class PatientDirectoryLifecycleTest extends ApplicationTest {
     public <T> void submit(
         ClinicTask<T> task, Consumer<T> onSuccess, Consumer<Throwable> onFailure) {
       ClinicTaskRunner.requireCallbacks(task, onSuccess, onFailure);
-      submissions.add(
-          new PendingSubmission(task, value -> onSuccess.accept((T) value), onFailure));
+      submissions.add(new PendingSubmission(task, value -> onSuccess.accept((T) value), onFailure));
       if (submissions.size() == 1) {
         try {
           onSuccess.accept(task.run());
@@ -93,7 +94,5 @@ final class PatientDirectoryLifecycleTest extends ApplicationTest {
   }
 
   private record PendingSubmission(
-      ClinicTaskRunner.ClinicTask<?> task,
-      Consumer<Object> success,
-      Consumer<Throwable> failure) {}
+      ClinicTaskRunner.ClinicTask<?> task, Consumer<Object> success, Consumer<Throwable> failure) {}
 }
