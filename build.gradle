@@ -108,6 +108,31 @@ tasks.withType(JavaCompile).configureEach {
     options.compilerArgs.addAll(['-Xlint:all', '-Werror'])
 }
 
+def sourceFileLineLimit = 500
+def javaSourceFiles = files(sourceSets.main.allJava, sourceSets.test.allJava)
+
+tasks.register('sourceFileSizeCheck') {
+    group = 'verification'
+    description = "Fails when a Java source file exceeds ${sourceFileLineLimit} lines."
+    inputs.files(javaSourceFiles)
+    doLast {
+        def oversizedFiles = javaSourceFiles.files
+            .findAll { it.isFile() }
+            .collect { file ->
+                [path: file, lines: file.readLines('UTF-8').size()]
+            }
+            .findAll { it.lines > sourceFileLineLimit }
+            .sort { left, right -> left.path.path <=> right.path.path }
+        if (!oversizedFiles.isEmpty()) {
+            def details = oversizedFiles
+                .collect { entry -> "${entry.lines} lines: ${entry.path}" }
+                .join(System.lineSeparator())
+            throw new GradleException(
+                "Java source files must be at most ${sourceFileLineLimit} lines:${System.lineSeparator()}${details}")
+        }
+    }
+}
+
 tasks.named('test') {
     useJUnitPlatform()
     jvmArgs '--enable-native-access=ALL-UNNAMED'
@@ -204,7 +229,7 @@ jacocoTestCoverageVerification {
             limit {
                 counter = 'BRANCH'
                 value = 'COVEREDRATIO'
-                minimum = 0.65
+                minimum = 0.70
             }
             limit {
                 counter = 'LINE'
@@ -216,6 +241,7 @@ jacocoTestCoverageVerification {
 }
 
 tasks.named('check') {
+    dependsOn tasks.named('sourceFileSizeCheck')
     dependsOn tasks.named('spotlessCheck')
     dependsOn tasks.named('checkstyleMain')
     dependsOn tasks.named('checkstyleTest')

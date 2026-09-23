@@ -1,12 +1,22 @@
 package nusynapxe.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.sql.SQLException;
 import java.time.LocalDate;
 import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
+import nusynapxe.domain.Role;
+import nusynapxe.domain.Session;
+import nusynapxe.persistence.AppointmentRepository;
+import nusynapxe.persistence.ClinicalRecordRepository;
+import nusynapxe.persistence.PatientRepository;
 import nusynapxe.persistence.SqliteDatabase;
 import org.junit.jupiter.api.Test;
 
@@ -93,5 +103,36 @@ final class PatientServiceValidationTest extends PatientServiceTestSupport {
               .register(fixture.receptionistSession, withPhone(validPatient(), "1234567890"))
               .phone());
     }
+  }
+
+  @Test
+  void translatesUniqueConstraintMessagesFromConcurrentRegistration() throws SQLException {
+    PatientRepository patients = mock(PatientRepository.class);
+    when(patients.findByIdentity(any(), any(), any())).thenReturn(java.util.Optional.empty());
+    PatientService service =
+        new PatientService(
+            patients, mock(AppointmentRepository.class), mock(ClinicalRecordRepository.class));
+    Session receptionist = new Session(1, "reception", Role.RECEPTIONIST);
+
+    SQLException directUnique = new SQLException("UNIQUE constraint failed: patients.identity");
+    doThrow(directUnique).when(patients).create(any());
+    ValidationException direct =
+        assertThrows(
+            ValidationException.class, () -> service.register(receptionist, validPatient()));
+    assertEquals(PatientService.DUPLICATE_IDENTITY_MESSAGE, direct.getMessage());
+    assertSame(directUnique, direct.getCause());
+
+    SQLException nestedUnique = new SQLException("write failed", new SQLException("UNIQUE index"));
+    doThrow(nestedUnique).when(patients).create(any());
+    ValidationException nested =
+        assertThrows(
+            ValidationException.class, () -> service.register(receptionist, validPatient()));
+    assertSame(nestedUnique, nested.getCause());
+
+    SQLException unrelated = new SQLException("disk unavailable");
+    doThrow(unrelated).when(patients).create(any());
+    SQLException propagated =
+        assertThrows(SQLException.class, () -> service.register(receptionist, validPatient()));
+    assertSame(unrelated, propagated);
   }
 }

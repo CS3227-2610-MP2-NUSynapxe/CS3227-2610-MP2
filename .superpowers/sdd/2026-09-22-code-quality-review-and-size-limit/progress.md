@@ -23,3 +23,15 @@ Task 2: complete (commit subject: fix: snapshot calendar and selector inputs; te
 Task 3: complete (commit subject: fix: guard appointment dialogs after logout; tests: WorkspaceLifecycleTest, DoctorCalendarViewTest, DoctorViewTest, and ReceptionistViewTest -> passed)
 
 Task 4: complete (commit subject: fix: protect receipt ordering and pending exports; tests: ReceiptRepositoryTest and ReportExportStateTest -> passed)
+
+Task 5: complete (UI controllers/views split into focused collaborators; all UI source files remain at or below 500 lines; focused calendar, doctor, and receptionist TestFX suites passed)
+
+Task 6: complete (commit 3dba032; repository query/mutation facades and demo seeders split; AppointmentRepositoryScheduleTest, PatientDirectoryRepositoryTest, and DemoDataSeederTest passed)
+
+Task 7: complete (commit dd88017; oversized calendar, doctor workspace, receptionist, and patient-service tests split; extracted suites passed)
+
+Task 8: complete (commit d2586a5; public API JavaDocs completed and native `javadoc` passed without warnings)
+
+Task 9: complete (coverage tests added, branch minimum raised to 70%, source-file limit enforced at 500 lines, and full native `check` passed)
+
+Task 10: pending (final diff review, GitHub issue creation, review replies/thread resolution, and PR update)

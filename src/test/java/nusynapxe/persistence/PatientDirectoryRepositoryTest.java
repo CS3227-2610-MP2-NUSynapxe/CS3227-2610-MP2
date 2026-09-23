@@ -74,6 +74,11 @@ final class PatientDirectoryRepositoryTest {
       assertEquals(List.of(alpha, beta), patients.search("+441234"));
       assertTrue(patients.search("no-match").isEmpty());
       assertEquals(List.of(alpha, beta), patients.search(""));
+      assertEquals(List.of(alpha, beta), patients.search(null));
+      assertEquals(List.of(alpha, beta), patients.search("   "));
+      assertEquals(List.of(alpha, beta), patients.search("P"));
+      assertTrue(patients.search("P999999999999999999999999").isEmpty());
+      assertTrue(patients.search("not-a-patient-id").isEmpty());
     }
   }
 

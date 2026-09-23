@@ -95,4 +95,58 @@ final class ReceptionistRevenueTest extends ReceptionistViewTestSupport {
     assertTrue(
         json.contains("\"doctors\":{\"Dr. \\\"Ada\\\"\\\\Clinic\\tEast\\u0001\":\"45.00\"}"));
   }
+
+  @Test
+  void revenueReportEscapesAllJsonShortControlCharactersAndEmptyTotals() {
+    Receipt receipt =
+        new Receipt(
+            1,
+            2,
+            3,
+            4,
+            "Plain patient",
+            "Back\bForm\fReturn\r",
+            4500,
+            PaymentMethod.CARD,
+            LocalDate.of(2026, 9, 1),
+            7,
+            LocalDateTime.of(2026, 9, 1, 12, 30));
+    String json = ReceptionistView.reportJson(new RevenueReport(List.of(receipt)));
+
+    assertTrue(json.contains("Back\\bForm\\fReturn\\r"));
+    Receipt quoteOnly =
+        new Receipt(
+            2,
+            2,
+            3,
+            4,
+            "Quote\"Only",
+            "Plain",
+            4500,
+            PaymentMethod.CARD,
+            LocalDate.of(2026, 9, 1),
+            8,
+            LocalDateTime.of(2026, 9, 1, 12, 31));
+    Receipt newlineOnly =
+        new Receipt(
+            3,
+            2,
+            3,
+            4,
+            "Line\nBreak",
+            "Plain",
+            4500,
+            PaymentMethod.CARD,
+            LocalDate.of(2026, 9, 1),
+            9,
+            LocalDateTime.of(2026, 9, 1, 12, 32));
+    String csv =
+        ReceptionistView.reportCsv(new RevenueReport(List.of(receipt, quoteOnly, newlineOnly)));
+    assertTrue(csv.contains("\"Quote\"\"Only\""));
+    assertTrue(csv.contains("\"Line\nBreak\""));
+    assertTrue(
+        ReceptionistView.reportCsv(new RevenueReport(List.of())).contains("summary,0,0,0.00"));
+    assertTrue(
+        ReceptionistView.reportJson(new RevenueReport(List.of())).contains("\"receipts\":[]"));
+  }
 }

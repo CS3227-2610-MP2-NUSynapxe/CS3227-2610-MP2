@@ -91,7 +91,11 @@ final class UiComponents {
         region.setMaxWidth(Double.MAX_VALUE);
       }
     }
-    VBox group = new VBox(6, label, control);
+    VBox group = new VBox(6);
+    group.getChildren().add(label);
+    if (control != null) {
+      group.getChildren().add(control);
+    }
     group.getStyleClass().add("field-group");
     return group;
   }
@@ -103,7 +107,11 @@ final class UiComponents {
     if (control != null) {
       label.setLabelFor(control);
     }
-    HBox group = new HBox(12, label, control);
+    HBox group = new HBox(12);
+    group.getChildren().add(label);
+    if (control != null) {
+      group.getChildren().add(control);
+    }
     group.getStyleClass().add("inline-field-group");
     if (control instanceof Region region) {
       HBox.setHgrow(region, Priority.ALWAYS);
