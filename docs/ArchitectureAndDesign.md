@@ -343,12 +343,12 @@ erDiagram
     }
 
     doctor_calendar_settings {
-        INTEGER doctor_id PK_FK
+        INTEGER doctor_id PK "FK"
         TEXT first_day_of_week
     }
 
     doctor_working_intervals {
-        INTEGER doctor_id PK_FK
+        INTEGER doctor_id PK "FK"
         TEXT day_of_week PK
         INTEGER start_minute PK
         INTEGER end_minute
@@ -357,7 +357,7 @@ erDiagram
     clinical_records {
         INTEGER id PK
         INTEGER patient_id FK
-        INTEGER appointment_id FK_UK
+        INTEGER appointment_id FK "UK"
         INTEGER doctor_id FK
         TEXT diagnosis
         TEXT consultation_notes
@@ -378,7 +378,7 @@ erDiagram
 
     payments {
         INTEGER id PK
-        INTEGER appointment_id FK_UK
+        INTEGER appointment_id FK "UK"
         INTEGER patient_id FK
         INTEGER receptionist_id FK
         INTEGER amount_minor
@@ -389,7 +389,7 @@ erDiagram
 
     receipts {
         INTEGER id PK
-        INTEGER payment_id FK_UK
+        INTEGER payment_id FK "UK"
         INTEGER appointment_id FK
         INTEGER patient_id FK
         INTEGER amount_minor
