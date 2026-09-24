@@ -4,6 +4,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.ClinicalHistoryEntry;
@@ -24,6 +26,7 @@ public final class ClinicalRecordRepository {
   private static final String PRESCRIPTION_COLUMNS =
       "id, clinical_record_id, medication, dosage, frequency, duration, instructions";
   private final SqliteDatabase database;
+  private final Clock clock;
 
   /**
    * Creates a clinical repository backed by an opened database.
@@ -32,7 +35,19 @@ public final class ClinicalRecordRepository {
    * @throws NullPointerException if {@code database} is {@code null}
    */
   public ClinicalRecordRepository(SqliteDatabase database) {
+    this(database, ClinicClock.system());
+  }
+
+  /**
+   * Creates a clinical repository using an injectable clinic clock.
+   *
+   * @param database database used for clinical persistence
+   * @param clock source for clinical timestamps
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public ClinicalRecordRepository(SqliteDatabase database, Clock clock) {
     this.database = Objects.requireNonNull(database, "database");
+    this.clock = ClinicClock.withClinicZone(clock);
   }
 
   /**
@@ -70,10 +85,10 @@ public final class ClinicalRecordRepository {
         connection -> {
           Optional<Long> existingId = findIdByAppointment(connection, record.appointmentId());
           if (existingId.isPresent()) {
-            updateRecord(connection, existingId.orElseThrow(), record);
+            updateRecord(connection, existingId.orElseThrow(), record, ClinicClock.now(clock));
             return withId(record, existingId.orElseThrow());
           }
-          return insertRecord(connection, record);
+          return insertRecord(connection, record, ClinicClock.now(clock));
         });
   }
 
@@ -101,7 +116,7 @@ public final class ClinicalRecordRepository {
             statement.setString(4, prescription.frequency());
             statement.setString(5, prescription.duration());
             statement.setString(6, prescription.instructions());
-            statement.setString(7, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+            statement.setString(7, SqliteQueries.formatTimestamp(ClinicClock.now(clock)));
             statement.executeUpdate();
             try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
               if (!generatedKeys.next()) {
@@ -156,8 +171,8 @@ public final class ClinicalRecordRepository {
             + "ORDER BY a.starts_at DESC, a.id DESC";
     try (PreparedStatement statement = database.connection().prepareStatement(sql)) {
       statement.setLong(1, patientId);
+      List<HistoryProjection> projections = new ArrayList<>();
       try (ResultSet resultSet = statement.executeQuery()) {
-        List<HistoryProjection> projections = new ArrayList<>();
         while (resultSet.next()) {
           projections.add(
               new HistoryProjection(
@@ -165,33 +180,42 @@ public final class ClinicalRecordRepository {
                   resultSet.getString("doctor_name"),
                   readHistoryRecord(resultSet)));
         }
-        Map<Long, List<Prescription>> prescriptionsByRecord = findPrescriptionsByPatient(patientId);
-        List<ClinicalHistoryEntry> history = new ArrayList<>(projections.size());
-        for (HistoryProjection projection : projections) {
-          history.add(
-              new ClinicalHistoryEntry(
-                  projection.appointment(),
-                  projection.doctorName(),
-                  projection.record(),
-                  prescriptionsByRecord.getOrDefault(projection.record().id(), List.of())));
-        }
-        return List.copyOf(history);
       }
+      List<Long> recordIds =
+          projections.stream().map(projection -> projection.record().id()).toList();
+      Map<Long, List<Prescription>> prescriptionsByRecord = findPrescriptionsByRecordIds(recordIds);
+      List<ClinicalHistoryEntry> history = new ArrayList<>(projections.size());
+      for (HistoryProjection projection : projections) {
+        history.add(
+            new ClinicalHistoryEntry(
+                projection.appointment(),
+                projection.doctorName(),
+                projection.record(),
+                prescriptionsByRecord.getOrDefault(projection.record().id(), List.of())));
+      }
+      return List.copyOf(history);
     }
   }
 
-  private Map<Long, List<Prescription>> findPrescriptionsByPatient(long patientId)
+  Map<Long, List<Prescription>> findPrescriptionsByRecordIds(List<Long> recordIds)
       throws SQLException {
+    if (recordIds.isEmpty()) {
+      return Map.of();
+    }
+    String placeholders = "?, ".repeat(recordIds.size());
+    placeholders = placeholders.substring(0, placeholders.length() - 2);
     String sql =
         "SELECT p.id, p.clinical_record_id, p.medication, p.dosage, p.frequency, p.duration, "
             + "p.instructions FROM prescriptions p "
-            + "JOIN clinical_records c ON c.id = p.clinical_record_id "
-            + "JOIN appointments a ON a.id = c.appointment_id "
-            + "WHERE c.patient_id = ? AND a.status IN ('COMPLETED', 'CHECKED_OUT') "
+            + "WHERE p.clinical_record_id IN ("
+            + placeholders
+            + ") "
             + "ORDER BY p.clinical_record_id, p.id";
     Map<Long, List<Prescription>> prescriptionsByRecord = new HashMap<>();
     try (PreparedStatement statement = database.connection().prepareStatement(sql)) {
-      statement.setLong(1, patientId);
+      for (int index = 0; index < recordIds.size(); index++) {
+        statement.setLong(index + 1, recordIds.get(index));
+      }
       try (ResultSet resultSet = statement.executeQuery()) {
         while (resultSet.next()) {
           Prescription prescription = readPrescription(resultSet);
@@ -210,7 +234,8 @@ public final class ClinicalRecordRepository {
     // Groups the joined history row before prescription enrichment.
   }
 
-  private static ClinicalRecord insertRecord(java.sql.Connection connection, ClinicalRecord record)
+  private static ClinicalRecord insertRecord(
+      java.sql.Connection connection, ClinicalRecord record, LocalDateTime updatedAt)
       throws SQLException {
     String sql =
         "INSERT INTO clinical_records(patient_id, appointment_id, doctor_id, diagnosis, "
@@ -223,7 +248,7 @@ public final class ClinicalRecordRepository {
       statement.setString(4, record.diagnosis());
       statement.setString(5, record.consultationNotes());
       statement.setString(6, record.followUpNotes());
-      statement.setString(7, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+      statement.setString(7, SqliteQueries.formatTimestamp(updatedAt));
       statement.executeUpdate();
       try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
         if (!generatedKeys.next()) {
@@ -234,7 +259,8 @@ public final class ClinicalRecordRepository {
     }
   }
 
-  private static void updateRecord(java.sql.Connection connection, long id, ClinicalRecord record)
+  private static void updateRecord(
+      java.sql.Connection connection, long id, ClinicalRecord record, LocalDateTime updatedAt)
       throws SQLException {
     String sql =
         "UPDATE clinical_records SET patient_id = ?, appointment_id = ?, doctor_id = ?, "
@@ -246,7 +272,7 @@ public final class ClinicalRecordRepository {
       statement.setString(4, record.diagnosis());
       statement.setString(5, record.consultationNotes());
       statement.setString(6, record.followUpNotes());
-      statement.setString(7, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+      statement.setString(7, SqliteQueries.formatTimestamp(updatedAt));
       statement.setLong(8, id);
       statement.executeUpdate();
     }

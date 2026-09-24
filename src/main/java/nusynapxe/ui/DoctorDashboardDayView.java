@@ -1,11 +1,11 @@
 package nusynapxe.ui;
 
-import java.sql.SQLException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Consumer;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
@@ -20,12 +20,9 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.util.Duration;
 import nusynapxe.domain.CalendarAppointment;
-import nusynapxe.domain.DoctorCalendarWeek;
 import nusynapxe.domain.Session;
-import nusynapxe.service.AuthorizationException;
 import nusynapxe.service.CalendarService;
 import nusynapxe.service.ClinicServices;
-import nusynapxe.service.ValidationException;
 
 /** Compact single-day Calendar used as the Doctor Dashboard master pane. */
 final class DoctorDashboardDayView {
@@ -35,6 +32,7 @@ final class DoctorDashboardDayView {
   private final Label feedback;
   private final Consumer<CalendarAppointment> onSelectionChanged;
   private final Clock clock;
+  private final ClinicTaskRunner taskRunner;
   private final BorderPane root = new BorderPane();
   private final DatePicker date;
   private final Timeline ticker;
@@ -42,6 +40,8 @@ final class DoctorDashboardDayView {
   private LocalDate loadedDate;
   private long selectedAppointmentId;
   private boolean shown;
+  private long refreshGeneration;
+  private boolean disposed;
 
   DoctorDashboardDayView(
       ClinicServices services,
@@ -49,7 +49,12 @@ final class DoctorDashboardDayView {
       Label feedback,
       Consumer<CalendarAppointment> onSelectionChanged) {
     this(
-        services, session, feedback, onSelectionChanged, Clock.system(CalendarService.CLINIC_ZONE));
+        services,
+        session,
+        feedback,
+        onSelectionChanged,
+        Clock.system(CalendarService.CLINIC_ZONE),
+        ClinicTaskRunner.immediate());
   }
 
   DoctorDashboardDayView(
@@ -58,11 +63,22 @@ final class DoctorDashboardDayView {
       Label feedback,
       Consumer<CalendarAppointment> onSelectionChanged,
       Clock clock) {
+    this(services, session, feedback, onSelectionChanged, clock, ClinicTaskRunner.immediate());
+  }
+
+  DoctorDashboardDayView(
+      ClinicServices services,
+      Session session,
+      Label feedback,
+      Consumer<CalendarAppointment> onSelectionChanged,
+      Clock clock,
+      ClinicTaskRunner taskRunner) {
     this.services = Objects.requireNonNull(services, "services");
     this.session = Objects.requireNonNull(session, "session");
     this.feedback = Objects.requireNonNull(feedback, "feedback");
     this.onSelectionChanged = Objects.requireNonNull(onSelectionChanged, "onSelectionChanged");
     this.clock = Objects.requireNonNull(clock, "clock").withZone(CalendarService.CLINIC_ZONE);
+    this.taskRunner = Objects.requireNonNull(taskRunner, "taskRunner");
     date = UiComponents.compactDatePicker(LocalDate.now(this.clock));
     date.setId("doctor-dashboard-date");
     date.setShowWeekNumbers(false);
@@ -99,6 +115,8 @@ final class DoctorDashboardDayView {
 
   void dispose() {
     shown = false;
+    disposed = true;
+    refreshGeneration++;
     ticker.stop();
     root.getProperties().put(TICKER_RUNNING_PROPERTY, false);
   }
@@ -110,47 +128,68 @@ final class DoctorDashboardDayView {
       UiComponents.showError(feedback, "Select a Dashboard date");
       return;
     }
+    refreshGeneration++;
+    long generation = refreshGeneration;
+    submit(
+        () -> services.calendarService().getRange(session, selectedDate, selectedDate),
+        data -> {
+          if (disposed || generation != refreshGeneration) {
+            return;
+          }
+          CalendarAppointment retained =
+              data.appointments().stream()
+                  .filter(appointment -> appointment.appointmentId() == selectedAppointmentId)
+                  .findFirst()
+                  .orElse(null);
+          if (selectedAppointmentId != 0 && retained == null) {
+            selectedAppointmentId = 0;
+            onSelectionChanged.accept(null);
+          }
+          grid =
+              new CalendarTimeGrid(
+                  List.of(selectedDate),
+                  data,
+                  clock,
+                  new CalendarTimeGrid.InteractionHandlers(
+                      this::selectAppointment, null, null, null),
+                  CalendarTimeGrid.DisplayProfile.COMPACT);
+          grid.setId("doctor-dashboard-time-grid");
+          root.setCenter(grid);
+          BorderPane.setMargin(grid, new Insets(12, 0, 0, 0));
+          loadedDate = selectedDate;
+          if (retained != null) {
+            onSelectionChanged.accept(retained);
+          }
+          if (shown) {
+            ticker.play();
+          }
+        },
+        failure -> {
+          if (disposed || generation != refreshGeneration) {
+            return;
+          }
+          if (loadedDate != null && !loadedDate.equals(selectedDate)) {
+            date.setValue(loadedDate);
+          } else if (loadedDate == null) {
+            grid = null;
+            root.setCenter(null);
+          }
+          UiComponents.showError(
+              feedback,
+              failure.getMessage() == null
+                  ? "Dashboard schedule is temporarily unavailable"
+                  : failure.getMessage());
+        });
+  }
+
+  private <T> void submit(
+      ClinicTaskRunner.ClinicTask<T> task,
+      java.util.function.Consumer<T> onSuccess,
+      java.util.function.Consumer<Throwable> onFailure) {
     try {
-      DoctorCalendarWeek data =
-          services.calendarService().getRange(session, selectedDate, selectedDate);
-      CalendarAppointment retained =
-          data.appointments().stream()
-              .filter(appointment -> appointment.appointmentId() == selectedAppointmentId)
-              .findFirst()
-              .orElse(null);
-      if (selectedAppointmentId != 0 && retained == null) {
-        selectedAppointmentId = 0;
-        onSelectionChanged.accept(null);
-      }
-      grid =
-          new CalendarTimeGrid(
-              List.of(selectedDate),
-              data,
-              clock,
-              new CalendarTimeGrid.InteractionHandlers(this::selectAppointment, null, null, null),
-              CalendarTimeGrid.DisplayProfile.COMPACT);
-      grid.setId("doctor-dashboard-time-grid");
-      root.setCenter(grid);
-      BorderPane.setMargin(grid, new Insets(12, 0, 0, 0));
-      loadedDate = selectedDate;
-      if (retained != null) {
-        onSelectionChanged.accept(retained);
-      }
-      if (shown) {
-        ticker.play();
-      }
-    } catch (SQLException | AuthorizationException | ValidationException exception) {
-      if (loadedDate != null && !loadedDate.equals(selectedDate)) {
-        date.setValue(loadedDate);
-      } else if (loadedDate == null) {
-        grid = null;
-        root.setCenter(null);
-      }
-      UiComponents.showError(
-          feedback,
-          exception.getMessage() == null
-              ? "Dashboard schedule is temporarily unavailable"
-              : exception.getMessage());
+      taskRunner.submit(task, onSuccess, onFailure);
+    } catch (RejectedExecutionException exception) {
+      onFailure.accept(exception);
     }
   }
 

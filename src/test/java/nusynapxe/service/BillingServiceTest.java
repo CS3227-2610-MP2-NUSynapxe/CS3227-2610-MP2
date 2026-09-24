@@ -46,6 +46,12 @@ final class BillingServiceTest {
       var receipts = billing.receiptHistory(fixture.receptionistSession(), "", null, null);
       assertEquals(1, receipts.size());
       assertEquals(1, receipts.get(0).sequenceNumber());
+      assertEquals(
+          fixture.appointment().id(),
+          billing
+              .receiptForAppointment(fixture.receptionistSession(), fixture.appointment().id())
+              .orElseThrow()
+              .appointmentId());
       assertThrows(
           ValidationException.class,
           () ->

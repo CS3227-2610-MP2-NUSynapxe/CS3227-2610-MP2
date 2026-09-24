@@ -15,9 +15,14 @@ public final class ReceiptRepository {
   private static final String RECEIPT_QUERY =
       "SELECT r.id, r.payment_id, r.appointment_id, r.patient_id, p.first_name || ' ' || p.last_name patient_name, u.display_name doctor_name, r.amount_minor, r.method, r.receipt_date, r.sequence_number, r.recorded_at FROM receipts r JOIN patients p ON p.id = r.patient_id JOIN appointments a ON a.id = r.appointment_id JOIN users u ON u.id = a.doctor_id";
   private static final String FIND_BY_ID_QUERY = RECEIPT_QUERY + " WHERE r.id = ?";
+  private static final String FIND_BY_APPOINTMENT_QUERY =
+      RECEIPT_QUERY + " WHERE r.appointment_id = ? ORDER BY r.id DESC LIMIT 1";
   private static final String FIND_ALL_QUERY =
       RECEIPT_QUERY
           + " WHERE (? IS NULL OR ? = '' OR CAST(p.id AS TEXT) LIKE lower(?) OR lower(p.first_name || ' ' || p.last_name) LIKE lower(?) OR lower(p.email) LIKE lower(?)) AND (? IS NULL OR a.doctor_id = ?) AND (? IS NULL OR r.receipt_date = ?) ORDER BY r.receipt_date DESC, r.sequence_number DESC";
+  private static final String FIND_RANGE_QUERY =
+      RECEIPT_QUERY
+          + " WHERE r.receipt_date >= ? AND r.receipt_date <= ? AND (? IS NULL OR ? = '' OR CAST(p.id AS TEXT) LIKE lower(?) OR lower(p.first_name || ' ' || p.last_name) LIKE lower(?) OR lower(p.email) LIKE lower(?)) AND (? IS NULL OR a.doctor_id = ?) AND (? IS NULL OR r.method = ?) ORDER BY r.receipt_date ASC, r.sequence_number DESC";
   private final SqliteDatabase database;
 
   /**
@@ -120,12 +125,29 @@ public final class ReceiptRepository {
   }
 
   /**
+   * Finds the receipt associated with one appointment.
+   *
+   * @param appointmentId appointment identifier
+   * @return the matching receipt, or empty when the appointment has no receipt
+   * @throws SQLException if the query fails
+   */
+  public java.util.Optional<Receipt> findByAppointment(long appointmentId) throws SQLException {
+    try (PreparedStatement statement =
+        database.connection().prepareStatement(FIND_BY_APPOINTMENT_QUERY)) {
+      statement.setLong(1, appointmentId);
+      try (ResultSet result = statement.executeQuery()) {
+        return result.next() ? java.util.Optional.of(read(result)) : java.util.Optional.empty();
+      }
+    }
+  }
+
+  /**
    * Finds receipts using optional patient, Doctor, and date filters.
    *
    * @param patientQuery optional patient search text
    * @param doctorId optional Doctor identifier
    * @param date optional Singapore-local receipt date
-   * @return matching receipts in reverse receipt-date and sequence order
+   * @return matching receipts in ascending receipt-date and descending sequence order
    * @throws SQLException if the query fails
    */
   public List<Receipt> findAll(String patientQuery, Long doctorId, LocalDate date)
@@ -147,6 +169,60 @@ public final class ReceiptRepository {
       }
       statement.setString(8, date == null ? null : date.toString());
       statement.setString(9, date == null ? null : date.toString());
+      try (ResultSet result = statement.executeQuery()) {
+        List<Receipt> receipts = new ArrayList<>();
+        while (result.next()) {
+          receipts.add(read(result));
+        }
+        return receipts;
+      }
+    }
+  }
+
+  /**
+   * Finds receipts in one inclusive date-range query with optional filters.
+   *
+   * @param patientQuery optional patient search text
+   * @param doctorId optional Doctor identifier
+   * @param from inclusive Singapore-local receipt date
+   * @param to inclusive Singapore-local receipt date
+   * @param method optional payment method
+   * @return matching receipts in reverse receipt-date and sequence order
+   * @throws NullPointerException if a date is {@code null}
+   * @throws SQLException if the query fails
+   */
+  public List<Receipt> findRange(
+      String patientQuery, Long doctorId, LocalDate from, LocalDate to, PaymentMethod method)
+      throws SQLException {
+    Objects.requireNonNull(from, "from");
+    Objects.requireNonNull(to, "to");
+    if (to.isBefore(from)) {
+      throw new IllegalArgumentException("Receipt range is reversed");
+    }
+    try (PreparedStatement statement = database.connection().prepareStatement(FIND_RANGE_QUERY)) {
+      String query = patientQuery == null ? "" : patientQuery.trim();
+      String pattern = "%" + query + "%";
+      statement.setString(1, from.toString());
+      statement.setString(2, to.toString());
+      statement.setString(3, patientQuery == null ? null : query);
+      statement.setString(4, query);
+      statement.setString(5, pattern);
+      statement.setString(6, pattern);
+      statement.setString(7, pattern);
+      if (doctorId == null) {
+        statement.setObject(8, null);
+        statement.setObject(9, null);
+      } else {
+        statement.setLong(8, doctorId);
+        statement.setLong(9, doctorId);
+      }
+      if (method == null) {
+        statement.setObject(10, null);
+        statement.setObject(11, null);
+      } else {
+        statement.setString(10, method.name());
+        statement.setString(11, method.name());
+      }
       try (ResultSet result = statement.executeQuery()) {
         List<Receipt> receipts = new ArrayList<>();
         while (result.next()) {

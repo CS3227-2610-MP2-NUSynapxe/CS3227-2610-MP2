@@ -5,11 +5,14 @@ import javafx.application.Application;
 import javafx.stage.Stage;
 import nusynapxe.persistence.SqliteDatabase;
 import nusynapxe.ui.ApplicationRouter;
+import nusynapxe.ui.ClinicTaskRunner;
+import nusynapxe.ui.SerializedClinicTaskRunner;
 
 /** JavaFX application entry point for NUSynapxe. */
 public final class NUSynapxeApp extends Application {
   private SqliteDatabase database;
   private ApplicationRouter router;
+  private ClinicTaskRunner taskRunner;
 
   /** Creates an application instance for the JavaFX runtime. */
   public NUSynapxeApp() {
@@ -26,9 +29,10 @@ public final class NUSynapxeApp extends Application {
   public void start(Stage stage) throws SQLException {
     database = new SqliteDatabase(DatabasePaths.configuredDatabasePath());
     database.open();
+    taskRunner = new SerializedClinicTaskRunner();
 
     stage.setTitle("NUSynapxe");
-    router = new ApplicationRouter(stage, database);
+    router = new ApplicationRouter(stage, database, ClinicClock.system(), taskRunner);
     router.showInitial();
     stage.setMaximized(true);
     stage.show();
@@ -44,6 +48,9 @@ public final class NUSynapxeApp extends Application {
     if (database != null) {
       if (router != null) {
         router.clearSession();
+      }
+      if (taskRunner != null) {
+        taskRunner.close();
       }
       database.close();
     }

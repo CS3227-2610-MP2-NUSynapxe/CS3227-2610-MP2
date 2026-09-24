@@ -1,12 +1,12 @@
 package nusynapxe.ui;
 
-import java.sql.SQLException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Consumer;
 import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
@@ -34,11 +34,9 @@ import nusynapxe.domain.CalendarScheduleCursor;
 import nusynapxe.domain.CalendarScheduleGroup;
 import nusynapxe.domain.CalendarSchedulePage;
 import nusynapxe.domain.Session;
-import nusynapxe.service.AuthorizationException;
 import nusynapxe.service.CalendarScheduleCalculations;
 import nusynapxe.service.CalendarService;
 import nusynapxe.service.ClinicServices;
-import nusynapxe.service.ValidationException;
 
 /** Displays a Doctor's future appointments as an append-only, lazy schedule list. */
 final class CalendarScheduleList extends BorderPane {
@@ -47,6 +45,7 @@ final class CalendarScheduleList extends BorderPane {
       DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy", Locale.ENGLISH);
 
   private final CalendarSchedulePageLoader pageLoader;
+  private final ClinicTaskRunner taskRunner;
   private final Clock clock;
   private final Consumer<CalendarAppointment> onSelected;
   private final ListView<ScheduleEntry> list = new ListView<>();
@@ -68,9 +67,10 @@ final class CalendarScheduleList extends BorderPane {
   private boolean errorVisible;
   private boolean bottomLoadArmed;
   private boolean disposed;
+  private long loadGeneration;
 
   CalendarScheduleList(ClinicServices services, Session session, LocalDate anchor, Clock clock) {
-    this(loaderFor(services, session), anchor, clock, null);
+    this(services, session, anchor, clock, ClinicTaskRunner.immediate(), null);
   }
 
   CalendarScheduleList(
@@ -79,11 +79,21 @@ final class CalendarScheduleList extends BorderPane {
       LocalDate anchor,
       Clock clock,
       Consumer<CalendarAppointment> onSelected) {
-    this(loaderFor(services, session), anchor, clock, onSelected);
+    this(services, session, anchor, clock, ClinicTaskRunner.immediate(), onSelected);
+  }
+
+  CalendarScheduleList(
+      ClinicServices services,
+      Session session,
+      LocalDate anchor,
+      Clock clock,
+      ClinicTaskRunner taskRunner,
+      Consumer<CalendarAppointment> onSelected) {
+    this(loaderFor(services, session), anchor, clock, onSelected, taskRunner);
   }
 
   CalendarScheduleList(CalendarSchedulePageLoader pageLoader, LocalDate anchor, Clock clock) {
-    this(pageLoader, anchor, clock, null);
+    this(pageLoader, anchor, clock, null, ClinicTaskRunner.immediate());
   }
 
   CalendarScheduleList(
@@ -91,7 +101,17 @@ final class CalendarScheduleList extends BorderPane {
       LocalDate anchor,
       Clock clock,
       Consumer<CalendarAppointment> onSelected) {
+    this(pageLoader, anchor, clock, onSelected, ClinicTaskRunner.immediate());
+  }
+
+  CalendarScheduleList(
+      CalendarSchedulePageLoader pageLoader,
+      LocalDate anchor,
+      Clock clock,
+      Consumer<CalendarAppointment> onSelected,
+      ClinicTaskRunner taskRunner) {
     this.pageLoader = Objects.requireNonNull(pageLoader, "pageLoader");
+    this.taskRunner = Objects.requireNonNull(taskRunner, "taskRunner");
     this.clock = Objects.requireNonNull(clock, "clock").withZone(CalendarService.CLINIC_ZONE);
     this.onSelected = onSelected;
     this.now = LocalDateTime.now(this.clock);
@@ -120,6 +140,7 @@ final class CalendarScheduleList extends BorderPane {
       return;
     }
     anchor = Objects.requireNonNull(newAnchor, "newAnchor");
+    loadGeneration++;
     cursor = null;
     hasMore = true;
     loadingPage = false;
@@ -148,6 +169,7 @@ final class CalendarScheduleList extends BorderPane {
       return;
     }
     disposed = true;
+    loadGeneration++;
     loadingPage = false;
     cursor = null;
     entries.clear();
@@ -315,23 +337,42 @@ final class CalendarScheduleList extends BorderPane {
     loadingPage = true;
     errorVisible = false;
     updateState();
+    long generation = loadGeneration;
     try {
-      CalendarSchedulePage page =
-          pageLoader.load(anchor, cursor, CalendarSchedulePage.DEFAULT_PAGE_SIZE);
-      append(page);
-      cursor = page.nextCursor();
-      hasMore = page.hasMore();
-      errorVisible = false;
-    } catch (SQLException | AuthorizationException | ValidationException exception) {
-      errorVisible = true;
-      error.setText(
-          exception.getMessage() == null
-              ? "The schedule could not be loaded."
-              : "The schedule could not be loaded: " + exception.getMessage());
-    } finally {
+      taskRunner.submit(
+          () -> pageLoader.load(anchor, cursor, CalendarSchedulePage.DEFAULT_PAGE_SIZE),
+          page -> {
+            if (disposed || generation != loadGeneration) {
+              return;
+            }
+            append(page);
+            cursor = page.nextCursor();
+            hasMore = page.hasMore();
+            errorVisible = false;
+            loadingPage = false;
+            updateState();
+          },
+          failure -> {
+            if (disposed || generation != loadGeneration) {
+              return;
+            }
+            errorVisible = true;
+            error.setText(errorMessage(failure));
+            loadingPage = false;
+            updateState();
+          });
+    } catch (RejectedExecutionException exception) {
       loadingPage = false;
+      errorVisible = true;
+      error.setText(errorMessage(exception));
       updateState();
     }
+  }
+
+  private static String errorMessage(Throwable failure) {
+    return failure.getMessage() == null
+        ? "The schedule could not be loaded."
+        : "The schedule could not be loaded: " + failure.getMessage();
   }
 
   private void append(CalendarSchedulePage page) {

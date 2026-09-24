@@ -5,9 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
@@ -79,6 +83,22 @@ final class ClinicRepositoryTest {
           prescription,
           new ClinicalRecordRepository(database).findPrescriptions(record.id()).get(0));
       assertEquals(receptionist.role(), Role.RECEPTIONIST);
+    }
+  }
+
+  @Test
+  void repositoryTimestampsUseSingaporeDateAtUtcBoundary() throws SQLException {
+    Clock fixedClock = Clock.fixed(Instant.parse("2026-09-21T16:30:00Z"), ZoneOffset.UTC);
+    try (SqliteDatabase database = openDatabase()) {
+      new AccountRepository(database, fixedClock)
+          .create("doctor", "Dr. Ada", Role.DOCTOR, new byte[] {1}, new byte[] {2});
+
+      try (var statement = database.connection().prepareStatement("SELECT created_at FROM users")) {
+        try (var resultSet = statement.executeQuery()) {
+          assertTrue(resultSet.next());
+          assertEquals("2026-09-22T00:30:00", resultSet.getString(1));
+        }
+      }
     }
   }
 
@@ -193,6 +213,9 @@ final class ClinicRepositoryTest {
       assertEquals("Dr. Babbage", history.get(0).doctorName());
       assertEquals(newerRecord, history.get(0).clinicalRecord());
       assertEquals(List.of(prescription), history.get(0).prescriptions());
+      assertEquals(
+          Map.of(newerRecord.id(), List.of(prescription)),
+          clinicalRecords.findPrescriptionsByRecordIds(List.of(newerRecord.id())));
       assertEquals(older.id(), history.get(1).appointment().id());
       assertEquals("Dr. Ada", history.get(1).doctorName());
       assertEquals(olderRecord, history.get(1).clinicalRecord());
@@ -265,7 +288,18 @@ final class ClinicRepositoryTest {
         database.connection().setAutoCommit(true);
       }
       assertEquals(1, receipts.findAll("grace", doctor.id(), LocalDate.of(2026, 9, 1)).size());
+      assertEquals(
+          1,
+          receipts
+              .findRange(
+                  "grace",
+                  doctor.id(),
+                  LocalDate.of(2026, 9, 1),
+                  LocalDate.of(2026, 9, 2),
+                  PaymentMethod.CARD)
+              .size());
       assertTrue(receipts.findAll("unknown", null, LocalDate.of(2026, 9, 1)).isEmpty());
+      assertTrue(receipts.findByAppointment(appointment.id() + 1).isEmpty());
     }
   }
 

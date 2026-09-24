@@ -1,0 +1,37 @@
+# SDD ledger — plan: docs/superpowers/plans/2026-09-22-code-quality-review-and-size-limit.md
+
+Setup: current branch `refactor/improve-code-quality` is isolated from `master`; the worktree was clean before execution.
+
+Ruling: Bash bookkeeping helpers could not run because `Bash/Service/CreateInstance` returned `E_ACCESSDENIED` even after an escalated retry; created this plan-scoped workspace and ledger manually in PowerShell, leaving the earlier plan workspace untouched. Cost if wrong: the helper's automatic task briefs are unavailable, so task boundaries and completion records must be maintained manually from the committed plan.
+
+Pre-flight: shared interfaces
+- Task 1 changes `DoctorWorkspace` selection/action state consumed by Task 3 lifecycle wiring and Task 5 Doctor decomposition; preserve captured-ID and generation contracts while extracting.
+- Task 2 changes `ReceptionistDataLoader` selector-loading signatures consumed by Task 5 Receptionist decomposition; complete selector-policy changes before moving panel code.
+- Task 3 adds `WorkspaceLifecycle` and dialog owner-active parameters consumed by Task 5 `AppointmentDialog` extraction; keep the lifecycle supplier at the facade boundary.
+- Task 4 changes revenue pending state and receipt ordering consumed by Task 7 test splits and Task 9 coverage/size verification; preserve node IDs and export behavior.
+- Task 5 produces the post-extraction UI class boundaries consumed by Task 9's 500-line gate and Task 10's final diff review.
+- Task 6 preserves repository and seeder facades consumed by all service/integration tests and Task 9's source-size gate.
+- Task 7 changes test class names and fixtures consumed by Task 9's source-size gate and full verification command.
+- Task 8 documents the final public/package APIs produced by Tasks 1–7; run it after refactors so documentation describes final signatures.
+- Task 9 produces the passing source-size, Javadoc, and branch-coverage gates required before Task 10 can push or resolve threads.
+
+Task 1: complete (commit 73e22f6; tests: DoctorAppointmentTargetTest and DoctorViewTest -> passed)
+
+Task 2: Ruling: the independent-selector test initially compared numeric generations across different selector keys; corrected it to assert freshness per selector, because equal generation numbers are valid for independent keys. Cost if wrong: the test would reject a correct per-selector generation design.
+Task 2: complete (commit subject: fix: snapshot calendar and selector inputs; tests: CalendarRangeSnapshotTest, SelectorLoadGenerationTest, ReceptionistDataLoaderTest, DoctorCalendarViewTest, and ReceptionistViewTest -> passed)
+
+Task 3: complete (commit subject: fix: guard appointment dialogs after logout; tests: WorkspaceLifecycleTest, DoctorCalendarViewTest, DoctorViewTest, and ReceptionistViewTest -> passed)
+
+Task 4: complete (commit subject: fix: protect receipt ordering and pending exports; tests: ReceiptRepositoryTest and ReportExportStateTest -> passed)
+
+Task 5: complete (UI controllers/views split into focused collaborators; all UI source files remain at or below 500 lines; focused calendar, doctor, and receptionist TestFX suites passed)
+
+Task 6: complete (commit 3dba032; repository query/mutation facades and demo seeders split; AppointmentRepositoryScheduleTest, PatientDirectoryRepositoryTest, and DemoDataSeederTest passed)
+
+Task 7: complete (commit dd88017; oversized calendar, doctor workspace, receptionist, and patient-service tests split; extracted suites passed)
+
+Task 8: complete (commit d2586a5; public API JavaDocs completed and native `javadoc` passed without warnings)
+
+Task 9: complete (coverage tests added, branch minimum raised to 70%, source-file limit enforced at 500 lines, and full native `check` passed)
+
+Task 10: complete (final diff review; commits 38ed84d, 8f8d3b6, and f8d0b3f; GitHub issues #74–#97 recorded; all 20 PR review threads answered and resolved; PR #73 updated; merge left to the reviewer)

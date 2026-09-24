@@ -3,12 +3,12 @@ package nusynapxe.domain;
 import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.WeekFields;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import nusynapxe.ClinicClock;
 
 /**
  * A normalized seven-day Calendar period ordered by a Doctor's preferred first day.
@@ -17,7 +17,6 @@ import java.util.Objects;
  * @param firstDayOfWeek configured first day of the week
  */
 public record CalendarWeek(LocalDate start, DayOfWeek firstDayOfWeek) {
-  private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Singapore");
   private static final DateTimeFormatter DAY_MONTH =
       DateTimeFormatter.ofPattern("d MMMM", Locale.ENGLISH);
 
@@ -60,7 +59,7 @@ public record CalendarWeek(LocalDate start, DayOfWeek firstDayOfWeek) {
    */
   public static CalendarWeek today(Clock clock, DayOfWeek firstDayOfWeek) {
     Objects.requireNonNull(clock, "clock");
-    return containing(LocalDate.now(clock.withZone(CLINIC_ZONE)), firstDayOfWeek);
+    return containing(LocalDate.now(ClinicClock.withClinicZone(clock)), firstDayOfWeek);
   }
 
   /**

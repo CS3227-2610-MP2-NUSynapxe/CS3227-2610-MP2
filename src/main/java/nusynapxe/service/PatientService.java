@@ -2,14 +2,15 @@ package nusynapxe.service;
 
 import java.math.BigDecimal;
 import java.sql.SQLException;
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.ClinicalRecord;
 import nusynapxe.domain.IdentityType;
@@ -33,10 +34,10 @@ public final class PatientService {
   private static final Pattern NRIC_PATTERN = Pattern.compile("^[ST][0-9]{7}[A-Z]$");
   private static final Pattern FIN_PATTERN = Pattern.compile("^[FGM][0-9]{7}[A-Z]$");
   private static final Pattern PASSPORT_PATTERN = Pattern.compile("^[A-Z0-9]{5,20}$");
-  private static final ZoneId SINGAPORE_ZONE = ZoneId.of("Asia/Singapore");
   private final PatientRepository patients;
   private final AppointmentRepository appointments;
   private final ClinicalRecordRepository clinicalRecords;
+  private final Clock clock;
 
   /**
    * Creates a patient service with its persistence collaborators.
@@ -50,9 +51,27 @@ public final class PatientService {
       PatientRepository patients,
       AppointmentRepository appointments,
       ClinicalRecordRepository clinicalRecords) {
+    this(patients, appointments, clinicalRecords, ClinicClock.system());
+  }
+
+  /**
+   * Creates a patient service using an injectable clinic clock.
+   *
+   * @param patients repository used for administrative patient data
+   * @param appointments repository used to resolve Doctor-owned appointments
+   * @param clinicalRecords repository used to read Doctor-owned clinical records
+   * @param clock source for date validation
+   * @throws NullPointerException if a dependency is {@code null}
+   */
+  public PatientService(
+      PatientRepository patients,
+      AppointmentRepository appointments,
+      ClinicalRecordRepository clinicalRecords,
+      Clock clock) {
     this.patients = Objects.requireNonNull(patients, "patients");
     this.appointments = Objects.requireNonNull(appointments, "appointments");
     this.clinicalRecords = Objects.requireNonNull(clinicalRecords, "clinicalRecords");
+    this.clock = ClinicClock.withClinicZone(clock);
   }
 
   /**
@@ -68,7 +87,7 @@ public final class PatientService {
    */
   public Patient register(Session actor, Patient requestedPatient) throws SQLException {
     Authorization.requirePatientAdministration(actor);
-    Patient patient = validate(requestedPatient, true);
+    Patient patient = validate(requestedPatient, true, clock);
     requireUniqueIdentity(patient, 0);
     try {
       return patients.create(patient);
@@ -95,7 +114,7 @@ public final class PatientService {
     if (requestedPatient.id() <= 0 || patients.findById(requestedPatient.id()).isEmpty()) {
       throw new ValidationException(PATIENT_NOT_FOUND_MESSAGE);
     }
-    Patient patient = validate(requestedPatient, false);
+    Patient patient = validate(requestedPatient, false, clock);
     requireUniqueIdentity(patient, patient.id());
     try {
       return patients.update(patient);
@@ -262,7 +281,7 @@ public final class PatientService {
     }
   }
 
-  private static Patient validate(Patient patient, boolean registration) {
+  private static Patient validate(Patient patient, boolean registration, Clock clock) {
     Objects.requireNonNull(patient, "patient");
     if (patient.identityType() == null) {
       throw new ValidationException("Identity type is required");
@@ -284,7 +303,7 @@ public final class PatientService {
     } catch (DateTimeParseException exception) {
       throw new ValidationException("Date of birth must use yyyy-MM-dd", exception);
     }
-    if (birthDate.isAfter(LocalDate.now(SINGAPORE_ZONE))) {
+    if (birthDate.isAfter(ClinicClock.today(clock))) {
       throw new ValidationException("Date of birth cannot be in the future");
     }
     String phoneCountryCode = required(patient.phoneCountryCode(), "Phone country code");

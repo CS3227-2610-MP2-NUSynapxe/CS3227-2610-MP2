@@ -4,11 +4,12 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.Objects;
 import java.util.Optional;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.Payment;
 import nusynapxe.domain.PaymentMethod;
 import nusynapxe.domain.PaymentStatus;
@@ -21,6 +22,7 @@ public final class PaymentRepository {
       "id, appointment_id, patient_id, receptionist_id, amount_minor, method, status, recorded_at";
   private final SqliteDatabase database;
   private final ReceiptRepository receipts;
+  private final Clock clock;
 
   /**
    * Creates a payment repository backed by an opened database.
@@ -29,7 +31,19 @@ public final class PaymentRepository {
    * @throws NullPointerException if {@code database} is {@code null}
    */
   public PaymentRepository(SqliteDatabase database) {
+    this(database, ClinicClock.system());
+  }
+
+  /**
+   * Creates a payment repository using an injectable clinic clock.
+   *
+   * @param database database used for payment persistence
+   * @param clock source for payment timestamps and receipt dates
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public PaymentRepository(SqliteDatabase database, Clock clock) {
     this.database = Objects.requireNonNull(database, "database");
+    this.clock = ClinicClock.withClinicZone(clock);
     this.receipts = new ReceiptRepository(database);
   }
 
@@ -73,7 +87,7 @@ public final class PaymentRepository {
               connection.prepareStatement(
                   "UPDATE appointments SET status = 'CHECKED_OUT', updated_at = ? "
                       + "WHERE id = ? AND status = 'COMPLETED'")) {
-            statement.setString(1, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+            statement.setString(1, SqliteQueries.formatTimestamp(ClinicClock.now(clock)));
             statement.setLong(2, payment.appointmentId());
             if (statement.executeUpdate() != EXPECTED_UPDATE_COUNT) {
               throw new SQLException("Appointment is not ready for checkout");
@@ -86,7 +100,7 @@ public final class PaymentRepository {
               payment.patientId(),
               payment.amountMinor(),
               payment.method(),
-              payment.recordedAt().atZone(ZoneId.of("Asia/Singapore")).toLocalDate(),
+              payment.recordedAt().toLocalDate(),
               payment.recordedAt());
           return stored;
         });

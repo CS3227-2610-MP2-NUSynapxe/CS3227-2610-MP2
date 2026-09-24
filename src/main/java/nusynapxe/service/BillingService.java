@@ -4,9 +4,10 @@ import java.sql.SQLException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
 import nusynapxe.domain.Payment;
@@ -35,13 +36,21 @@ public final class BillingService {
    * @throws NullPointerException if a dependency is {@code null}
    */
   public BillingService(PaymentRepository payments, AppointmentService appointments) {
-    this(payments, appointments, Clock.systemDefaultZone());
+    this(payments, appointments, ClinicClock.system());
   }
 
-  BillingService(PaymentRepository payments, AppointmentService appointments, Clock clock) {
+  /**
+   * Creates billing service with an injectable clock.
+   *
+   * @param payments repository used to persist payments
+   * @param appointments service used to validate appointment state
+   * @param clock clock used for payment timestamps
+   * @throws NullPointerException if a dependency is {@code null}
+   */
+  public BillingService(PaymentRepository payments, AppointmentService appointments, Clock clock) {
     this.payments = Objects.requireNonNull(payments, "payments");
     this.appointments = Objects.requireNonNull(appointments, "appointments");
-    this.clock = Objects.requireNonNull(clock, "clock");
+    this.clock = ClinicClock.withClinicZone(clock);
     this.receipts = new ReceiptRepository(payments.backingDatabase());
   }
 
@@ -134,12 +143,7 @@ public final class BillingService {
     if (to.isBefore(from)) {
       throw new ValidationException("Report end date must not be before its start date");
     }
-    List<Receipt> result = new ArrayList<>();
-    for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
-      receipts.findAll(patientQuery, doctorId, date).stream()
-          .filter(receipt -> method == null || receipt.method() == method)
-          .forEach(result::add);
-    }
+    List<Receipt> result = receipts.findRange(patientQuery, doctorId, from, to, method);
     return new RevenueReport(result);
   }
 
@@ -165,12 +169,27 @@ public final class BillingService {
    *
    * @param actor authenticated Receptionist session
    * @param receiptId receipt identifier
-   * @return the matching receipt
+   * @return the matching receipt, or empty when the appointment has no receipt
    * @throws AuthorizationException if the actor is not a Receptionist
    * @throws SQLException if the receipt does not exist or the query fails
    */
   public Receipt receipt(Session actor, long receiptId) throws SQLException {
     Authorization.requireRole(actor, Role.RECEPTIONIST);
     return receipts.findById(receiptId);
+  }
+
+  /**
+   * Returns the receipt directly associated with an appointment.
+   *
+   * @param actor authenticated Receptionist session
+   * @param appointmentId appointment identifier
+   * @return the matching receipt
+   * @throws AuthorizationException if the actor is not a Receptionist
+   * @throws SQLException if the receipt does not exist or the query fails
+   */
+  public Optional<Receipt> receiptForAppointment(Session actor, long appointmentId)
+      throws SQLException {
+    Authorization.requireRole(actor, Role.RECEPTIONIST);
+    return receipts.findByAppointment(appointmentId);
   }
 }

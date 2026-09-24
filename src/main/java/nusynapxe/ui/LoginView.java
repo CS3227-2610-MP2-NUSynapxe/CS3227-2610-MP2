@@ -1,7 +1,7 @@
 package nusynapxe.ui;
 
-import java.sql.SQLException;
-import java.util.Optional;
+import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicLong;
 import javafx.geometry.Insets;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
@@ -27,6 +27,20 @@ public final class LoginView {
    * @throws NullPointerException if an argument is {@code null}
    */
   public static Parent create(AuthenticationService authentication, LoginSuccess onSuccess) {
+    return create(authentication, onSuccess, ClinicTaskRunner.immediate());
+  }
+
+  /**
+   * Creates a login view whose authentication runs through the supplied task runner.
+   *
+   * @param authentication service used to authenticate submitted credentials
+   * @param onSuccess callback invoked with a successful session
+   * @param taskRunner runner used for authentication work
+   * @return root node for the login form
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public static Parent create(
+      AuthenticationService authentication, LoginSuccess onSuccess, ClinicTaskRunner taskRunner) {
     TextField username = new TextField();
     username.setId("login-username");
     username.setPromptText("Username");
@@ -35,21 +49,37 @@ public final class LoginView {
     var password = passwordInput.field();
     Label feedback = UiComponents.feedback("login-feedback");
     Button submit = UiComponents.primaryButton("Log in", "login-submit");
+    AtomicLong loginGeneration = new AtomicLong();
     submit.setDefaultButton(true);
     submit.setOnAction(
         event -> {
-          try {
-            Optional<Session> session =
-                authentication.login(username.getText(), password.getText().toCharArray());
-            if (session.isPresent()) {
-              feedback.setText("");
-              onSuccess.accept(session.orElseThrow());
-            } else {
-              UiComponents.showError(feedback, "Invalid username or password");
-            }
-          } catch (SQLException exception) {
-            UiComponents.showError(feedback, "Login is temporarily unavailable");
-          }
+          long generation = loginGeneration.incrementAndGet();
+          String submittedUsername = username.getText();
+          char[] submittedPassword = password.getText().toCharArray();
+          taskRunner.submit(
+              () -> {
+                try {
+                  return authentication.login(submittedUsername, submittedPassword);
+                } finally {
+                  Arrays.fill(submittedPassword, '\0');
+                }
+              },
+              session -> {
+                if (generation != loginGeneration.get()) {
+                  return;
+                }
+                if (session.isPresent()) {
+                  feedback.setText("");
+                  onSuccess.accept(session.orElseThrow());
+                } else {
+                  UiComponents.showError(feedback, "Invalid username or password");
+                }
+              },
+              failure -> {
+                if (generation == loginGeneration.get()) {
+                  UiComponents.showError(feedback, "Login is temporarily unavailable");
+                }
+              });
         });
 
     Label brand = new Label("NUSynapxe");

@@ -1,6 +1,5 @@
 package nusynapxe.ui;
 
-import java.sql.SQLException;
 import java.time.DayOfWeek;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
@@ -26,7 +25,6 @@ import javafx.scene.layout.VBox;
 import nusynapxe.domain.DoctorCalendarSettings;
 import nusynapxe.domain.Session;
 import nusynapxe.domain.WorkingInterval;
-import nusynapxe.service.AuthorizationException;
 import nusynapxe.service.ClinicServices;
 import nusynapxe.service.ValidationException;
 
@@ -41,14 +39,20 @@ public final class DoctorCalendarSettingsView {
   private final Runnable onBack;
   private final Runnable onSaved;
   private final Label feedback;
+  private final ClinicTaskRunner taskRunner;
   private final Map<DayOfWeek, DayEditor> dayEditors = new EnumMap<>(DayOfWeek.class);
   private final BorderPane root;
+  private VBox daysContainer;
   private Button saveButton;
+  private Button backButton;
+  private Button cancelButton;
   private DayOfWeek firstDayOfWeek = DayOfWeek.SUNDAY;
   private boolean settingsLoaded;
+  private long operationGeneration;
+  private boolean disposed;
 
   /**
-   * Creates a Calendar settings page for one authenticated Doctor.
+   * Creates a Calendar settings page for one authenticated Doctor.\n *
    *
    * @param services application services used to load and save settings
    * @param session authenticated Doctor session
@@ -59,11 +63,22 @@ public final class DoctorCalendarSettingsView {
    */
   public DoctorCalendarSettingsView(
       ClinicServices services, Session session, Runnable onBack, Runnable onSaved, Label feedback) {
+    this(services, session, onBack, onSaved, feedback, ClinicTaskRunner.immediate());
+  }
+
+  DoctorCalendarSettingsView(
+      ClinicServices services,
+      Session session,
+      Runnable onBack,
+      Runnable onSaved,
+      Label feedback,
+      ClinicTaskRunner taskRunner) {
     this.services = Objects.requireNonNull(services, "services");
     this.session = Objects.requireNonNull(session, "session");
     this.onBack = Objects.requireNonNull(onBack, "onBack");
     this.onSaved = Objects.requireNonNull(onSaved, "onSaved");
     this.feedback = Objects.requireNonNull(feedback, "feedback");
+    this.taskRunner = Objects.requireNonNull(taskRunner, "taskRunner");
     root = buildRoot();
     reload();
   }
@@ -77,34 +92,65 @@ public final class DoctorCalendarSettingsView {
     return root;
   }
 
+  /** Prevents later database callbacks from mutating this settings page. */
+  public void dispose() {
+    disposed = true;
+    operationGeneration++;
+  }
+
   /** Reloads persisted settings into the editable draft. */
   public void reload() {
-    try {
-      populate(services.calendarService().getSettings(session));
-      settingsLoaded = true;
-      if (saveButton != null) {
-        saveButton.setDisable(false);
-      }
-    } catch (SQLException | AuthorizationException | ValidationException exception) {
-      settingsLoaded = false;
-      if (saveButton != null) {
-        saveButton.setDisable(true);
-      }
-      feedback.setText(userMessage(exception, "Calendar settings are temporarily unavailable"));
+    if (disposed) {
+      return;
     }
+    operationGeneration++;
+    long generation = operationGeneration;
+    if (daysContainer != null) {
+      daysContainer.setDisable(true);
+    }
+    taskRunner.submit(
+        () -> services.calendarService().getSettings(session),
+        settings -> {
+          if (disposed || generation != operationGeneration) {
+            return;
+          }
+          populate(settings);
+          settingsLoaded = true;
+          if (daysContainer != null) {
+            daysContainer.setDisable(false);
+          }
+          if (saveButton != null) {
+            saveButton.setDisable(false);
+          }
+        },
+        failure -> {
+          if (disposed || generation != operationGeneration) {
+            return;
+          }
+          settingsLoaded = false;
+          if (daysContainer != null) {
+            daysContainer.setDisable(false);
+          }
+          if (saveButton != null) {
+            saveButton.setDisable(true);
+          }
+          feedback.setText(userMessage(failure, "Calendar settings are temporarily unavailable"));
+        });
   }
 
   private BorderPane buildRoot() {
-    Button back = UiComponents.secondaryButton("Back to Calendar", "doctor-calendar-settings-back");
-    back.setAccessibleText("Return to Calendar");
-    back.setOnAction(event -> onBack.run());
-    HBox toolbar = new HBox(12, back, UiComponents.pageTitle("Calendar settings"));
+    backButton = UiComponents.secondaryButton("Back to Calendar", "doctor-calendar-settings-back");
+    backButton.setAccessibleText("Return to Calendar");
+    backButton.setOnAction(event -> onBack.run());
+    HBox toolbar = new HBox(12, backButton, UiComponents.pageTitle("Calendar settings"));
     toolbar.setAlignment(Pos.CENTER_LEFT);
     toolbar.getStyleClass().add("calendar-settings-toolbar");
 
     VBox days = new VBox(10);
     days.setId("doctor-calendar-settings-days");
     days.getStyleClass().add("calendar-settings-days");
+    days.setDisable(true);
+    daysContainer = days;
     for (DayOfWeek day : DayOfWeek.values()) {
       DayEditor editor = new DayEditor(day);
       dayEditors.put(day, editor);
@@ -123,10 +169,10 @@ public final class DoctorCalendarSettingsView {
     saveButton.setAccessibleText("Save Calendar settings");
     saveButton.setDisable(true);
     saveButton.setOnAction(event -> save());
-    Button cancel = UiComponents.secondaryButton("Cancel", "doctor-calendar-settings-cancel");
-    cancel.setAccessibleText("Cancel Calendar setting edits");
-    cancel.setOnAction(event -> onBack.run());
-    HBox actions = UiComponents.actionBar(saveButton, cancel);
+    cancelButton = UiComponents.secondaryButton("Cancel", "doctor-calendar-settings-cancel");
+    cancelButton.setAccessibleText("Cancel Calendar setting edits");
+    cancelButton.setOnAction(event -> onBack.run());
+    HBox actions = UiComponents.actionBar(saveButton, cancelButton);
 
     VBox content = new VBox(16, workingHours, actions);
     content.setPadding(new Insets(0, 4, 24, 4));
@@ -158,8 +204,10 @@ public final class DoctorCalendarSettingsView {
   }
 
   private void save() {
-    if (!settingsLoaded) {
-      feedback.setText("Calendar settings are not loaded");
+    if (!settingsLoaded || (saveButton != null && saveButton.isDisable())) {
+      if (!settingsLoaded) {
+        feedback.setText("Calendar settings are not loaded");
+      }
       return;
     }
     try {
@@ -169,14 +217,45 @@ public final class DoctorCalendarSettingsView {
       }
       DoctorCalendarSettings settings =
           new DoctorCalendarSettings(session.accountId(), firstDayOfWeek, intervals);
-      services.calendarService().saveSettings(session, settings);
-      feedback.setText("Calendar settings saved");
-      onSaved.run();
-    } catch (SQLException
-        | AuthorizationException
-        | ValidationException
-        | IllegalArgumentException exception) {
+      operationGeneration++;
+      long generation = operationGeneration;
+      setSaving(true);
+      taskRunner.submit(
+          () -> {
+            services.calendarService().saveSettings(session, settings);
+            return null;
+          },
+          ignored -> {
+            if (disposed || generation != operationGeneration) {
+              return;
+            }
+            setSaving(false);
+            feedback.setText("Calendar settings saved");
+            onSaved.run();
+          },
+          failure -> {
+            if (!disposed && generation == operationGeneration) {
+              setSaving(false);
+              feedback.setText(userMessage(failure, "Calendar settings could not be saved"));
+            }
+          });
+    } catch (ValidationException | IllegalArgumentException exception) {
       feedback.setText(userMessage(exception, "Calendar settings could not be saved"));
+    }
+  }
+
+  private void setSaving(boolean saving) {
+    if (daysContainer != null) {
+      daysContainer.setDisable(saving);
+    }
+    if (saveButton != null) {
+      saveButton.setDisable(saving);
+    }
+    if (cancelButton != null) {
+      cancelButton.setDisable(saving);
+    }
+    if (backButton != null) {
+      backButton.setDisable(saving);
     }
   }
 
@@ -202,7 +281,7 @@ public final class DoctorCalendarSettingsView {
         : SETTINGS_ID_PREFIX + dayName + "-" + suffix;
   }
 
-  private static String userMessage(Exception exception, String fallback) {
+  private static String userMessage(Throwable exception, String fallback) {
     return exception.getMessage() == null ? fallback : exception.getMessage();
   }
 

@@ -18,5 +18,29 @@ final class DatabasePathsTest {
     Path requestedPath = Path.of("data", "..", "nusynapxe.db");
 
     assertEquals(requestedPath.toAbsolutePath().normalize(), DatabasePaths.resolve(requestedPath));
+    assertEquals(DatabasePaths.defaultDatabasePath(), DatabasePaths.resolve(null));
+  }
+
+  @Test
+  void configuredDatabasePathResolvesFromSystemPropertyOrDefault() {
+    String original = System.getProperty("nusynapxe.database");
+    try {
+      System.clearProperty("nusynapxe.database");
+      assertEquals(DatabasePaths.defaultDatabasePath(), DatabasePaths.configuredDatabasePath());
+
+      System.setProperty("nusynapxe.database", "   ");
+      assertEquals(DatabasePaths.defaultDatabasePath(), DatabasePaths.configuredDatabasePath());
+
+      System.setProperty("nusynapxe.database", "custom/data/../custom.db");
+      assertEquals(
+          Path.of("custom/custom.db").toAbsolutePath().normalize(),
+          DatabasePaths.configuredDatabasePath());
+    } finally {
+      if (original == null) {
+        System.clearProperty("nusynapxe.database");
+      } else {
+        System.setProperty("nusynapxe.database", original);
+      }
+    }
   }
 }

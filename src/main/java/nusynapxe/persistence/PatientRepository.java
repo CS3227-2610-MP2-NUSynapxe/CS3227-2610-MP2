@@ -4,76 +4,53 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
-import java.time.LocalDateTime;
+import java.time.Clock;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.IdentityType;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.PatientDeletionBlockers;
-import nusynapxe.domain.Sex;
 
-/** Persists the non-clinical portion of patient records. */
+/** Persists patient mutations while delegating reads to a focused query repository. */
 public final class PatientRepository {
   private static final int EXPECTED_UPDATE_COUNT = 1;
   private static final String PATIENT_MISSING_MESSAGE = "Patient does not exist: ";
-  private static final String PATIENTS_TABLE = "patients";
-  private static final String PATIENT_COLUMNS =
-      "id, identity_type, identity_number, issuing_country, first_name, last_name, "
-          + "date_of_birth, sex, phone_country_code, phone_number, email, address, "
-          + "height_cm, weight_kg, active";
-  private static final String PATIENT_ORDER = " ORDER BY last_name, first_name, id";
-  private static final String SELECT_PATIENTS = "SELECT " + PATIENT_COLUMNS + " FROM patients";
-  private static final String SELECT_PATIENT_BY_ID = SELECT_PATIENTS + " WHERE id = ?";
-  private static final String SELECT_PATIENT_BY_IDENTITY =
-      SELECT_PATIENTS + " WHERE identity_type = ? AND issuing_country = ? AND identity_number = ?";
-  private static final String COUNT_APPOINTMENTS =
-      "SELECT COUNT(*) FROM appointments WHERE patient_id = ?";
-  private static final String COUNT_CLINICAL_RECORDS =
-      "SELECT COUNT(*) FROM clinical_records WHERE patient_id = ?";
-  private static final String COUNT_PRESCRIPTIONS =
-      "SELECT COUNT(*) FROM prescriptions p "
-          + "JOIN clinical_records c ON c.id = p.clinical_record_id "
-          + "WHERE c.patient_id = ?";
-  private static final String COUNT_PAYMENTS = "SELECT COUNT(*) FROM payments WHERE patient_id = ?";
-  private static final String COUNT_RECEIPTS = "SELECT COUNT(*) FROM receipts WHERE patient_id = ?";
-  private static final String TABLE_NAMES =
-      "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'";
-  private static final Set<String> EXPLICIT_PATIENT_REFERENCE_TABLES =
-      Set.of("appointments", "clinical_records", "payments", "receipts");
-  private static final String SEARCH_PATIENTS =
-      SELECT_PATIENTS
-          + " WHERE (identity_type LIKE ? ESCAPE '\\' "
-          + "OR identity_number LIKE ? ESCAPE '\\' OR issuing_country LIKE ? ESCAPE '\\' "
-          + "OR first_name LIKE ? ESCAPE '\\' OR last_name LIKE ? ESCAPE '\\' "
-          + "OR (first_name || ' ' || last_name) LIKE ? ESCAPE '\\' "
-          + "OR (last_name || ' ' || first_name) LIKE ? ESCAPE '\\' "
-          + "OR phone_country_code LIKE ? ESCAPE '\\' OR phone_number LIKE ? ESCAPE '\\' "
-          + "OR ('+' || phone_country_code || phone_number) LIKE ? ESCAPE '\\' "
-          + "OR email LIKE ? ESCAPE '\\' "
-          + "OR (? IS NOT NULL AND id = ?))"
-          + PATIENT_ORDER;
   private final SqliteDatabase database;
+  private final Clock clock;
+  private final PatientQueryRepository queries;
 
   /**
-   * Creates a patient repository backed by an opened database.
+   * Creates a patient repository using the Singapore clinic system clock.
    *
-   * @param database database used for patient persistence
+   * @param database opened application database
    * @throws NullPointerException if {@code database} is {@code null}
    */
   public PatientRepository(SqliteDatabase database) {
+    this(database, ClinicClock.system());
+  }
+
+  /**
+   * Creates a patient repository using an injectable clinic clock.
+   *
+   * @param database opened application database
+   * @param clock clock used for persisted timestamps
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public PatientRepository(SqliteDatabase database, Clock clock) {
     this.database = Objects.requireNonNull(database, "database");
+    this.clock = ClinicClock.withClinicZone(clock);
+    this.queries = new PatientQueryRepository(database);
   }
 
   /**
    * Creates a patient and returns its generated Patient ID.
    *
-   * @param requestedPatient patient data to normalize and persist
-   * @return the patient with its generated identifier
-   * @throws NullPointerException if {@code requestedPatient} is {@code null}
-   * @throws SQLException if the insert fails
+   * @param requestedPatient patient data to persist
+   * @return the persisted patient with its generated identifier
+   * @throws SQLException if the patient cannot be persisted
    */
   public Patient create(Patient requestedPatient) throws SQLException {
     Objects.requireNonNull(requestedPatient, "patient");
@@ -93,7 +70,7 @@ public final class PatientRepository {
           try (PreparedStatement statement =
               connection.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
             bindPatient(statement, patient);
-            String timestamp = SqliteQueries.formatTimestamp(LocalDateTime.now());
+            String timestamp = SqliteQueries.formatTimestamp(ClinicClock.now(clock));
             statement.setString(15, timestamp);
             statement.setString(16, timestamp);
             statement.executeUpdate();
@@ -110,10 +87,9 @@ public final class PatientRepository {
   /**
    * Atomically updates a patient's permitted basic information.
    *
-   * @param requestedPatient replacement administrative patient data
+   * @param requestedPatient patient data to persist
    * @return the updated patient
-   * @throws NullPointerException if {@code requestedPatient} is {@code null}
-   * @throws SQLException if the update fails or the patient does not exist
+   * @throws SQLException if the patient does not exist or cannot be updated
    */
   public Patient update(Patient requestedPatient) throws SQLException {
     Objects.requireNonNull(requestedPatient, "patient");
@@ -133,7 +109,7 @@ public final class PatientRepository {
               """;
           try (PreparedStatement statement = connection.prepareStatement(sql)) {
             bindPatient(statement, patient);
-            statement.setString(15, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+            statement.setString(15, SqliteQueries.formatTimestamp(ClinicClock.now(clock)));
             statement.setLong(16, patient.id());
             if (statement.executeUpdate() != EXPECTED_UPDATE_COUNT) {
               throw new SQLException(PATIENT_MISSING_MESSAGE + patient.id());
@@ -144,22 +120,22 @@ public final class PatientRepository {
   }
 
   /**
-   * Deactivates a patient while preserving the Patient ID and all related history.
+   * Deactivates a patient while preserving its history.
    *
    * @param patientId patient identifier
    * @return the deactivated patient
-   * @throws SQLException if the update fails or the patient does not exist
+   * @throws SQLException if the patient does not exist or cannot be updated
    */
   public Patient deactivate(long patientId) throws SQLException {
     return setActive(patientId, false);
   }
 
   /**
-   * Reactivates a patient while preserving the Patient ID and all related history.
+   * Reactivates a patient while preserving its history.
    *
    * @param patientId patient identifier
-   * @return the activated patient
-   * @throws SQLException if the update fails or the patient does not exist
+   * @return the reactivated patient
+   * @throws SQLException if the patient does not exist or cannot be updated
    */
   public Patient activate(long patientId) throws SQLException {
     return setActive(patientId, true);
@@ -169,24 +145,16 @@ public final class PatientRepository {
     return SqliteTransactions.execute(
         database,
         connection -> {
-          Patient patient;
-          try (PreparedStatement select = connection.prepareStatement(SELECT_PATIENT_BY_ID)) {
-            select.setLong(1, patientId);
-            try (ResultSet resultSet = select.executeQuery()) {
-              if (!resultSet.next()) {
-                throw new SQLException(PATIENT_MISSING_MESSAGE + patientId);
-              }
-              patient = readPatient(resultSet);
-            }
-          }
+          Patient patient =
+              queries.findById(connection, patientId).orElseThrow(() -> missing(patientId));
           try (PreparedStatement update =
               connection.prepareStatement(
                   "UPDATE patients SET active = ?, updated_at = ? WHERE id = ?")) {
             update.setInt(1, active ? 1 : 0);
-            update.setString(2, SqliteQueries.formatTimestamp(LocalDateTime.now()));
+            update.setString(2, SqliteQueries.formatTimestamp(ClinicClock.now(clock)));
             update.setLong(3, patientId);
             if (update.executeUpdate() != EXPECTED_UPDATE_COUNT) {
-              throw new SQLException(PATIENT_MISSING_MESSAGE + patientId);
+              throw missing(patientId);
             }
           }
           return withActive(patient, active);
@@ -197,80 +165,54 @@ public final class PatientRepository {
    * Finds one patient's non-clinical basic information.
    *
    * @param id patient identifier
-   * @return matching patient, or empty when it does not exist
+   * @return the patient, if found
    * @throws SQLException if the query fails
    */
   public Optional<Patient> findById(long id) throws SQLException {
-    try (PreparedStatement statement =
-        database.connection().prepareStatement(SELECT_PATIENT_BY_ID)) {
-      statement.setLong(1, id);
-      try (ResultSet resultSet = statement.executeQuery()) {
-        return resultSet.next() ? Optional.of(readPatient(resultSet)) : Optional.empty();
-      }
-    }
+    return queries.findById(id);
   }
 
   /**
-   * Finds a patient by the normalized composite document identity.
+   * Finds a patient by normalized composite document identity.
    *
-   * @param type identity-document category
-   * @param issuingCountry normalized issuing country code
-   * @param identityNumber normalized identity-document number
-   * @return matching patient, or empty when any component is missing or no match exists
+   * @param type document type
+   * @param issuingCountry issuing country
+   * @param identityNumber document number
+   * @return the matching patient, if found
    * @throws SQLException if the query fails
    */
   public Optional<Patient> findByIdentity(
       IdentityType type, String issuingCountry, String identityNumber) throws SQLException {
-    if (type == null || issuingCountry == null || identityNumber == null) {
-      return Optional.empty();
-    }
-    try (PreparedStatement statement =
-        database.connection().prepareStatement(SELECT_PATIENT_BY_IDENTITY)) {
-      statement.setString(1, type.name());
-      statement.setString(2, normalize(issuingCountry));
-      statement.setString(3, normalize(identityNumber));
-      try (ResultSet resultSet = statement.executeQuery()) {
-        return resultSet.next() ? Optional.of(readPatient(resultSet)) : Optional.empty();
-      }
-    }
+    return queries.findByIdentity(type, issuingCountry, identityNumber);
   }
 
   /**
-   * Returns non-sensitive relationship counts for a patient deletion check.
+   * Returns non-sensitive relationship counts for a deletion check.
    *
    * @param patientId patient identifier
-   * @return relationship counts, or empty when the patient does not exist
+   * @return relationship counts, if the patient exists
    * @throws SQLException if the query fails
    */
   public Optional<PatientDeletionBlockers> findDeletionBlockers(long patientId)
       throws SQLException {
-    try (PreparedStatement statement =
-        database.connection().prepareStatement("SELECT 1 FROM patients WHERE id = ?")) {
-      statement.setLong(1, patientId);
-      try (ResultSet resultSet = statement.executeQuery()) {
-        if (!resultSet.next()) {
-          return Optional.empty();
-        }
-      }
-    }
-    return Optional.of(readDeletionBlockers(database.connection(), patientId));
+    return queries.findDeletionBlockers(patientId);
   }
 
   /**
-   * Deletes an unused patient or returns the relationship counts that safely block deletion.
+   * Deletes an unused patient or returns relationship counts that block deletion.
    *
    * @param patientId patient identifier
-   * @return empty when deletion succeeds, or non-sensitive blockers when deletion is unsafe
-   * @throws SQLException if the transaction fails or the patient does not exist
+   * @return empty when deleted, otherwise the relationship counts that block deletion
+   * @throws SQLException if the query or delete fails
    */
   public Optional<PatientDeletionBlockers> deleteIfUnrelated(long patientId) throws SQLException {
     return SqliteTransactions.execute(
         database,
         connection -> {
-          if (!patientExists(connection, patientId)) {
-            throw new SQLException(PATIENT_MISSING_MESSAGE + patientId);
+          if (!queries.patientExists(connection, patientId)) {
+            throw missing(patientId);
           }
-          PatientDeletionBlockers blockers = readDeletionBlockers(connection, patientId);
+          PatientDeletionBlockers blockers = queries.readDeletionBlockers(connection, patientId);
           if (!blockers.canDelete()) {
             return Optional.of(blockers);
           }
@@ -278,13 +220,13 @@ public final class PatientRepository {
               connection.prepareStatement("DELETE FROM patients WHERE id = ?")) {
             statement.setLong(1, patientId);
             if (statement.executeUpdate() != EXPECTED_UPDATE_COUNT) {
-              throw new SQLException(PATIENT_MISSING_MESSAGE + patientId);
+              throw missing(patientId);
             }
           } catch (SQLException exception) {
             if (!isForeignKeyViolation(exception)) {
               throw exception;
             }
-            PatientDeletionBlockers refreshed = readDeletionBlockers(connection, patientId);
+            PatientDeletionBlockers refreshed = queries.readDeletionBlockers(connection, patientId);
             if (refreshed.canDelete()) {
               refreshed = refreshed.withAdditionalOtherReferences(1);
             }
@@ -297,66 +239,22 @@ public final class PatientRepository {
   /**
    * Returns all patients in deterministic name and Patient ID order.
    *
-   * @return immutable patient list
+   * @return all patients
    * @throws SQLException if the query fails
    */
   public List<Patient> findAll() throws SQLException {
-    return search("");
+    return queries.findAll();
   }
 
   /**
    * Searches non-clinical patient data using one trimmed query.
    *
-   * <p>Text fields use escaped literal substring matching. Numeric and {@code P}-prefixed values
-   * also match an exact generated Patient ID.
-   *
-   * @param requestedQuery query text, or {@code null} for all patients
-   * @return immutable matching patient list
+   * @param requestedQuery search text
+   * @return matching patients
    * @throws SQLException if the query fails
    */
   public List<Patient> search(String requestedQuery) throws SQLException {
-    String query = requestedQuery == null ? "" : requestedQuery.trim();
-    if (query.isEmpty()) {
-      try (PreparedStatement statement =
-          database.connection().prepareStatement(SELECT_PATIENTS + PATIENT_ORDER)) {
-        return SqliteQueries.readAll(statement, PatientRepository::readPatient);
-      }
-    }
-
-    Long patientId = parsePatientId(query);
-    try (PreparedStatement statement = database.connection().prepareStatement(SEARCH_PATIENTS)) {
-      String pattern = "%" + escapeLike(query) + "%";
-      for (int index = 1; index <= 11; index++) {
-        statement.setString(index, pattern);
-      }
-      if (patientId == null) {
-        statement.setNull(12, Types.BIGINT);
-        statement.setNull(13, Types.BIGINT);
-      } else {
-        statement.setLong(12, patientId);
-        statement.setLong(13, patientId);
-      }
-      return SqliteQueries.readAll(statement, PatientRepository::readPatient);
-    }
-  }
-
-  private static Long parsePatientId(String query) {
-    String candidate = query;
-    if (candidate.length() > 1 && (candidate.charAt(0) == 'P' || candidate.charAt(0) == 'p')) {
-      candidate = candidate.substring(1);
-    }
-    if (candidate.isEmpty() || !candidate.chars().allMatch(Character::isDigit)) {
-      return null;
-    }
-    try {
-      return Long.valueOf(candidate);
-    } catch (NumberFormatException exception) {
-      return null;
-    }
-  }
-
-  private static String escapeLike(String value) {
-    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    return queries.search(requestedQuery);
   }
 
   private static void bindPatient(PreparedStatement statement, Patient patient)
@@ -402,34 +300,6 @@ public final class PatientRepository {
     } else {
       statement.setDouble(index, value);
     }
-  }
-
-  private static Patient readPatient(ResultSet resultSet) throws SQLException {
-    return new Patient(
-        resultSet.getLong("id"),
-        enumValue(IdentityType.class, resultSet.getString("identity_type")),
-        resultSet.getString("identity_number"),
-        resultSet.getString("issuing_country"),
-        resultSet.getString("first_name"),
-        resultSet.getString("last_name"),
-        resultSet.getString("date_of_birth"),
-        enumValue(Sex.class, resultSet.getString("sex")),
-        resultSet.getString("phone_country_code"),
-        resultSet.getString("phone_number"),
-        resultSet.getString("email"),
-        resultSet.getString("address"),
-        nullableDouble(resultSet, "height_cm"),
-        nullableDouble(resultSet, "weight_kg"),
-        resultSet.getInt("active") == 1);
-  }
-
-  private static <T extends Enum<T>> T enumValue(Class<T> type, String value) {
-    return value == null ? null : Enum.valueOf(type, value);
-  }
-
-  private static Double nullableDouble(ResultSet resultSet, String column) throws SQLException {
-    double value = resultSet.getDouble(column);
-    return resultSet.wasNull() ? null : value;
   }
 
   private static Patient normalizeIdentity(Patient patient) {
@@ -497,89 +367,8 @@ public final class PatientRepository {
         active);
   }
 
-  private static PatientDeletionBlockers readDeletionBlockers(
-      java.sql.Connection connection, long patientId) throws SQLException {
-    return new PatientDeletionBlockers(
-        patientId,
-        count(connection, COUNT_APPOINTMENTS, patientId),
-        count(connection, COUNT_CLINICAL_RECORDS, patientId),
-        count(connection, COUNT_PRESCRIPTIONS, patientId),
-        count(connection, COUNT_PAYMENTS, patientId),
-        count(connection, COUNT_RECEIPTS, patientId),
-        countOtherPatientReferences(connection, patientId));
-  }
-
-  private static long count(java.sql.Connection connection, String sql, long patientId)
-      throws SQLException {
-    try (PreparedStatement statement = connection.prepareStatement(sql)) {
-      statement.setLong(1, patientId);
-      try (ResultSet resultSet = statement.executeQuery()) {
-        if (!resultSet.next()) {
-          throw new SQLException("SQLite did not return a relationship count");
-        }
-        return resultSet.getLong(1);
-      }
-    }
-  }
-
-  private static boolean patientExists(java.sql.Connection connection, long patientId)
-      throws SQLException {
-    try (PreparedStatement statement =
-        connection.prepareStatement("SELECT 1 FROM patients WHERE id = ?")) {
-      statement.setLong(1, patientId);
-      try (ResultSet resultSet = statement.executeQuery()) {
-        return resultSet.next();
-      }
-    }
-  }
-
-  private static long countOtherPatientReferences(java.sql.Connection connection, long patientId)
-      throws SQLException {
-    long count = 0;
-    try (PreparedStatement tables = connection.prepareStatement(TABLE_NAMES);
-        ResultSet tableResults = tables.executeQuery()) {
-      while (tableResults.next()) {
-        String table = tableResults.getString(1);
-        if (!EXPLICIT_PATIENT_REFERENCE_TABLES.contains(table.toLowerCase(Locale.ROOT))) {
-          count += countPatientForeignKeys(connection, table, patientId);
-        }
-      }
-    }
-    return count;
-  }
-
-  private static long countPatientForeignKeys(
-      java.sql.Connection connection, String table, long patientId) throws SQLException {
-    long count = 0;
-    String pragma = "PRAGMA foreign_key_list(" + quoteIdentifier(table) + ")";
-    try (PreparedStatement foreignKeys = connection.prepareStatement(pragma);
-        ResultSet foreignKeyResults = foreignKeys.executeQuery()) {
-      while (foreignKeyResults.next()) {
-        if (PATIENTS_TABLE.equalsIgnoreCase(foreignKeyResults.getString("table"))) {
-          String column = foreignKeyResults.getString("from");
-          if (column != null) {
-            count += countForeignKeyRows(connection, table, column, patientId);
-          }
-        }
-      }
-    }
-    return count;
-  }
-
-  private static long countForeignKeyRows(
-      java.sql.Connection connection, String table, String column, long patientId)
-      throws SQLException {
-    String sql =
-        "SELECT COUNT(*) FROM "
-            + quoteIdentifier(table)
-            + " WHERE "
-            + quoteIdentifier(column)
-            + " = ?";
-    return count(connection, sql, patientId);
-  }
-
-  private static String quoteIdentifier(String identifier) {
-    return "\"" + identifier.replace("\"", "\"\"") + "\"";
+  private static SQLException missing(long patientId) {
+    return new SQLException(PATIENT_MISSING_MESSAGE + patientId);
   }
 
   private static boolean isForeignKeyViolation(SQLException exception) {

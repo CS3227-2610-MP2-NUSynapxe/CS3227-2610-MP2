@@ -1,6 +1,6 @@
 package nusynapxe.ui;
 
-import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
 import javafx.beans.property.ReadOnlyStringWrapper;
@@ -42,6 +42,21 @@ public final class SystemAdminView {
    * @throws NullPointerException if an argument is {@code null}
    */
   public static Parent create(AccountService accounts, Session session, Runnable onLogout) {
+    return create(accounts, session, onLogout, ClinicTaskRunner.immediate());
+  }
+
+  /**
+   * Creates the account workspace with serialized background database work.
+   *
+   * @param accounts service used to list and create staff accounts
+   * @param session authenticated System Admin session
+   * @param onLogout callback invoked when the administrator logs out
+   * @param taskRunner runner used for account mutations
+   * @return root node for the System Admin workspace
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public static Parent create(
+      AccountService accounts, Session session, Runnable onLogout, ClinicTaskRunner taskRunner) {
     TextField username = new TextField();
     username.setId("admin-account-username");
     TextField displayName = new TextField();
@@ -67,24 +82,47 @@ public final class SystemAdminView {
             UiComponents.showError(feedback, "Passwords do not match");
             return;
           }
-          try {
-            accounts.createStaff(
-                session,
-                username.getText(),
-                displayName.getText(),
-                role.getValue(),
-                password.getText().toCharArray());
-            UiComponents.showMessage(feedback, "Account created");
-            username.clear();
-            displayName.clear();
-            password.clear();
-            confirmation.clear();
-            refreshAccounts(accounts, session, accountTable, feedback);
-          } catch (ValidationException | AuthorizationException exception) {
-            UiComponents.showError(feedback, exception.getMessage());
-          } catch (SQLException exception) {
-            UiComponents.showError(feedback, "Accounts are temporarily unavailable");
-          }
+          String submittedUsername = username.getText();
+          String submittedDisplayName = displayName.getText();
+          Role submittedRole = role.getValue();
+          String submittedPasswordText = password.getText();
+          char[] submittedPassword = submittedPasswordText.toCharArray();
+          create.setDisable(true);
+          taskRunner.submit(
+              () -> {
+                try {
+                  accounts.createStaff(
+                      session,
+                      submittedUsername,
+                      submittedDisplayName,
+                      submittedRole,
+                      submittedPassword);
+                  return null;
+                } finally {
+                  Arrays.fill(submittedPassword, '\0');
+                }
+              },
+              ignored -> {
+                create.setDisable(false);
+                UiComponents.showMessage(feedback, "Account created");
+                if (username.getText().equals(submittedUsername)) {
+                  username.clear();
+                }
+                if (displayName.getText().equals(submittedDisplayName)) {
+                  displayName.clear();
+                }
+                if (password.getText().equals(submittedPasswordText)) {
+                  password.clear();
+                }
+                if (confirmation.getText().equals(submittedPasswordText)) {
+                  confirmation.clear();
+                }
+                refreshAccounts(accounts, session, accountTable, feedback, taskRunner);
+              },
+              failure -> {
+                create.setDisable(false);
+                showAccountError(feedback, failure);
+              });
         });
     Button logout = new Button("Log out");
     logout.setId("logout-button");
@@ -117,7 +155,7 @@ public final class SystemAdminView {
     ScrollPane scroll = new ScrollPane(content);
     scroll.setFitToWidth(true);
     root.setCenter(scroll);
-    refreshAccounts(accounts, session, accountTable, feedback);
+    refreshAccounts(accounts, session, accountTable, feedback, taskRunner);
     return UiComponents.notificationOverlay(root, feedback);
   }
 
@@ -177,13 +215,26 @@ public final class SystemAdminView {
   }
 
   private static void refreshAccounts(
-      AccountService accounts, Session session, TableView<Account> accountTable, Label feedback) {
-    try {
-      accountTable.setItems(FXCollections.observableArrayList(accounts.listAccounts(session)));
-      accountTable.getSelectionModel().clearSelection();
-      int visibleRows = Math.min(Math.max(accountTable.getItems().size(), 1), 5);
-      accountTable.setPrefHeight(40 + visibleRows * 40);
-    } catch (SQLException exception) {
+      AccountService accounts,
+      Session session,
+      TableView<Account> accountTable,
+      Label feedback,
+      ClinicTaskRunner taskRunner) {
+    taskRunner.submit(
+        () -> accounts.listAccounts(session),
+        accountsList -> {
+          accountTable.setItems(FXCollections.observableArrayList(accountsList));
+          accountTable.getSelectionModel().clearSelection();
+          int visibleRows = Math.min(Math.max(accountTable.getItems().size(), 1), 5);
+          accountTable.setPrefHeight(40 + visibleRows * 40);
+        },
+        failure -> showAccountError(feedback, failure));
+  }
+
+  private static void showAccountError(Label feedback, Throwable failure) {
+    if (failure instanceof ValidationException || failure instanceof AuthorizationException) {
+      UiComponents.showError(feedback, failure.getMessage());
+    } else {
       UiComponents.showError(feedback, "Accounts are temporarily unavailable");
     }
   }

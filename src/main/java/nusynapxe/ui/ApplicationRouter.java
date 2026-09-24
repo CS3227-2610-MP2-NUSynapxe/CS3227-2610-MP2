@@ -1,6 +1,5 @@
 package nusynapxe.ui;
 
-import java.sql.SQLException;
 import java.time.Clock;
 import java.util.Objects;
 import javafx.geometry.Insets;
@@ -8,8 +7,10 @@ import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.Label;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
 import nusynapxe.persistence.SqliteDatabase;
@@ -26,6 +27,7 @@ public final class ApplicationRouter {
   private final Stage stage;
   private final ClinicServices services;
   private final Clock clock;
+  private final ClinicTaskRunner taskRunner;
 
   /**
    * Creates a router for one opened database and JavaFX stage.
@@ -35,43 +37,65 @@ public final class ApplicationRouter {
    * @throws NullPointerException if either argument is {@code null}
    */
   public ApplicationRouter(Stage stage, SqliteDatabase database) {
-    this(
-        stage,
-        ClinicServices.forDatabase(Objects.requireNonNull(database, "database")),
-        Clock.system(CalendarService.CLINIC_ZONE));
+    this(stage, database, ClinicClock.system());
   }
 
   ApplicationRouter(Stage stage, ClinicServices services) {
-    this(stage, services, Clock.system(CalendarService.CLINIC_ZONE));
+    this(stage, services, ClinicClock.system());
   }
 
   ApplicationRouter(Stage stage, SqliteDatabase database, Clock clock) {
-    this(stage, ClinicServices.forDatabase(Objects.requireNonNull(database, "database")), clock);
-  }
-
-  ApplicationRouter(Stage stage, ClinicServices services, Clock clock) {
-    this.stage = Objects.requireNonNull(stage, "stage");
-    this.services = Objects.requireNonNull(services, "services");
-    this.clock = Objects.requireNonNull(clock, "clock").withZone(CalendarService.CLINIC_ZONE);
+    this(stage, database, clock, ClinicTaskRunner.immediate());
   }
 
   /**
-   * Shows first-run setup or login depending on persisted account state.
+   * Creates a router with an application-owned task runner.
    *
-   * @throws SQLException if the account state cannot be read
+   * @param stage JavaFX stage to control
+   * @param database opened application database
+   * @param clock clock used for clinic-local dates
+   * @param taskRunner runner used for blocking work
+   * @throws NullPointerException if an argument is {@code null}
    */
-  public void showInitial() throws SQLException {
-    if (services.accountService().needsInitialSetup()) {
-      showSetup();
-    } else {
-      showLogin();
-    }
+  public ApplicationRouter(
+      Stage stage, SqliteDatabase database, Clock clock, ClinicTaskRunner taskRunner) {
+    this(
+        stage,
+        ClinicServices.forDatabase(Objects.requireNonNull(database, "database"), clock),
+        clock,
+        taskRunner);
+  }
+
+  ApplicationRouter(Stage stage, ClinicServices services, Clock clock) {
+    this(stage, services, clock, ClinicTaskRunner.immediate());
+  }
+
+  ApplicationRouter(
+      Stage stage, ClinicServices services, Clock clock, ClinicTaskRunner taskRunner) {
+    this.stage = Objects.requireNonNull(stage, "stage");
+    this.services = Objects.requireNonNull(services, "services");
+    this.clock = Objects.requireNonNull(clock, "clock").withZone(CalendarService.CLINIC_ZONE);
+    this.taskRunner = Objects.requireNonNull(taskRunner, "taskRunner");
+  }
+
+  /** Shows first-run setup or login depending on persisted account state. */
+  public void showInitial() {
+    taskRunner.submit(
+        () -> services.accountService().needsInitialSetup(),
+        needsSetup -> {
+          if (needsSetup) {
+            showSetup();
+          } else {
+            showLogin();
+          }
+        },
+        failure -> showStorageError());
   }
 
   /** Shows the login page and ensures no previous session remains. */
   public void showLogin() {
     services.authenticationService().logout();
-    setContent(LoginView.create(services.authenticationService(), this::showWorkspace));
+    setContent(LoginView.create(services.authenticationService(), this::showWorkspace, taskRunner));
   }
 
   /** Clears the ephemeral session without changing the stage during application shutdown. */
@@ -81,7 +105,7 @@ public final class ApplicationRouter {
 
   /** Shows the first-run administrator setup page. */
   public void showSetup() {
-    setContent(SetupView.create(services.accountService(), this::showLogin));
+    setContent(SetupView.create(services.accountService(), this::showLogin, taskRunner));
   }
 
   /**
@@ -93,15 +117,16 @@ public final class ApplicationRouter {
   public void showWorkspace(Session session) {
     Objects.requireNonNull(session, "session");
     if (session.role() == Role.SYSTEM_ADMIN) {
-      setContent(SystemAdminView.create(services.accountService(), session, this::showLogin));
+      setContent(
+          SystemAdminView.create(services.accountService(), session, this::showLogin, taskRunner));
       return;
     }
     if (session.role() == Role.RECEPTIONIST) {
-      setContent(ReceptionistView.create(services, session, this::showLogin));
+      setContent(ReceptionistView.create(services, session, this::showLogin, clock, taskRunner));
       return;
     }
     if (session.role() == Role.DOCTOR) {
-      setContent(DoctorView.create(services, session, this::showLogin, clock));
+      setContent(DoctorView.create(services, session, this::showLogin, clock, taskRunner));
       return;
     }
     Button logout = new Button("Log out");
@@ -133,6 +158,18 @@ public final class ApplicationRouter {
     stage.setMinWidth(MINIMUM_WIDTH);
     stage.setMinHeight(MINIMUM_HEIGHT);
     stage.setResizable(true);
+  }
+
+  private void showStorageError() {
+    Label feedback = UiComponents.feedback("storage-feedback");
+    VBox content =
+        new VBox(
+            12,
+            UiComponents.pageTitle("Storage unavailable"),
+            UiComponents.supportingText("The clinic database could not be read. Please try again."),
+            feedback);
+    UiComponents.showError(feedback, "Clinic storage is temporarily unavailable");
+    setContent(UiComponents.notificationOverlay(content, feedback));
   }
 
   private static String workspaceId(Role role) {

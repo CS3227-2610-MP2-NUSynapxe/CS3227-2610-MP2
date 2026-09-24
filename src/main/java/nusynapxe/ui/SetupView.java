@@ -1,6 +1,6 @@
 package nusynapxe.ui;
 
-import java.sql.SQLException;
+import java.util.Arrays;
 import javafx.geometry.Insets;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
@@ -26,6 +26,20 @@ public final class SetupView {
    * @throws NullPointerException if an argument is {@code null}
    */
   public static Parent create(AccountService accounts, SetupSuccess onSuccess) {
+    return create(accounts, onSuccess, ClinicTaskRunner.immediate());
+  }
+
+  /**
+   * Creates a setup view whose account mutation runs through the supplied task runner.
+   *
+   * @param accounts service used to create the initial administrator
+   * @param onSuccess callback invoked after setup succeeds
+   * @param taskRunner runner used for account creation
+   * @return root node for the setup form
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public static Parent create(
+      AccountService accounts, SetupSuccess onSuccess, ClinicTaskRunner taskRunner) {
     TextField username = new TextField();
     username.setId("setup-username");
     username.setPromptText("Admin username");
@@ -44,15 +58,28 @@ public final class SetupView {
             UiComponents.showError(feedback, "Passwords do not match");
             return;
           }
-          try {
-            accounts.createInitialAdmin(username.getText(), password.getText().toCharArray());
-            feedback.setText("");
-            onSuccess.accept();
-          } catch (ValidationException exception) {
-            UiComponents.showError(feedback, exception.getMessage());
-          } catch (SQLException exception) {
-            UiComponents.showError(feedback, "Account setup is temporarily unavailable");
-          }
+          String submittedUsername = username.getText();
+          char[] submittedPassword = password.getText().toCharArray();
+          taskRunner.submit(
+              () -> {
+                try {
+                  accounts.createInitialAdmin(submittedUsername, submittedPassword);
+                  return null;
+                } finally {
+                  Arrays.fill(submittedPassword, '\0');
+                }
+              },
+              ignored -> {
+                feedback.setText("");
+                onSuccess.accept();
+              },
+              failure -> {
+                if (failure instanceof ValidationException) {
+                  UiComponents.showError(feedback, failure.getMessage());
+                } else {
+                  UiComponents.showError(feedback, "Account setup is temporarily unavailable");
+                }
+              });
         });
 
     Label brand = new Label("NUSynapxe");
