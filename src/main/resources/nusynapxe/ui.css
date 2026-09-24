@@ -132,7 +132,8 @@
 .button {
     -fx-background-radius: 8px;
     -fx-border-radius: 8px;
-    -fx-padding: 10px 16px;
+    -fx-padding: 8px 16px;
+    -fx-alignment: center;
     -fx-font-weight: bold;
     -fx-cursor: hand;
 }
@@ -434,6 +435,13 @@
     -fx-min-width: 180px;
     -fx-pref-width: 240px;
     -fx-max-width: infinity;
+}
+
+.uniform-filter-grid .button,
+.spacious-filter-grid .button,
+.single-line-filter-grid .button {
+    -fx-min-height: 38px;
+    -fx-pref-height: 38px;
 }
 
 .appointment-interval-field,

@@ -140,7 +140,7 @@ final class ReceptionistReceiptPanel {
 
   private static void alignFilterAction(Button button) {
     GridPane.setValignment(button, VPos.BOTTOM);
-    button.setMinHeight(34);
-    button.setPrefHeight(34);
+    button.setMinHeight(38);
+    button.setPrefHeight(38);
   }
 }

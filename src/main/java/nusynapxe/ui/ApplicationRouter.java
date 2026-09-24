@@ -173,6 +173,7 @@ public final class ApplicationRouter {
         stage.setMaximized(true);
       }
     } else {
+      UiComponents.applyStylesheet(scene);
       scene.setRoot(root);
     }
     stage.setMinWidth(MINIMUM_WIDTH);

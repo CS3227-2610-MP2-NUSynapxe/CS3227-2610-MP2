@@ -14,7 +14,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.List;
+import javafx.geometry.Bounds;
 import javafx.scene.Node;
+import javafx.scene.control.Button;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TabPane;
@@ -279,6 +281,76 @@ final class ReceptionistBookingTest extends ReceptionistViewTestSupport {
     assertFalse(receiptDate.getEditor().getText().isBlank());
     assertCompactDatePickerBounds(receiptDate);
     assertTrue(lookup("#reception-receipts-tab").queryAs(VBox.class).getPadding().getTop() >= 20);
+  }
+
+  @Test
+  void receptionFilterButtonsHaveUniformHeightAndSufficientTextClearance() {
+    loginAsReceptionist();
+    layoutWorkspace();
+
+    selectWorkspaceTab(3);
+    layoutWorkspace();
+    Button checkInSearch = lookup("#reception-check-in-queue-search").queryAs(Button.class);
+    checkInSearch.applyCss();
+    checkInSearch.layout();
+    assertTrue(checkInSearch.getHeight() >= 38.0 || checkInSearch.getPrefHeight() >= 38.0);
+    Node queueFilters = lookup("#reception-check-in-filter-grid").query();
+    Node queueTable = lookup("#reception-check-in-queue-list").query();
+    Bounds qfBounds = queueFilters.localToScene(queueFilters.getBoundsInLocal());
+    Bounds qtBounds = queueTable.localToScene(queueTable.getBoundsInLocal());
+    assertTrue(
+        qtBounds.getMinY() >= qfBounds.getMaxY(),
+        "Check-in table overlaps filters: tableMinY="
+            + qtBounds.getMinY()
+            + ", filterMaxY="
+            + qfBounds.getMaxY());
+
+    selectWorkspaceTab(4);
+    layoutWorkspace();
+    Button checkoutSearch = lookup("#reception-checkout-search").queryAs(Button.class);
+    checkoutSearch.applyCss();
+    checkoutSearch.layout();
+    assertTrue(checkoutSearch.getHeight() >= 38.0 || checkoutSearch.getPrefHeight() >= 38.0);
+    Node checkoutFilters = lookup("#reception-checkout-filter-grid").query();
+    Node checkoutTable = lookup("#reception-checkout-appointment-list").query();
+    Bounds cfBounds = checkoutFilters.localToScene(checkoutFilters.getBoundsInLocal());
+    Bounds ctBounds = checkoutTable.localToScene(checkoutTable.getBoundsInLocal());
+    assertTrue(
+        ctBounds.getMinY() >= cfBounds.getMaxY(),
+        "Checkout table overlaps filters: tableMinY="
+            + ctBounds.getMinY()
+            + ", filterMaxY="
+            + cfBounds.getMaxY());
+
+    interact(
+        () ->
+            lookup("#reception-checkout-tabs")
+                .queryAs(TabPane.class)
+                .getSelectionModel()
+                .select(1));
+    WaitForAsyncUtils.waitForFxEvents();
+    layoutWorkspace();
+    Button receiptSearch = lookup("#reception-receipt-search").queryAs(Button.class);
+    receiptSearch.applyCss();
+    receiptSearch.layout();
+    assertTrue(receiptSearch.getHeight() >= 38.0 || receiptSearch.getPrefHeight() >= 38.0);
+    Node receiptFilters = lookup("#reception-receipt-filter-grid").query();
+    Node receiptTable = lookup("#reception-receipt-history-list").query();
+    Bounds rfBounds = receiptFilters.localToScene(receiptFilters.getBoundsInLocal());
+    Bounds rtBounds = receiptTable.localToScene(receiptTable.getBoundsInLocal());
+    assertTrue(
+        rtBounds.getMinY() >= rfBounds.getMaxY(),
+        "Receipt table overlaps filters: tableMinY="
+            + rtBounds.getMinY()
+            + ", filterMaxY="
+            + rfBounds.getMaxY());
+
+    selectWorkspaceTab(5);
+    layoutWorkspace();
+    Button revenueReport = lookup("#reception-revenue-report").queryAs(Button.class);
+    revenueReport.applyCss();
+    revenueReport.layout();
+    assertTrue(revenueReport.getHeight() >= 38.0 || revenueReport.getPrefHeight() >= 38.0);
   }
 
   @Test

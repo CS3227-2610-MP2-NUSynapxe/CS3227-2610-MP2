@@ -11,6 +11,8 @@ import java.sql.SQLException;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
@@ -223,23 +225,45 @@ final class DoctorCalendarNavigationTest extends DoctorCalendarViewTestSupport {
     Stage stage = (Stage) toolbar.getScene().getWindow();
     interact(
         () -> {
+          stage.setMaximized(false);
           stage.setWidth(980);
-          stage.getScene().getRoot().applyCss();
-          stage.getScene().getRoot().layout();
-          toolbar.applyCss();
-          toolbar.layout();
         });
     WaitForAsyncUtils.waitForFxEvents();
-    assertEquals("doctor-calendar-toolbar-actions", actionGroup.getParent().getId());
     interact(
         () -> {
-          stage.setWidth(1400);
           stage.getScene().getRoot().applyCss();
           stage.getScene().getRoot().layout();
           toolbar.applyCss();
           toolbar.layout();
         });
     WaitForAsyncUtils.waitForFxEvents();
+    try {
+      WaitForAsyncUtils.waitFor(
+          10,
+          TimeUnit.SECONDS,
+          () -> "doctor-calendar-toolbar-actions".equals(actionGroup.getParent().getId()));
+    } catch (TimeoutException exception) {
+      assertEquals("doctor-calendar-toolbar-actions", actionGroup.getParent().getId());
+    }
+    assertEquals("doctor-calendar-toolbar-actions", actionGroup.getParent().getId());
+    interact(() -> stage.setWidth(1400));
+    WaitForAsyncUtils.waitForFxEvents();
+    interact(
+        () -> {
+          stage.getScene().getRoot().applyCss();
+          stage.getScene().getRoot().layout();
+          toolbar.applyCss();
+          toolbar.layout();
+        });
+    WaitForAsyncUtils.waitForFxEvents();
+    try {
+      WaitForAsyncUtils.waitFor(
+          10,
+          TimeUnit.SECONDS,
+          () -> "doctor-calendar-toolbar-main".equals(actionGroup.getParent().getId()));
+    } catch (TimeoutException exception) {
+      assertEquals("doctor-calendar-toolbar-main", actionGroup.getParent().getId());
+    }
     assertEquals("doctor-calendar-toolbar-main", actionGroup.getParent().getId());
   }
 }
