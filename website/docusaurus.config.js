@@ -16,6 +16,7 @@ const config = {
     mermaid: true,
     hooks: {
       onBrokenMarkdownLinks: 'warn',
+      onBrokenMarkdownImages: 'warn',
     },
   },
   themes: ['@docusaurus/theme-mermaid'],
@@ -25,7 +26,7 @@ const config = {
       {
         docs: {
           path: '..',
-          include: ['README.md', 'docs/**/*.md'],
+          include: ['docs/**/*.md'],
           routeBasePath: '/',
           sidebarPath: './sidebars.js',
         },
@@ -57,8 +58,8 @@ const config = {
           title: 'Guides',
           items: [
             {label: 'Overview', to: '/'},
-            {label: 'Developer Guide', to: '/docs/DeveloperGuide'},
             {label: 'User Guide', to: '/docs/UserGuide'},
+            {label: 'Developer Guide', to: '/docs/DeveloperGuide'},
           ],
         },
       ],

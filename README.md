@@ -1,10 +1,3 @@
----
-id: overview
-title: NUSynapxe
-slug: /
-sidebar_label: Overview
----
-
 # NUSynapxe Clinic Appointment & Records System
 
 NUSynapxe is a Java 25 JavaFX desktop application for coordinating clinic
@@ -153,5 +146,6 @@ npm run start
 ```
 
 Use `npm run build` for a production documentation build with broken links
-treated as errors. The Docusaurus site uses this README as its overview page
-and exposes the developer and user guides as separate navigation entries.
+treated as errors. The documentation website homepage is located at
+`docs/index.md` and exposes the developer and user guides as separate
+navigation entries.
