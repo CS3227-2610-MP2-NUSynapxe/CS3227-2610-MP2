@@ -94,7 +94,7 @@ The Patients workspace serves two crucial clinical purposes:
 
 Every patient receives an immutable internal Patient ID for relational database integrity. Routine directory and detail views display patient contact and demographic information rather than raw database keys. Historical appointments, clinical notes, and billing records remain permanently linked to the internal ID when basic contact details are updated.
 
-![Patient Directory and Search](images/ug_patient_directory.png)
+![Patient Directory and Search](images/ug_doctor_patient_directory.png)
 *Figure 3: Patient directory showing multi-field search and registered patient table.*
 
 #### 3.1.1 Patient Directory Table
@@ -117,7 +117,7 @@ The **Directory** tab displays patient search controls at the top and a full-wid
 
 Click **Register new patient** at the bottom of the directory to switch to the registration form:
 
-![Patient Registration Form](images/ug_patient_registration.png)
+![Patient Registration Form](images/ug_doctor_patient_registration.png)
 *Figure 4: Patient registration form with document type selection and Singapore phone autofill.*
 
 1. **Identity Type**: Select `NRIC`, `FIN`, `PASSPORT`, or `OTHER`.
@@ -230,7 +230,7 @@ Use the compact toggle in the toolbar to switch views:
 ### 4.3 Configuring Working Hours and Breaks
 Click the **Settings** (gear) icon in the Calendar toolbar:
 
-![Doctor Working Hours Settings](images/ug_calendar_settings.png)
+![Doctor Working Hours Settings](images/ug_doctor_calendar_settings.png)
 *Figure 7: Doctor working hours configuration with split intervals for lunch breaks.*
 
 - Displays the fixed Singapore timezone (`Asia/Singapore`). There is no week-start or work-location setting because Calendar ranges and Agenda start dates are selected directly.

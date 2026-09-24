@@ -171,7 +171,7 @@ The **Check-in Queue** is the receptionist's arrival processing view.
 When the Doctor finishes consultation and marks it completed, the patient proceeds to checkout.
 
 ![Receptionist Checkout and Payment](images/ug_checkout_payment.png)
-*Figure 6: Checkout dialog with payment amount entry and method selection.*
+*Figure 6: Checkout view showing patients with completed consultations.*
 
 1. Open **Checkout** in the left navigation.
 2. Use Patient, Doctor, or Date filters to locate the `COMPLETED` appointment.
