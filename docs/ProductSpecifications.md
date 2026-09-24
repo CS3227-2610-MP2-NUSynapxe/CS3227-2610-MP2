@@ -121,9 +121,9 @@ Priorities are designated as follows:
   3. System validates input, generates password salt and hash, persists account, and refreshes the staff accounts table.
 - **Extensions**:
   - 2a. Username already exists.
-    - System rejects creation and displays `Username is already taken`.
-  - 2b. Password is shorter than 8 characters.
-    - System rejects creation and displays `Password must be at least 8 characters long`.
+    - System rejects creation and displays `The username is already in use or the account could not be created`.
+  - 2b. Password contains fewer than 8 non-blank characters.
+    - System rejects creation and displays `Password must contain at least 8 non-blank characters`.
 
 ### UC03: Patient Registration & NRIC/FIN Document Validation
 - **Actor**: Clinic Receptionist or Doctor

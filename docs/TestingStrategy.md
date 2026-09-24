@@ -156,10 +156,11 @@ Testers can manually execute these comprehensive end-to-end verification scenari
 
 ### Scenario 7: Arrival Check-in Gate
 1. Log in as `mary`. Open **Check in** queue.
-2. Select an accepted appointment whose scheduled time has not yet arrived.
+2. Select an accepted appointment whose scheduled time has not yet arrived (such as the appointment for tomorrow created in Scenario 5).
 3. Verify that **Check in patient** button is disabled in the dialog (as current time is before the scheduled start time).
-4. Select an accepted appointment whose start time is in the past or present.
-5. Click **Check in patient**. Verify status transitions to `CHECKED_IN`.
+4. Navigate to **Appointments**, select `Tan Ah Teck`'s appointment, click **Reschedule**, and change the date to today with a start time in the past (e.g. `09:00`–`09:30`).
+5. Return to **Check in** queue and select the rescheduled appointment.
+6. Click **Check in patient**. Verify status transitions to `CHECKED_IN`.
 
 ### Scenario 8: Clinical Consultation & Multi-Drug Prescriptions
 1. Log in as `dr.john`.

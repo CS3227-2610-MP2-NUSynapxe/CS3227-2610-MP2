@@ -71,7 +71,7 @@ Click **Register new patient** at the bottom of the directory to switch to the r
    - **PASSPORT**: Accepts 5 to 20 alphanumeric characters.
    - *Format vs. Checksum Note*: Syntactic pattern checks are validated by the system. Government checksum algorithms are not queried, so staff must inspect the physical document.
    - *Duplicate Prevention*: The combination of `(identity_type, issuing_country, identity_number)` must be unique. Entering an existing document is rejected with `A patient with this identity document already exists.` To protect confidentiality, application logs and feedback messages do not repeat the full document number.
-4. **Full Name**: Enter the patient's full legal name.
+4. **First Name & Last Name**: Enter the patient's given/first name and family/last name into their respective required fields (both are mandatory and must not be blank).
 5. **Date of Birth**:
    - Select using the Day, Month, and Year dropdowns.
    - Note that changing month or year retains the selected day value; you must adjust the day manually if the selected day does not exist in the new month (e.g. adjust day 31 manually if switching to February). Invalid calendar combinations will clear the computed age and be rejected upon submission with Date of birth must be valid.

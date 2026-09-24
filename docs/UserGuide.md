@@ -196,7 +196,7 @@ A successful setup routes immediately to the **Login** screen. Once an account e
 All screens in NUSynapxe use a calm, clinical visual language:
 - **Workspace Palette**: Light workspace background (`#f4f7f9`), crisp white content cards, clear section headings in dark navy (`#17324d`), and teal primary actions (`#0f8f83`).
 - **Window Sizing & Responsiveness**: The desktop application window opens **maximized** by default so it utilizes the available monitor workspace while retaining standard operating system window controls. When restored, it adopts a compact default size of `1200 x 760` pixels and can be resized down to the supported minimum of `980 x 640` pixels. Longer forms, patient tables, and result lists scroll smoothly within their dedicated content areas.
-- **Top Header Bar**: All authenticated screens display the NUSynapxe brand name, current user role badge, signed-in display name, username, and a prominent **Log out** button in a shared top header.
+- **Top Header Bar**: All authenticated screens display the NUSynapxe brand name, current user role badge, signed-in username (`Signed in as <username>`), and a prominent **Log out** button in a shared top header.
 - **Left Navigation Rail**:
   - **Receptionist Rail**: Dark left-hand navigation rail with horizontal labels to switch between **Directory**, **Appointments**, **Calendar**, **Check in**, **Checkout**, and **Revenue Reports**. The separate **Navigation** section heading is a section label, not a selectable destination.
   - **Doctor Rail**: Follows the same dark rail pattern for **Dashboard**, **Patients**, and **Calendar**. The currently active destination is highlighted. The **Patients** tab also houses a dedicated consultation-history state.

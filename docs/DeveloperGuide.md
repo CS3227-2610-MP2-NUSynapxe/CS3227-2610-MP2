@@ -50,6 +50,19 @@ The application creates or opens the local SQLite database described in the [Use
 
 *(Note: When launching a standalone fat JAR directly via `java -jar`, pass `-Dnusynapxe.database="build/dev-test.db"` directly to the JVM).*
 
+> [!NOTE]
+> When launching against a fresh custom database path, `run` creates an unpopulated database that presents the initial administrator registration screen. To populate it with showcase accounts and sample clinical records beforehand, seed it first using `scripts/seed-demo-data.ps1` (or the `demoData` Gradle task):
+> ```powershell
+> # Windows PowerShell
+> .\scripts\seed-demo-data.ps1 -DatabasePath "build/dev-test.db" -Reset
+> .\gradlew.bat run -PdemoDatabasePath="build/dev-test.db"
+> ```
+> ```bash
+> # macOS / Linux
+> ./gradlew demoData -PdemoDataCommand=seed -PdemoDatabasePath="build/dev-test.db" -PdemoDataReset=true --no-daemon --console=plain
+> ./gradlew run -PdemoDatabasePath="build/dev-test.db"
+> ```
+
 ### 2.2 Useful Build and Quality Commands
 
 Execute the complete local Java quality gate:

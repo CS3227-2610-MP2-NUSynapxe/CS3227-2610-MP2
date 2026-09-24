@@ -60,11 +60,12 @@ sequenceDiagram
     participant UI as Role Workspace View
 
     User->>App: Launch NUSynapxe
-    App->>Router: init() & start(Stage)
-    Router->>DB: SqliteDatabase.open(DatabasePaths.resolve())
+    App->>DB: new SqliteDatabase(configuredDatabasePath()).open()
     DB->>DB: Configure PRAGMAs (foreign_keys = ON)
     DB->>Migrator: initialize(connection)
     Migrator->>DB: Execute versioned migrations (v1 -> v7)
+    App->>Router: new ApplicationRouter(stage, database, clock, taskRunner)
+    App->>Router: showInitial()
     Router->>Auth: hasAccounts()
     alt Empty Database (First Launch)
         Router->>UI: Show SetupView (First-Run Admin Setup)
@@ -527,9 +528,11 @@ sequenceDiagram
     Repo->>DB: Query active appointments overlapping interval
     Repo->>DB: Query doctor_time_off overlapping interval
     alt Conflict Detected
-        Repo-->>Svc: Conflict found
-        Svc-->>UI: throw ScheduleConflictException("Doctor is unavailable")
-        UI->>Receptionist: Show conflict warning banner
+        Repo->>DB: INSERT / interval check
+        DB-->>Repo: throw SQLException("...schedule has a conflict...")
+        Repo-->>Svc: propagate SQLException
+        Svc-->>UI: throw ValidationException("The doctor's schedule has a conflict")
+        UI->>Receptionist: Show conflict error feedback
     else Interval Clear
         Repo->>DB: INSERT INTO appointments (status='PENDING', ...)
         DB-->>Repo: Generated Appointment ID
