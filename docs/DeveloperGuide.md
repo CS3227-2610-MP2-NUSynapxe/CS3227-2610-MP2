@@ -134,16 +134,17 @@ The current version of NUSynapxe intentionally omits:
 
 ---
 
-## 4. Product Specifications & Requirements Overview
+## 4. Product Specifications Overview
 
-Detailed user personas, prioritized user stories, and formal use cases have been extracted into a standalone reference document to facilitate modular specification reviews:
+Detailed user personas, prioritized user stories, formal use cases, and executable behavioral specifications (Gherkin feature scenarios) have been organized into a standalone specifications document:
 
-👉 **[Read the Full Product Specifications & Use Cases Guide](ProductSpecifications.md)**
+👉 **[Read the Full Product Specifications Guide](ProductSpecifications.md)**
 
-The standalone requirements guide covers:
-- **Target User Personas**: Receptionist (Sarah Tan), Attending Physician (Dr. Michael Lim), System Administrator (Alex Chen).
-- **Prioritized User Stories**: 21 prioritized stories (`* * *`, `* *`, `*`) across administrative, clinical, and security workflows.
-- **Formal Use Cases (UC01 – UC10)**: Comprehensive scenarios with actors, preconditions, triggers, main success scenarios, and alternative extensions.
+The standalone specifications document covers:
+- **Target User Personas**: Clinic Receptionist, Attending Physician / Doctor, and System Administrator.
+- **Prioritized User Stories**: Comprehensive user stories organized across administrative, patient identity, appointment scheduling, clinical documentation, doctor availability, and billing checkout workflows.
+- **Formal Use Cases**: Detailed end-to-end operational use cases specifying actors, preconditions, triggers, main success scenarios, and alternative extensions.
+- **Behavioral Specifications (Gherkin)**: Executable BDD feature scenarios with syntax highlighting covering account security, document deduplication, conflict prevention, queue management, consultations, and revenue auditing.
 
 ---
 
@@ -206,7 +207,7 @@ Pull requests require linear git history, zero merge commits on release branches
 A task or pull request is considered **Done** only when:
 - [x] Code passes `.\gradlew.bat spotlessCheck` with zero formatting differences.
 - [x] Code passes `.\gradlew.bat check` (Checkstyle, PMD, SpotBugs with FindSecBugs) with zero violations.
-- [x] All 168 automated tests in `.\gradlew.bat test` pass cleanly.
+- [x] All automated tests in `.\gradlew.bat test` pass cleanly.
 - [x] `.\gradlew.bat javadoc` generates complete API documentation without compilation warnings.
 - [x] `npm run build` in `website/` completes with exit code 0 and zero broken links.
 - [x] Git patch passes `git diff --check` with zero trailing whitespace or carriage-return warnings.
@@ -222,9 +223,9 @@ Automated test structures, quality tasks, coverage risk matrices, and manual pee
 
 The standalone testing guide covers:
 - **Test Levels Pyramid**: Domain records, temporary SQLite persistence, transactional services, integration workflows, and headless TestFX UI tests.
-- **Automated Test Inventory**: 168 automated `@Test` methods across 35 test classes.
+- **Automated Test Inventory**: Full inventory of automated test classes spanning domain, persistence, service, and UI layers.
 - **Risk-Based Coverage Matrix**: Specific test suites mitigating data privacy leaks, transaction splits, schedule conflicts, and numeric overflow.
-- **Manual Peer Testing Walkthrough Scenarios**: 10 end-to-end scenarios covering setup, patient deduplication, booking conflicts, consultations, cross-doctor history, and revenue exports.
+- **Manual Peer Testing Walkthrough Scenarios**: End-to-end walkthrough scenarios covering setup, patient deduplication, booking conflicts, consultations, cross-doctor history, and revenue exports.
 
 ---
 

@@ -66,7 +66,7 @@ const config = {
       copyright: `Copyright ${new Date().getFullYear()} NUSynapxe.`,
     },
     prism: {
-      additionalLanguages: ['gherkin'],
+      additionalLanguages: ['bash', 'json', 'powershell', 'gherkin'],
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
     },

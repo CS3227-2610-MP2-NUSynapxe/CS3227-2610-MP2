@@ -107,9 +107,9 @@ git diff --check
 
 ---
 
-## 6. Manual & Peer Testing Walkthrough Scenarios
+## 6. Manual Testing Walkthrough Scenarios
 
-Peer testers can execute these 10 comprehensive end-to-end verification scenarios to validate the latest release of NUSynapxe:
+Testers can manually execute these comprehensive end-to-end verification scenarios to validate the latest release of NUSynapxe:
 
 ### Scenario 1: First-Run Setup & Administrator Provisioning
 1. Launch NUSynapxe with a clean database (`-Dnusynapxe.database="build/peer-test.db"`).

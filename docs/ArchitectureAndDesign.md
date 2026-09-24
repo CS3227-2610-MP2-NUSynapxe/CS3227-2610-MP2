@@ -5,158 +5,272 @@ sidebar_label: Architecture & Design
 
 # Architecture & System Design
 
-This document details the architectural principles, component structure, database schema, authorization mechanics, and workflow rules of NUSynapxe.
+This document provides a comprehensive technical breakdown of NUSynapxe's system architecture, package structure, module responsibilities, threading model, and operational execution flows.
 
-For product specifications and use case flows, see [Product Specifications & Use Cases](ProductSpecifications.md). For automated and manual testing strategies, see [Testing Strategy](TestingStrategy.md).
+For product requirements and use cases, see [Product Specifications](ProductSpecifications.md). For automated verification and test walkthroughs, see [Testing Strategy](TestingStrategy.md).
 
 ---
 
-## 1. System Architecture
+## 1. High-Level Architecture Overview
 
-### 1.1 Component & Tier Architecture
-
-NUSynapxe enforces a strict layered architecture with unidirectional dependencies from presentation down to persistence:
+NUSynapxe enforces a strict layered desktop architecture with unidirectional dependencies. High-level modules communicate downward through explicit service interfaces; lower layers remain completely agnostic of presentation details.
 
 ```mermaid
-flowchart TB
-    subgraph PresentationLayer["Presentation Layer (JavaFX)"]
-        Router["ApplicationRouter (Composition Root)"]
-        UIComp["UiComponents (Shared Design System)"]
-        AdminView["SystemAdminView"]
-        ReceptView["ReceptionistView & Subviews"]
-        DocView["DoctorView & Subviews"]
-        SharedDir["PatientDirectoryView (Shared Component)"]
-    end
+flowchart TD
+    UI["Presentation Layer (JavaFX 25)<br/>ApplicationRouter, Workspaces, UI Panels, Design System"]
+    SVC["Service Layer (Business Logic and Rules)<br/>ClinicServices, Authentication, Authorization Guards, Validation"]
+    REPO["Persistence Layer (Data Access and SQL)<br/>SqliteDatabase, Transactions, SchemaInitializer, Repositories"]
+    DOM["Domain Layer (Shared Models and Enums)<br/>Immutable Records, Value Objects, Domain Enums"]
+    DB[("Embedded Storage<br/>SQLite WAL Database")]
 
-    subgraph ServiceLayer["Service Layer (Business Rules & Authorization)"]
-        AuthService["AuthenticationService & Session"]
-        AccountService["AccountService"]
-        PatientService["PatientService"]
-        ApptService["AppointmentService"]
-        ClinicalService["ClinicalService"]
-        CalendarService["CalendarService"]
-        BillingService["BillingService"]
-        Authorizer["Authorization Guard"]
-    end
-
-    subgraph PersistenceLayer["Persistence Layer (Projections & Transactions)"]
-        SqliteDb["SqliteDatabase & Transactions"]
-        SchemaInit["SchemaInitializer (v1 - v5 Migrations)"]
-        AccountRepo["AccountRepository"]
-        PatientRepo["PatientDirectoryRepository"]
-        ApptRepo["AppointmentRepository"]
-        ClinicalRepo["ClinicalRecordRepository"]
-        TimeOffRepo["DoctorTimeOffRepository"]
-        WorkingRepo["DoctorWorkingIntervalRepository"]
-        BillingRepo["PaymentReceiptRepository"]
-    end
-
-    subgraph DomainLayer["Domain Layer (Immutable Records & Enums)"]
-        Records["Patient, Appointment, ClinicalRecord, Prescription, etc."]
-        Enums["Role, AppointmentStatus, IdentityType, PaymentMethod"]
-        Values["Money, TimeSlot, DoctorCalendarWeek, CalendarScheduleCursor"]
-    end
-
-    subgraph StorageLayer["Storage Layer (Embedded)"]
-        SQLiteFile[("SQLite Database (~/.nusynapxe/nusynapxe.db)")]
-    end
-
-    %% Dependencies
-    Router --> AdminView & ReceptView & DocView
-    ReceptView & DocView --> SharedDir
-    AdminView & ReceptView & DocView & SharedDir --> ServiceLayer
-    PresentationLayer -. uses .-> UIComp
-    ServiceLayer --> Authorizer
-    ServiceLayer --> PersistenceLayer
-    ServiceLayer -. consumes & produces .-> DomainLayer
-    PersistenceLayer -. maps .-> DomainLayer
-    PersistenceLayer --> SqliteDb
-    SqliteDb --> SQLiteFile
+    UI --> SVC
+    SVC --> REPO
+    SVC -.-> DOM
+    REPO -.-> DOM
+    UI -.-> DOM
+    REPO --> DB
 ```
 
-### 1.2 Package Layout and Responsibilities
+### 1.1 Architectural Principles & Layer Boundaries
 
-```text
-src/main/java/nusynapxe/             Application entry point, paths, and router
-src/main/java/nusynapxe/domain/      Immutable records, value objects, and enums
-src/main/java/nusynapxe/tools/       Database seeding and demo data utilities
-src/main/java/nusynapxe/persistence/ SQLite connection, migrations, repositories
-src/main/java/nusynapxe/service/     Authorization, business validation, use-cases
-src/main/java/nusynapxe/ui/          JavaFX programmatic views and UI components
-src/test/java/nusynapxe/             Unit, integration, persistence, and TestFX tests
-config/checkstyle/                   Checkstyle ruleset
-config/pmd/                          PMD ruleset
-config/spotbugs/                     SpotBugs security and bug exclusions
-website/                             Docusaurus documentation website
-```
+The codebase follows five fundamental architectural invariants continuously verified by **ArchUnit 1.5.0** (`ArchitectureTest.java`):
 
-### 1.3 Enforced Dependency Rules
-
-Architectural rules are codified and continuously verified via **ArchUnit 1.5.0** in `ArchitectureTest.java`:
-1. **Domain Isolation**: Classes in `nusynapxe.domain` have zero dependencies on outer layers (persistence, service, UI, or tools).
-2. **Persistence Boundary**: `nusynapxe.persistence` cannot depend on `service`, `ui`, or `tools`.
-3. **Service Layer Boundary**: `nusynapxe.service` cannot depend on `ui` or `tools`.
-4. **UI Isolation**: `nusynapxe.ui` cannot directly access `persistence` or `tools`. The sole exception is `ApplicationRouter`, which acts as the composition root by opening the database and wiring dependencies.
-5. **No Package Cycles**: Slice assertions verify zero cyclical dependencies between `domain`, `persistence`, `service`, `ui`, and `tools`.
-
-Run the automated architecture check:
+1. **Domain Purity**: Classes in `nusynapxe.domain` are strictly decoupled from external dependencies. They contain no imports from `persistence`, `service`, `ui`, or `tools`, consisting purely of immutable records, value objects, and domain enums.
+2. **Persistence Boundary**: `nusynapxe.persistence` depends only on `nusynapxe.domain` and the SQLite JDBC driver. It has zero knowledge of services, UI controllers, or tooling.
+3. **Service Layer Isolation**: `nusynapxe.service` contains all application business rules, interval conflict math, authorization checks, and password hashing algorithms. It consumes persistence interfaces and domain models, but has no UI or JavaFX imports.
+4. **Presentation Encapsulation**: `nusynapxe.ui` interacts exclusively through domain services. Direct persistence calls are forbidden. The sole composition root is `ApplicationRouter`, which opens the database and wires dependencies on startup.
+5. **Acyclic Package Graph**: Slices across all top-level packages (`domain`, `persistence`, `service`, `ui`, `tools`) are strictly acyclic.
 
 ```powershell
+# Run automated ArchUnit structural verification
 .\gradlew.bat test --tests nusynapxe.architecture.ArchitectureTest --no-daemon --console=plain
 ```
 
-### 1.4 Application Startup & Session Routing Sequence
+### 1.2 Application Startup & Session Lifecycle
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User as Clinic Staff
-    participant Main as NUSynapxeApp
+    participant App as NUSynapxeApp
     participant Router as ApplicationRouter
     participant DB as SqliteDatabase
-    participant Schema as SchemaInitializer
+    participant Migrator as SchemaInitializer
     participant Auth as AuthenticationService
-    participant View as Role Workspace View
+    participant UI as Role Workspace View
 
-    User->>Main: Launch application
-    Main->>Router: init() & start(Stage)
-    Router->>DB: SqliteDatabase.open(path)
-    DB->>DB: PRAGMA foreign_keys = ON;
-    DB->>Schema: initialize(connection)
-    Schema->>DB: Execute versioned migrations (v1 to v5)
+    User->>App: Launch NUSynapxe
+    App->>Router: init() & start(Stage)
+    Router->>DB: SqliteDatabase.open(DatabasePaths.resolve())
+    DB->>DB: Configure PRAGMAs (foreign_keys = ON, journal_mode = WAL)
+    DB->>Migrator: initialize(connection)
+    Migrator->>DB: Execute versioned migrations (v1 -> v5)
     Router->>Auth: hasAccounts()
-    alt Zero Accounts in Database
-        Router->>View: Render Initial Setup Wizard
-        User->>View: Enter Admin Credentials
-        View->>Router: AccountService.createAdmin(...)
+    alt Empty Database (First Launch)
+        Router->>UI: Show SetupView (First-Run Admin Setup)
+        User->>UI: Enter Root Admin Credentials
+        UI->>Router: AccountService.createAdmin(...)
     end
-    Router->>View: Render Login Screen
-    User->>View: Enter Username & Password
-    View->>Auth: login(username, password)
-    Auth->>Auth: Verify PBKDF2 hash & active status
-    Auth-->>View: In-Memory Session (User, Role)
+    Router->>UI: Show LoginView
+    User->>UI: Submit Username & Password
+    UI->>Auth: login(username, password)
+    Auth->>Auth: Verify PBKDF2 hash & active flag
+    Auth-->>UI: Volatile In-Memory Session
     alt Role == SYSTEM_ADMIN
-        Router->>View: Open SystemAdminView
+        Router->>UI: Render SystemAdminView
     else Role == RECEPTIONIST
-        Router->>View: Open ReceptionistView (Directory)
+        Router->>UI: Render ReceptionistView
     else Role == DOCTOR
-        Router->>View: Open DoctorView (Dashboard)
+        Router->>UI: Render DoctorView
     end
 ```
 
 ---
 
-## 2. Persistence & Schema Design
+## 2. Presentation Layer (`nusynapxe.ui`)
 
-### 2.1 SQLite Connection Lifecycle and Settings
+The presentation layer is implemented in **pure programmatic JavaFX** without FXML templates. This guarantees type safety, fast component instantiation, clean dependency injection, and deterministic component IDs for headless UI automation.
 
-`SqliteDatabase.java` manages SQLite JDBC connections. On initialization:
-1. Creates parent directory if missing (`%USERPROFILE%\.nusynapxe` or `~/.nusynapxe`).
-2. Opens connection with `PRAGMA foreign_keys = ON;` to enforce relational integrity.
-3. Configures WAL (Write-Ahead Logging) mode for concurrent read performance and crash resilience.
-4. Executes `SchemaInitializer.java` to inspect `app_metadata.schema_version` and apply pending schema migrations.
+```mermaid
+flowchart TD
+    subgraph Core["Core Presentation Shell"]
+        Router["ApplicationRouter<br/>(Composition Root and Stage Manager)"]
+        Runner["ClinicTaskRunner and SerializedClinicTaskRunner<br/>(Async Thread Pool and Callback Serializer)"]
+    end
 
-### 2.2 Entity-Relationship Diagram
+    subgraph Workspaces["Role-Based Workspaces"]
+        AdminView["SystemAdminView<br/>(Staff Account Management)"]
+        ReceptView["ReceptionistView<br/>(Front-Desk Multi-Tab Coordinator)"]
+        DocView["DoctorView<br/>(Clinician Master-Detail Workspace)"]
+    end
+
+    subgraph SharedComponents["Shared Design System"]
+        SharedDir["PatientDirectoryView<br/>(Shared Directory Table and Forms)"]
+        UiComp["UiComponents<br/>(Cards, Status Badges, DatePickers)"]
+        Suggest["SearchSuggestionField<br/>(Reactive Autocomplete)"]
+    end
+
+    Router --> Workspaces
+    ReceptView --> SharedDir
+    DocView --> SharedDir
+    Workspaces --> Runner
+    Workspaces -.-> SharedComponents
+```
+
+### 2.1 Key UI Files and Responsibilities
+
+| Class / File | Primary Role & Responsibilities | Key Collaborators |
+| --- | --- | --- |
+| `ApplicationRouter` | Central stage manager, scene switcher, and dependency wiring root. Instantiates services, sets window constraints (`980x640` min), and coordinates logout flows. | `NUSynapxeApp`, `ClinicServices`, `Session` |
+| `ClinicTaskRunner` / `SerializedClinicTaskRunner` | Concurrency coordinators executing database and service tasks on background threads while marshaling completions back to the JavaFX Application Thread. Prevents UI freezing and race conditions. | `Platform.runLater()`, Java `ExecutorService` |
+| `UiComponents` | Shared visual component factory producing standard cards, colored status badges (`status-pending`, `status-checked-in`, etc.), compact date pickers, and fading feedback banners. | JavaFX controls, `ui.css` |
+| `SystemAdminView` | Administrator dashboard for provisioning staff credentials, selecting user roles (`Doctor`, `Receptionist`), and auditing active accounts. | `AccountService`, `ClinicTaskRunner` |
+| `ReceptionistView` & Workspace | Front-desk master view hosting navigation tabs: Patient Directory, Appointments Booking, Check-in Queue, Checkout Billing, and Revenue Reports. | `ReceptionistDataLoader`, `ReceptionistAppointmentPanel`, `ReceptionistCheckoutPanel` |
+| `DoctorView` & Workspace | Clinician master view hosting the daily 24-hour schedule grid, live Singapore clock line, active consultation editor, prescription builder, and historical records. | `DoctorConsultationPanel`, `DoctorDashboardDayView`, `DoctorCalendarView` |
+| `PatientDirectoryView` | Modular patient management interface embedded in both Receptionist and Doctor views. Handles live multi-field search, document registration, profile editing, and safe deletion. | `PatientService`, `PatientDirectoryTableView`, `PatientDirectoryFormView` |
+| `ClinicalHistoryView` | Clinician-exclusive modal browsing completed cross-doctor medical consultations, diagnoses, and issued prescriptions across all attending physicians. | `ClinicalService`, `Patient` |
+| `DoctorCalendarView` | Multi-day scheduling view supporting both 7-day interactive time grid and infinite-scrolling agenda, personal time-off blocking, and working hours settings. | `CalendarService`, `CalendarTimeGrid`, `DoctorCalendarSettingsView` |
+| `ReportExporter` | File export coordinator formatting and saving revenue records to RFC 4180 CSV and RFC 8259 JSON files. | `BillingService`, `RevenueReport` |
+
+### 2.2 Asynchronous Concurrency & UI Thread Safety
+
+To guarantee a responsive UI, all database queries and service calls execute off the JavaFX Application Thread:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Staff as Clinic Staff
+    participant UI as JavaFX Controller (FX Thread)
+    participant Runner as SerializedClinicTaskRunner (Worker Thread)
+    participant Svc as Domain Service
+    participant FX as Platform.runLater()
+
+    Staff->>UI: Clicks action button (e.g. Save / Search)
+    UI->>UI: Snapshot input fields & disable submit button
+    UI->>Runner: execute(task, onSuccess, onError)
+    Note over Runner: Runs asynchronously on background worker
+    Runner->>Svc: Execute business logic & SQLite transaction
+    Svc-->>Runner: Return computed domain result
+    Runner->>FX: Dispatch completion callback
+    Note over FX: Marshaled safely onto JavaFX Application Thread
+    FX->>UI: onSuccess(result)
+    UI->>UI: Update TableView / Scene & re-enable submit
+```
+
+- **Input Snapshotting**: Form inputs (such as credentials, appointment slots, or patient details) are immediately captured as immutable local records before submitting tasks to the background runner, preventing input mutation during inflight operations.
+- **Sequential Task Serialization**: `SerializedClinicTaskRunner` chains related operations sequentially, preventing race conditions (such as rapid consecutive appointment bookings or double payment submissions).
+- **Callback Invalidation on Navigation**: When a user navigates away from a tab or closes a dialog, pending callback tokens are invalidated so stale background completions do not overwrite newer UI state.
+
+---
+
+## 3. Service Layer (`nusynapxe.service`)
+
+The service layer implements all core business validation, role-based access control, appointment conflict mathematics, cryptographic password management, and use-case coordination.
+
+```mermaid
+flowchart TD
+    subgraph Registry["Service Registry"]
+        ClinicServices["ClinicServices<br/>(Dependency Container)"]
+    end
+
+    subgraph Security["Authentication and Access Control"]
+        AuthService["AuthenticationService"]
+        AuthGuard["Authorization<br/>(Role Enforcement)"]
+        Hasher["PasswordHasher<br/>(PBKDF2WithHmacSHA256)"]
+        SessionMgr["SessionManager"]
+    end
+
+    subgraph CoreServices["Domain Business Services"]
+        PatientSvc["PatientService<br/>(Identity Validation and Deduplication)"]
+        ApptSvc["AppointmentService<br/>(Interval Conflicts and State Machine)"]
+        ClinSvc["ClinicalService<br/>(Consultations and Prescriptions)"]
+        CalSvc["CalendarService<br/>(Time Grid Layout and Agenda Paging)"]
+        BillSvc["BillingService<br/>(Minor Units and Receipt Numbering)"]
+        AcctSvc["AccountService<br/>(Staff Account Lifecycle)"]
+    end
+
+    ClinicServices --> Security
+    ClinicServices --> CoreServices
+    CoreServices --> AuthGuard
+```
+
+### 3.1 Key Service Files and Responsibilities
+
+| Class / File | Primary Role & Responsibilities | Key Collaborators |
+| --- | --- | --- |
+| `ClinicServices` | Immutable service container providing centralized instantiation and access to all domain services. | All service interfaces |
+| `AuthenticationService` | Handles user authentication, credential verification against PBKDF2 hashes, account active flag inspection, and session initialization. | `AccountRepository`, `PasswordHasher`, `Session` |
+| `Authorization` | Static security guard enforcing role authorization matrices (e.g. `requireRole()`, `requireDoctorOwnership()`, `requirePatientAdministration()`). Throws `AuthorizationException`. | `Session`, `Role` |
+| `PasswordHasher` | Cryptographic password management. Hashes passwords using `PBKDF2WithHmacSHA256` with 16-byte random salt and 65,536 iterations. Scrubs password byte buffers immediately after use. | `SecureRandom`, `SecretKeyFactory` |
+| `PatientService` | Validates NRIC/FIN/Passport document syntax, locks Singapore issuing country, normalizes international calling codes, executes preflight deletion blocker checks, and toggles active state. | `PatientRepository`, `PatientDeletionBlockers` |
+| `AppointmentService` | Enforces 30-minute interval boundaries, executes interval overlap conflict detection (`existing_start < new_end AND existing_end > new_start`), checks Singapore check-in time gate, and manages state transitions. | `AppointmentRepository`, `AppointmentTransitions` |
+| `ClinicalService` | Enforces attending doctor consultation ownership, persists diagnostic notes, manages itemized multi-drug prescriptions, and joins completed cross-doctor medical histories. | `ClinicalRecordRepository`, `Prescription` |
+| `CalendarService` | Computes 24-hour visual time slot layouts, discretizes doctor working intervals, filters personal time-off blocks, and handles keyspaced cursor-based agenda pagination. | `CalendarSettingsRepository`, `DoctorTimeOff` |
+| `BillingService` | Converts dollar amounts to exact integer cents (`amount_cents INTEGER`), enforces positive payments, generates daily sequential receipt numbers (`RCP-YYYYMMDD-XXXX`), and aggregates revenue reports. | `PaymentRepository`, `ReceiptRepository`, `RevenueReport` |
+
+### 3.2 Authorization & Role Access Matrix
+
+Every public service method verifies the caller's volatile `Session` against the formal security matrix:
+
+```mermaid
+flowchart TD
+    Request["Incoming Service Operation"] --> CheckAuth{"Is Session Valid?"}
+    CheckAuth -- No --> DenyAuth["Reject: Session Expired"]
+    CheckAuth -- Yes --> CheckRole{"Does Role Match Policy?"}
+    CheckRole -- No --> DenyRole["Reject: Unauthorized Role"]
+    CheckRole -- Yes --> CheckOwner{"Requires Resource Ownership?"}
+    CheckOwner -- No --> Execute["Proceed with Business Operation"]
+    CheckOwner -- Yes --> ValidateDoctor{"Is Attending Doctor Assigned?"}
+    ValidateDoctor -- No --> DenyOwner["Reject: Doctor Ownership Mismatch"]
+    ValidateDoctor -- Yes --> Execute
+```
+
+---
+
+## 4. Persistence Layer (`nusynapxe.persistence`)
+
+The persistence layer manages all embedded SQLite database interactions, connection pooling, transactional rollbacks, query projection sanitization, and automated schema migrations.
+
+```mermaid
+flowchart TD
+    subgraph CoreStorage["Database Engine"]
+        SqliteDb["SqliteDatabase<br/>(Connection Factory and PRAGMA Settings)"]
+        TxHelper["SqliteTransactions<br/>(Atomic Commit and Rollback Wrapper)"]
+        Migrator["SchemaInitializer<br/>(v1 to v5 Schema Migration Engine)"]
+        Queries["SqliteQueries<br/>(SQL Helpers and Wildcard Escaping)"]
+    end
+
+    subgraph Repositories["Domain Repositories"]
+        AcctRepo["AccountRepository"]
+        PatientRepo["PatientRepository and PatientQueryRepository"]
+        ApptRepo["AppointmentRepository and AppointmentQueryRepository"]
+        ClinRepo["ClinicalRecordRepository"]
+        CalRepo["CalendarSettingsRepository"]
+        PayRepo["PaymentRepository and ReceiptRepository"]
+    end
+
+    Repositories --> TxHelper
+    Repositories --> Queries
+    TxHelper --> SqliteDb
+    Migrator --> SqliteDb
+```
+
+### 4.1 Key Persistence Files and Responsibilities
+
+| Class / File | Primary Role & Responsibilities | Key Collaborators |
+| --- | --- | --- |
+| `SqliteDatabase` | Manages SQLite JDBC connection lifecycle. Sets `PRAGMA foreign_keys = ON;` and `PRAGMA journal_mode = WAL;`. Provides pooled and single-connection access. | `org.sqlite.JDBC`, `DatabasePaths` |
+| `SqliteTransactions` | Functional transaction helper executing multi-statement operations within explicit `BEGIN TRANSACTION` and `COMMIT` blocks, automatically rolling back on `SQLException`. | `Connection` |
+| `SchemaInitializer` | Incremental database migration runner. Inspects `app_metadata.schema_version` and executes migrations v1 through v5 sequentially within an atomic transaction. | `SqliteTransactions` |
+| `SqliteQueries` | SQL utility class providing parameterized query construction and SQL `LIKE` wildcard escaping (safely escaping `%` and `_` characters to prevent query leakage). | `PreparedStatement` |
+| `AccountRepository` | Persists user credentials, salts, PBKDF2 verifiers, display names, and active status flags. Enforces unique username constraints. | `Account`, `AccountCredential` |
+| `PatientRepository` & `PatientQueryRepository` | Stores standardized patient profiles, executes multi-field search queries, enforces unique identity document tuples, and calculates preflight deletion blockers. | `Patient`, `PatientDeletionBlockers` |
+| `AppointmentRepository` & `AppointmentQueryRepository` | Manages appointment booking, status updates, check-in queue queries, and transactional interval conflict checks. | `Appointment`, `TimeSlot` |
+| `ClinicalRecordRepository` | Stores attending doctor consultation findings and coordinates atomic multi-drug prescription inserts. Executes batch queries for clinical histories. | `ClinicalRecord`, `Prescription` |
+| `CalendarSettingsRepository` | Persists doctor daily shift intervals, lunch break splits, and personal time-off blocking ranges. | `DoctorCalendarSettings`, `DoctorTimeOff` |
+| `PaymentRepository` & `ReceiptRepository` | Persists minor-unit payments, generates daily sequential receipt numbers, and executes revenue aggregation queries grouped by payment method and clinician. | `Payment`, `Receipt`, `RevenueReport` |
+
+### 4.2 Relational Entity-Relationship Diagram
 
 ```mermaid
 erDiagram
@@ -274,146 +388,138 @@ erDiagram
     }
 ```
 
-### 2.3 Schema Version Evolution & Migrations
+### 4.3 Database Schema Migration Ledger (v1 to v5)
 
-Migrations execute within an explicit SQLite transaction; failure rolls back all statement changes and leaves `schema_version` unchanged:
-- **Version 1**: Initial baseline tables (`users`, `patients`, `appointments`, `clinical_records`, `prescriptions`, `payments`, `app_metadata`).
-- **Version 2**: Adds nullable identity columns (`identity_type`, `issuing_country`, `identity_number`), `sex`, `height_cm`, `weight_kg`, and `active` flag to `patients` for backward compatibility.
-- **Version 3**: Drops legacy `billing_information` column from `patients` table (payment records are preserved in `payments`) and normalizes legacy sex values to `FEMALE` or `MALE`.
-- **Version 4**: Renames legacy `phone` to `phone_number`, adds nullable `phone_country_code`, and requires country code validation on subsequent patient saves.
-- **Version 5**: Introduces `doctor_calendar_settings` and `doctor_working_intervals` supporting custom daily shift intervals and lunch breaks (up to 1440 minutes). Default seed supplies Mon-Fri `08:00`-`18:00` display intervals.
+All schema changes are versioned and executed through `SchemaInitializer.java`. When upgrading an existing clinic installation, migrations run incrementally in an explicit SQLite transaction:
 
-### 2.4 Safe Patient Deletion Sequence with Preflight Blocker Check
+- **Version 1 (Baseline)**: Initial operational tables: `users`, `patients`, `appointments`, `clinical_records`, `prescriptions`, `payments`, `app_metadata`.
+- **Version 2 (Identity Document Enhancements)**: Adds nullable columns `identity_type`, `issuing_country`, `identity_number`, `sex`, `height_cm`, `weight_kg`, and `active` flag to `patients` to preserve backward compatibility with legacy demo data.
+- **Version 3 (Data Hygiene & Normalization)**: Drops unused `billing_information` column from `patients` table (payment details are strictly stored in `payments`) and normalizes historical sex values to uppercase `MALE` or `FEMALE`.
+- **Version 4 (International Telephony Normalization)**: Renames `phone` to `phone_number`, introduces `phone_country_code`, and requires standardized calling codes for subsequent patient profile updates.
+- **Version 5 (Custom Working Hours & Shift Splits)**: Creates `doctor_calendar_settings` and `doctor_working_intervals`, enabling doctors to define split working shifts and lunch breaks (up to 1440 minutes per day). Defaults to Mon-Fri `08:00`–`18:00`.
 
-To maintain relational integrity, NUSynapxe **never uses cascade deletions** (`ON DELETE CASCADE`). Deletion is strictly reserved for unused records. If any linked record exists, deletion is rejected with itemized blocker counts:
+---
+
+## 5. Domain Layer (`nusynapxe.domain`)
+
+The domain layer encapsulates immutable business records, value types, and domain state enumerations:
+
+| Category | Domain Models & Types | Characteristics & Invariants |
+| --- | --- | --- |
+| **Identity & Patient** | `Patient`, `IdentityType`, `Sex`, `PatientDeletionBlockers` | Immutable Java record holding standardized patient demographic details, computed age, and foreign key blocker metrics across 6 categories. |
+| **Authentication & Access** | `Account`, `AccountCredential`, `Role`, `Session` | Encapsulates staff accounts, roles (`SYSTEM_ADMIN`, `RECEPTIONIST`, `DOCTOR`), and volatile heap sessions containing login timestamps. |
+| **Appointments & Scheduling** | `Appointment`, `AppointmentStatus`, `AppointmentListRow`, `TimeSlot` | Enforces finite state transitions. Coordinates 30-minute interval slots and projection rows for front-desk list views. |
+| **Calendar & Availability** | `CalendarAppointment`, `CalendarScheduleCursor`, `CalendarSchedulePage`, `DoctorTimeOff`, `DoctorCalendarSettings`, `WorkingInterval` | Virtualized keyspaced pagination cursors `(startsAt, appointmentId)`, recurring daily shift intervals, and personal time-off date ranges. |
+| **Clinical Records** | `ClinicalRecord`, `ClinicalHistoryEntry`, `Prescription` | Attending doctor clinical findings, examination notes, and itemized multi-drug prescriptions (drug name, dosage, frequency, duration). |
+| **Billing & Finance** | `Payment`, `PaymentMethod`, `PaymentStatus`, `Receipt`, `RevenueReport`, `RevenueSummary` | 64-bit integer minor unit representation (`amount_cents`), payment methods (`CASH`, `CARD`, `TRANSFER`, `OTHER`), and date-bounded revenue summaries. |
+
+---
+
+## 6. Core Application Utilities (`nusynapxe`)
+
+The root package provides the platform bootstrap, path resolution, and injectable time foundations:
+
+| Class / File | Primary Role & Responsibilities | Key Collaborators |
+| --- | --- | --- |
+| `NUSynapxeApp` | The JavaFX `Application` entrypoint. Initializes database connections, starts `SchemaInitializer`, verifies administrator provisioning, and loads the primary maximized window. | `ApplicationRouter`, `DatabasePaths` |
+| `NUSynapxeLauncher` | A pure Java bootstrapping class that does not extend `javafx.application.Application`. Enables launching executable fat JARs (`java -jar NUSynapxe.jar`) on standard JVMs without needing `--module-path` runtime arguments. | `NUSynapxeApp` |
+| `DatabasePaths` | Resolves the clinic database file path. Defaults to `%USERPROFILE%\.nusynapxe\nusynapxe.db` (Windows) or `~/.nusynapxe/nusynapxe.db` (macOS/Linux), while supporting runtime command-line overrides via `-Dnusynapxe.database=...`. | Java `System.getProperty` |
+| `ClinicClock` | Centralized injectable clock wrapper defaulting to Singapore standard time (`ZoneId.of("Asia/Singapore")`). Allows automated test suites to inject fixed timestamps to verify time-sensitive arrival gates and calendar lines. | Java `Clock`, `ZonedDateTime` |
+
+---
+
+## 7. Developer Tooling & Seeding (`nusynapxe.tools`)
+
+Developer tooling provides deterministic database initialization and demo data generation:
+
+```mermaid
+flowchart TD
+    CLI["DemoDataCli<br/>(Command-line Argument Parser)"] --> Seeder["DemoDataSeeder<br/>(Master Seeding Orchestrator)"]
+
+    Seeder --> AcctSeed["DemoDataAccountSeeder<br/>(Creates Admin, Doctors, Receptionists)"]
+    Seeder --> PatSeed["DemoDataPatientSeeder<br/>(Creates 18 Diverse Patient Profiles)"]
+    Seeder --> SchedSeed["DemoDataScheduleSeeder<br/>(Creates Appointments from -7 to +14 days)"]
+    Seeder --> ClinSeed["DemoDataClinicalSeeder<br/>(Creates Consultations, Prescriptions, Payments)"]
+
+    Seeder --> Services["ClinicServices Domain Layer"]
+```
+
+- **Reset Tooling (`reset-demo-database.ps1`)**: Safely purges existing SQLite database files (`.db`, `-wal`, `-shm`) and re-executes all migrations to return to a pristine zero-account state.
+- **Seeding Tooling (`seed-demo-data.ps1`)**: Populates realistic clinical scenarios relative to the current calendar date (`Asia/Singapore`), enabling immediate testing of front-desk check-ins, active doctor dashboards, and multi-drug prescriptions.
+
+---
+
+## 8. Detailed Flow Diagrams
+
+### 8.1 Safe Patient Deletion Preflight Check Flow
+
+NUSynapxe strictly prevents orphan records without using cascade deletes (`ON DELETE CASCADE`). Deletion is permitted only if the patient has zero linked records across all categories:
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Staff as Clinic Staff
     participant UI as PatientDirectoryView
-    participant Service as PatientService
-    participant Repo as PatientDirectoryRepository
+    participant Svc as PatientService
+    participant Repo as PatientRepository
     participant DB as SQLite Database
 
     Staff->>UI: Click "Delete patient"
-    UI->>Service: deletePatient(sessionId, patientId)
-    Service->>Service: Authorization.requirePatientAdministration()
-    Service->>Repo: inspectDeletionBlockers(patientId)
-    Repo->>DB: COUNT(*) FROM appointments WHERE patient_id = ?
-    Repo->>DB: COUNT(*) FROM clinical_records WHERE patient_id = ?
-    Repo->>DB: COUNT(*) FROM prescriptions via clinical_records
-    Repo->>DB: COUNT(*) FROM payments WHERE patient_id = ?
-    Repo-->>Service: PatientDeletionBlockers(apptCount, clinicalCount, prescrCount, payCount)
+    UI->>Svc: deletePatient(sessionId, patientId)
+    Svc->>Svc: Authorization.requirePatientAdministration()
+    Svc->>Repo: inspectDeletionBlockers(patientId)
+    Repo->>DB: COUNT(*) appointments WHERE patient_id = ?
+    Repo->>DB: COUNT(*) clinical_records WHERE patient_id = ?
+    Repo->>DB: COUNT(*) prescriptions via clinical_records
+    Repo->>DB: COUNT(*) payments WHERE patient_id = ?
+    Repo-->>Svc: PatientDeletionBlockers(apptCount, clinicalCount, prescrCount, payCount)
     alt Any Blocker Count > 0
-        Service-->>UI: throw PatientDeletionBlockedException(blockers)
-        UI->>Staff: Display "Delete Blocked" Dialog with Category Counts & Deactivation Suggestion
+        Svc-->>UI: throw PatientDeletionBlockedException(blockers)
+        UI->>Staff: Display "Delete Blocked" dialog showing category counts & suggest Deactivation
     else All Blocker Counts == 0
-        Service->>Repo: deleteIfUnrelated(patientId)
+        Svc->>Repo: deleteIfUnrelated(patientId)
         Repo->>DB: BEGIN TRANSACTION
         Repo->>DB: Re-verify all counts == 0
         Repo->>DB: DELETE FROM patients WHERE id = ?
         Repo->>DB: COMMIT
-        Repo-->>Service: Success
-        Service-->>UI: Deletion Completed
-        UI->>Staff: Patient Removed & Directory Refreshed
+        Repo-->>Svc: Success
+        Svc-->>UI: Patient deleted
+        UI->>Staff: Refresh directory table
     end
 ```
 
----
-
-## 3. Account, Session, and Authorization Design
-
-### 3.1 Cryptographic Password Storage
-
-`AccountService.java` delegates password verification and salting to `PasswordHasher.java`:
-- **Algorithm**: `PBKDF2WithHmacSHA256`
-- **Salt**: 16 cryptographically secure random bytes generated per account via `SecureRandom`
-- **Iterations**: 65,536 iterations
-- **Key Length**: 256 bits
-- **Zeroing Memory**: Password char arrays are scrubbed immediately after verification. Plaintext passwords and derived hashes are never recorded in application log files.
-
-### 3.2 Volatile In-Memory Session
-
-Authentication produces an immutable `Session` object containing the authenticated `User`, their assigned `Role`, and login timestamp. Sessions exist purely in JVM volatile heap memory and are **never serialized to SQLite or written to disk**. When the application closes or the user clicks **Log out**, the session reference is discarded.
-
-### 3.3 Role Authorization Matrix
-
-Every public service method enforces authorization guards through `Authorization.java`:
-
-| Operation | System Admin | Receptionist | Attending Doctor | Other Doctors |
-| --- | :---: | :---: | :---: | :---: |
-| Create Staff Account | ✅ | ❌ | ❌ | ❌ |
-| View Staff Account List | ✅ | ❌ | ❌ | ❌ |
-| Register / Edit Patient Basic Data | ❌ | ✅ | ✅ | ✅ |
-| Activate / Deactivate Patient | ❌ | ✅ | ✅ | ✅ |
-| Safe Delete Unused Patient | ❌ | ✅ | ✅ | ✅ |
-| Book / Reschedule / Cancel Appointment | ❌ | ✅ | ❌ | ❌ |
-| Check-in Arriving Patient | ❌ | ✅ | ❌ | ❌ |
-| Complete Billing Checkout & Receipt | ❌ | ✅ | ❌ | ❌ |
-| View Financial Reports & Export CSV/JSON | ❌ | ✅ | ❌ | ❌ |
-| Accept / Decline Assigned Visit | ❌ | ❌ | ✅ | ❌ |
-| Record Diagnosis & Consultation Notes | ❌ | ❌ | ✅ | ❌ |
-| Build & Issue Multi-Drug Prescriptions | ❌ | ❌ | ✅ | ❌ |
-| Mark Consultation Completed | ❌ | ❌ | ✅ | ❌ |
-| Inspect Completed Patient Clinical History | ❌ | ❌ | ✅ | ✅ |
-| Inspect In-Progress Patient Consultations | ❌ | ❌ | ✅ | ❌ |
-| Configure Personal Working Hours & Time-Off | ❌ | ❌ | ✅ (own only) | ❌ |
-
----
-
-## 4. Workflow Rules & Implementation Design
-
-### 4.1 Appointment Finite State Machine
-
-```mermaid
-stateDiagram-v2
-    [*] --> PENDING: Receptionist books visit
-    PENDING --> ACCEPTED: Doctor accepts visit
-    PENDING --> DECLINED: Doctor declines visit (slot released)
-    PENDING --> CANCELLED: Receptionist cancels visit (slot released)
-    ACCEPTED --> CHECKED_IN: Receptionist checks in patient (at or after start time)
-    ACCEPTED --> DECLINED: Doctor declines visit (slot released)
-    ACCEPTED --> CANCELLED: Receptionist cancels visit (slot released)
-    CHECKED_IN --> COMPLETED: Doctor saves consultation & marks completed
-    COMPLETED --> CHECKED_OUT: Receptionist records payment & issues receipt
-    DECLINED --> [*]
-    CANCELLED --> [*]
-    CHECKED_OUT --> [*]
-```
-
-### 4.2 Appointment Booking Sequence & Conflict Validation
+### 8.2 Appointment Booking & Conflict Detection Flow
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Receptionist
     participant UI as ReceptionistView
-    participant ApptService as AppointmentService
-    participant ApptRepo as AppointmentRepository
+    participant Svc as AppointmentService
+    participant Repo as AppointmentRepository
     participant DB as SQLite Database
 
     Receptionist->>UI: Enter Patient, Doctor, Date, Interval (e.g. 10:00 - 10:30)
-    UI->>ApptService: bookAppointment(session, patientId, doctorId, startsAt, endsAt)
-    ApptService->>ApptService: Authorization.requireRole(Role.RECEPTIONIST)
-    ApptService->>ApptService: Validate: start < end & half-hour boundaries
-    ApptService->>ApptRepo: checkConflicts(doctorId, startsAt, endsAt)
-    ApptRepo->>DB: Query appointments: status IN ('PENDING', 'ACCEPTED', 'CHECKED_IN', 'COMPLETED', 'CHECKED_OUT') AND starts_at < endsAt AND ends_at > startsAt
-    ApptRepo->>DB: Query doctor_time_off: starts_at < endsAt AND ends_at > startsAt
-    alt Conflict Found
-        ApptRepo-->>ApptService: Conflict detected
-        ApptService-->>UI: throw ScheduleConflictException("Doctor is unavailable")
-        UI->>Receptionist: Show conflict feedback
+    UI->>Svc: bookAppointment(session, patientId, doctorId, startsAt, endsAt)
+    Svc->>Svc: Authorization.requireRole(Role.RECEPTIONIST)
+    Svc->>Svc: Validate: start < end AND half-hour slot boundary
+    Svc->>Repo: checkConflicts(doctorId, startsAt, endsAt)
+    Repo->>DB: Query active appointments overlapping interval
+    Repo->>DB: Query doctor_time_off overlapping interval
+    alt Conflict Detected
+        Repo-->>Svc: Conflict found
+        Svc-->>UI: throw ScheduleConflictException("Doctor is unavailable")
+        UI->>Receptionist: Show conflict warning banner
     else Interval Clear
-        ApptRepo->>DB: INSERT INTO appointments (status='PENDING', ...)
-        DB-->>ApptRepo: Generated Appointment ID
-        ApptRepo-->>ApptService: Appointment record
-        ApptService-->>UI: Appointment booked
-        UI->>Receptionist: Success notice & reload appointments table
+        Repo->>DB: INSERT INTO appointments (status='PENDING', ...)
+        DB-->>Repo: Generated Appointment ID
+        Repo-->>Svc: New Appointment record
+        Svc-->>UI: Appointment successfully booked
+        UI->>Receptionist: Update appointments table
     end
 ```
 
-### 4.3 Check-in to Consultation to Checkout End-to-End Workflow
+### 8.3 Check-in to Consultation to Checkout End-to-End Flow
 
 ```mermaid
 sequenceDiagram
@@ -422,101 +528,63 @@ sequenceDiagram
     actor Doctor
     participant UI_R as Receptionist Workspace
     participant UI_D as Doctor Workspace
-    participant ApptService as AppointmentService
-    participant ClinService as ClinicalService
-    participant BillService as BillingService
+    participant ApptSvc as AppointmentService
+    participant ClinSvc as ClinicalService
+    participant BillSvc as BillingService
     participant DB as SQLite Database
 
-    Note over Receptionist, UI_R: 1. Patient Arrival & Check-in
+    Note over Receptionist, UI_R: 1. Patient Arrival Check-in
     Receptionist->>UI_R: Select Accepted Appointment in Check-in Queue
-    UI_R->>ApptService: checkInAppointment(session, appointmentId)
-    ApptService->>ApptService: Verify Singapore local time >= appointment.startsAt
-    ApptService->>DB: UPDATE appointments SET status = 'CHECKED_IN'
-    ApptService-->>UI_R: Status updated
+    UI_R->>ApptSvc: checkInAppointment(session, appointmentId)
+    ApptSvc->>ApptSvc: Verify Singapore time >= appointment.startsAt
+    ApptSvc->>DB: UPDATE appointments SET status = 'CHECKED_IN'
+    ApptSvc-->>UI_R: Status updated
 
-    Note over Doctor, UI_D: 2. Clinical Consultation & Prescriptions
+    Note over Doctor, UI_D: 2. Consultation & Prescriptions
     Doctor->>UI_D: Select Checked-in Visit on Dashboard
-    UI_D->>ClinService: saveConsultation(session, apptId, diagnosis, examNotes, followUp)
-    ClinService->>ClinService: Authorization.requireDoctorOwnership()
-    ClinService->>DB: INSERT INTO clinical_records (...)
+    UI_D->>ClinSvc: saveConsultation(session, apptId, diagnosis, examNotes, followUp)
+    ClinSvc->>ClinSvc: Authorization.requireDoctorOwnership()
+    ClinSvc->>DB: INSERT INTO clinical_records (...)
     Doctor->>UI_D: Add Prescriptions (Drug, Dosage, Frequency, Duration)
-    UI_D->>ClinService: addPrescription(session, recordId, prescription)
-    ClinService->>DB: INSERT INTO prescriptions (...)
+    UI_D->>ClinSvc: addPrescription(session, recordId, prescription)
+    ClinSvc->>DB: INSERT INTO prescriptions (...)
     Doctor->>UI_D: Click "Mark consultation completed"
-    UI_D->>ClinService: completeConsultation(session, apptId)
-    ClinService->>DB: UPDATE appointments SET status = 'COMPLETED'
-    ClinService-->>UI_D: Consultation finalized & locked
+    UI_D->>ClinSvc: completeConsultation(session, apptId)
+    ClinSvc->>DB: UPDATE appointments SET status = 'COMPLETED'
+    ClinSvc-->>UI_D: Consultation finalized & locked
 
     Note over Receptionist, UI_R: 3. Billing & Daily Receipt Generation
     Receptionist->>UI_R: Open Checkout Tab & Select Completed Visit
     Receptionist->>UI_R: Enter Amount ($45.00) & Method (CARD)
-    UI_R->>BillService: completeCheckout(session, apptId, 4500, CARD)
-    BillService->>DB: BEGIN TRANSACTION
-    BillService->>DB: Generate sequence: RCP-YYYYMMDD-XXXX
-    BillService->>DB: INSERT INTO payments (amount_cents=4500, receipt_number=...)
-    BillService->>DB: UPDATE appointments SET status = 'CHECKED_OUT'
-    BillService->>DB: COMMIT
-    BillService-->>UI_R: Receipt Details
+    UI_R->>BillSvc: completeCheckout(session, apptId, 4500, CARD)
+    BillSvc->>DB: BEGIN TRANSACTION
+    BillSvc->>DB: Generate sequence: RCP-YYYYMMDD-XXXX
+    BillSvc->>DB: INSERT INTO payments (amount_cents=4500, receipt_number=...)
+    BillSvc->>DB: UPDATE appointments SET status = 'CHECKED_OUT'
+    BillSvc->>DB: COMMIT
+    BillSvc-->>UI_R: Receipt Details
     UI_R->>Receptionist: Render Receipt Preview
 ```
 
-### 4.4 Doctor Calendar vs Infinite Scrolling Agenda
+### 8.4 Virtualized Infinite Agenda Keyspaced Pagination Flow
 
-Doctor scheduling provides two distinct view modes:
-1. **Interactive Multi-Day Time Grid (`Calendar`)**:
-   - Visual grid displaying assigned appointments, shaded working intervals, and purple blocked time-off.
-   - Dynamic Singapore red time line showing current time.
-   - 100-pixel half-hour rows in full view; 44-pixel rows in compact dashboard view.
-2. **Infinite Scrolling Agenda (`Agenda`)**:
-   - Bounded chronological appointment stream starting from a selected Singapore anchor date.
-   - Keyspacing pagination implemented via `CalendarScheduleCursor` containing `(startsAt, appointmentId)`.
-   - SQLite orders rows deterministically by `starts_at ASC, id ASC`, reading one look-ahead row (`LIMIT pageSize + 1`) to accurately set `hasMore` without off-by-one errors or duplicate cards on page boundaries.
+When browsing the upcoming schedule in Agenda mode, appointments are paginated using a deterministic keyspacing cursor `(startsAt, appointmentId)`:
 
-### 4.5 Revenue Calculation & Export Sanitization
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Doctor
+    participant UI as DoctorCalendarView
+    participant Svc as CalendarService
+    participant Repo as CalendarSettingsRepository
+    participant DB as SQLite Database
 
-- **Minor Unit Storage**: Monetary amounts are stored strictly as 64-bit integer cents (`amount_cents INTEGER`), eliminating IEEE-754 floating-point inaccuracies.
-- **Strict Boundary Checks**: UI parses amounts using `BigDecimal` and checks for non-negative values. Arithmetic operations in `RevenueReport.java` use `Math.addExact()` to prevent integer overflow.
-- **CSV Sanitization**: CSV export properly escapes values containing commas, double quotes (`"` &rarr; `""`), and newline characters (`\r\n`).
-- **JSON Sanitization**: JSON export properly escapes Unicode control characters, tabs, quotes, and backslashes according to RFC 8259.
-
----
-
-## 5. UI and TestFX Conventions
-
-### 5.1 Scene Routing & Sizing
-
-`ApplicationRouter.java` manages primary Stage transitions:
-- Window opens **maximized** by default to provide an expansive clinical workspace.
-- Minimum stage dimensions are locked at `980 x 640` pixels; restored initial default is `1200 x 760` pixels.
-- All routed scenes share the single stylesheet `src/main/resources/nusynapxe/ui.css`.
-
-### 5.2 Design System Components
-
-`UiComponents.java` provides reusable, presentation-only component factories:
-- `card(Node... children)`: Styled white content card with subtle border and drop shadow.
-- `statusBadge(AppointmentStatus status)`: Produces a `Label` with the base `status-badge` class and semantic status class (`status-pending`, `status-accepted`, `status-checked-in`, `status-completed`, `status-checked-out`, `status-declined`, `status-cancelled`).
-- `compactDatePicker()`: Custom styled date picker maintaining standard compact field height with integrated calendar icon.
-- `feedback(String message, FeedbackType type)`: Standardized banner appearing below the header, automatically fading after 6 seconds.
-- `errorBanner(String message)`: Prominent centered red error alert for form validation failures.
-
-### 5.3 Stable TestFX IDs
-
-Views are constructed programmatically in Java rather than FXML, ensuring every actionable node has an immutable, deterministic `setId()` for headless UI testing:
-
-| Component ID | UI Description |
-| --- | --- |
-| `login-submit` | Login submit button |
-| `setup-submit` | First-run setup submit button |
-| `admin-account-submit` | Staff account creation button |
-| `reception-patient-open-register` | Open patient registration button |
-| `reception-patient-search` | Patient directory search input |
-| `reception-patient-table` | Patient directory TableView |
-| `reception-patient-view-<id>` | View action button for specific patient ID |
-| `reception-book` | Book appointment submit button |
-| `reception-checkout` | Complete checkout submit button |
-| `doctor-dashboard-day-calendar` | Doctor dashboard single-day time grid |
-| `doctor-consultation-save` | Save clinical consultation notes button |
-| `doctor-history-patient` | Patient selector in consultation history view |
-| `doctor-calendar-block-time` | Open block time-off modal button |
-| `doctor-calendar-view-mode` | Calendar vs Agenda toggle button |
-| `logout-button` | Top header logout button |\n
+    Doctor->>UI: Select anchor date & scroll agenda
+    UI->>Svc: loadAgendaPage(doctorId, cursor, pageSize=20)
+    Svc->>Repo: queryAgenda(doctorId, cursor, limit=21)
+    Repo->>DB: Query appointments ordered by starts_at and id with LIMIT 21
+    DB-->>Repo: List of 21 records
+    Note over Repo, Svc: Lookahead item 21 indicates hasMore=true
+    Svc-->>UI: CalendarSchedulePage(records[0..19], nextCursor=records[19], hasMore=true)
+    UI->>Doctor: Append 20 appointment cards seamlessly without duplicate items
+```\n

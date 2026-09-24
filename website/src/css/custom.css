@@ -126,3 +126,10 @@
 .badge {
   border-radius: 999px;
 }
+
+/* Ensure ordered lists in markdown always use decimal numbering across all nesting levels */
+.markdown ol,
+.markdown ul ol,
+.markdown ol ol {
+  list-style-type: decimal !important;
+}
