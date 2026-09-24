@@ -246,18 +246,21 @@ The project uses `jpackage` through the unified `packageNative` Gradle task (whi
 
 ---
 
-## 12. Documentation and Code Reuse Acknowledgements
+## 12. Acknowledgements
 
-NUSynapxe builds upon established software engineering methodologies and open-source foundations:
+We gratefully acknowledge the following open-source projects, frameworks, specifications, and reference documentation that made the development of NUSynapxe possible:
 
-1. **Architectural Foundations & Guidelines**:
-   - Reference curriculum materials, design principles, and developer documentation structure adapted from [CS3227 Software Engineering](https://johnwz123.github.io/CS3227-2610-MP1/DeveloperGuide).
-2. **Cryptographic Standards**:
-   - Password hashing adheres strictly to RFC 2898 / NIST SP 800-132 recommendations using PBKDF2 with HMAC-SHA256, 210,000 iterations, and a cryptographically secure 128-bit salt (`java.security.SecureRandom`).
-3. **Open-Source Libraries & Dependencies**:
-   - [OpenJFX](https://openjfx.io/): JavaFX UI toolkit for cross-platform desktop UI controls.
-   - [SQLite JDBC](https://github.com/xerial/sqlite-jdbc): Embedded database engine and driver by Taro L. Saito.
-   - [JUnit 6](https://junit.org/junit5/): Developer testing framework.
-   - [Mockito](https://site.mockito.org/): Mocking framework for unit testing.
-   - [Docusaurus](https://docusaurus.io/): Modern static website generator for documentation.
-   - [Mermaid.js](https://mermaid.js.org/): Diagramming and charting tool integrated with Docusaurus.
+| Source / Project | Role and Utilization in NUSynapxe |
+| --- | --- |
+| [OpenJFX](https://openjfx.io/) | High-performance desktop UI controls, scene graph, layouts, and JavaFX application lifecycle. |
+| [SQLite](https://www.sqlite.org/docs.html) & [Xerial SQLite JDBC](https://github.com/xerial/sqlite-jdbc) | Zero-configuration embedded relational persistence, transactional schema initialization, and foreign key enforcement. |
+| [Google libphonenumber](https://github.com/google/libphonenumber) | International telephone country calling-code mapping and metadata resolution. |
+| [JUnit 5](https://junit.org/junit5/) & [Mockito](https://site.mockito.org/) | Comprehensive unit, parameterized, and service layer mock testing. |
+| [TestFX](https://github.com/TestFX/TestFX) | Automated headless JavaFX user interface interaction, form automation, and scene assertion. |
+| [ArchUnit](https://www.archunit.org/) | Automated structural linting and architectural dependency direction enforcement. |
+| [Spotless](https://github.com/diffplug/spotless) & [Google Java Format](https://github.com/google/google-java-format) | Deterministic code formatting and automated style checking. |
+| [Checkstyle](https://checkstyle.org/) & [PMD](https://pmd.github.io/) | Static source analysis, maintainability rules, and coding standards enforcement. |
+| [SpotBugs](https://spotbugs.github.io/) & [FindSecBugs](https://find-sec-bugs.github.io/) | Bytecode security vulnerability detection and static bug pattern analysis. |
+| [JaCoCo](https://www.jacoco.org/jacoco/) | Branch and instruction code coverage analysis and report generation. |
+| [Docusaurus](https://docusaurus.io/) & [Mermaid](https://mermaid.js.org/) | Production documentation website generation, MDX rendering, and source-controlled architectural diagrams. |
+| [WiX Toolset](https://wixtoolset.org/) & `jpackage` | Native Windows (`.msi`), macOS (`.dmg`), and Linux (`.deb`) installer compilation. |
