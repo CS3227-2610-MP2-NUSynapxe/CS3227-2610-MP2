@@ -204,7 +204,7 @@ flowchart TD
 | `Authorization` | Static security guard enforcing role authorization matrices (e.g. `requireRole()`, `requireDoctorOwnership()`, `requirePatientAdministration()`). Throws `AuthorizationException`. | `Session`, `Role` |
 | `PasswordHasher` | Cryptographic password management. Hashes passwords using `PBKDF2WithHmacSHA256` with 16-byte random salt and 210,000 iterations. Scrubs password byte buffers immediately after use. | `SecureRandom`, `SecretKeyFactory` |
 | `PatientService` | Validates NRIC/FIN/Passport document syntax, locks Singapore issuing country, normalizes international calling codes, executes preflight deletion blocker checks, and toggles active state. | `PatientRepository`, `PatientDeletionBlockers` |
-| `AppointmentService` | Enforces 30-minute interval boundaries, executes interval overlap conflict detection (`existing_start < new_end AND existing_end > new_start`), checks Singapore check-in time gate, and manages state transitions. | `AppointmentRepository`, `AppointmentTransitions` |
+| `AppointmentService` | Enforces interval ordering (`start < end`), executes interval overlap conflict detection (`existing_start < new_end AND existing_end > new_start`), checks Singapore check-in time gate, and manages state transitions (half-hour slot selection is constrained at the UI layer). | `AppointmentRepository`, `AppointmentTransitions` |
 | `ClinicalService` | Enforces attending doctor consultation ownership, persists diagnostic notes, manages itemized multi-drug prescriptions, and joins completed cross-doctor medical histories. | `ClinicalRecordRepository`, `Prescription` |
 | `CalendarService` | Computes 24-hour visual time slot layouts, discretizes doctor working intervals, filters personal time-off blocks, and handles keyspaced cursor-based agenda pagination. | `CalendarSettingsRepository`, `DoctorTimeOff` |
 | `BillingService` | Converts dollar amounts to exact integer cents (`amount_minor INTEGER`), enforces positive payments, generates daily sequential receipt numbers (`receipt_date` and `sequence_number`), and aggregates revenue reports. | `PaymentRepository`, `ReceiptRepository`, `RevenueReport` |
@@ -493,7 +493,9 @@ sequenceDiagram
     Repo->>DB: COUNT(*) clinical_records WHERE patient_id = ?
     Repo->>DB: COUNT(*) prescriptions via clinical_records
     Repo->>DB: COUNT(*) payments WHERE patient_id = ?
-    Repo-->>Svc: PatientDeletionBlockers(apptCount, clinicalCount, prescrCount, payCount)
+    Repo->>DB: COUNT(*) receipts WHERE patient_id = ?
+    Repo->>DB: COUNT(*) other references
+    Repo-->>Svc: PatientDeletionBlockers(appointments, clinicalRecords, prescriptions, payments, receipts, otherReferences)
     alt Any Blocker Count > 0
         Svc-->>UI: throw PatientDeletionBlockedException(blockers)
         UI->>Staff: Display "Delete Blocked" dialog showing category counts & suggest Deactivation
@@ -523,7 +525,7 @@ sequenceDiagram
     Receptionist->>UI: Enter Patient, Doctor, Date, Interval (e.g. 10:00 - 10:30)
     UI->>Svc: bookAppointment(session, patientId, doctorId, startsAt, endsAt)
     Svc->>Svc: Authorization.requireRole(Role.RECEPTIONIST)
-    Svc->>Svc: Validate: start < end AND half-hour slot boundary
+    Svc->>Svc: Validate: start < end
     Svc->>Repo: checkConflicts(doctorId, startsAt, endsAt)
     Repo->>DB: Query active appointments overlapping interval
     Repo->>DB: Query doctor_time_off overlapping interval
@@ -572,9 +574,9 @@ sequenceDiagram
     UI_D->>ClinSvc: addPrescription(session, recordId, prescription)
     ClinSvc->>DB: INSERT INTO prescriptions (...)
     Doctor->>UI_D: Click "Mark consultation completed"
-    UI_D->>ClinSvc: completeConsultation(session, apptId)
-    ClinSvc->>DB: UPDATE appointments SET status = 'COMPLETED'
-    ClinSvc-->>UI_D: Consultation completed
+    UI_D->>ApptSvc: complete(session, apptId)
+    ApptSvc->>DB: UPDATE appointments SET status = 'COMPLETED'
+    ApptSvc-->>UI_D: Consultation completed
 
     Note over Receptionist, UI_R: 3. Billing & Daily Receipt Generation
     Receptionist->>UI_R: Open Checkout Tab & Select Completed Visit
@@ -604,11 +606,11 @@ sequenceDiagram
     participant DB as SQLite Database
 
     Doctor->>UI: Select anchor date and scroll agenda
-    UI->>Svc: loadAgendaPage(doctorId, cursor, pageSize=20)
-    Svc->>Repo: queryAgenda(doctorId, cursor, limit=21)
-    Repo->>DB: Query appointments ordered by starts_at and id with LIMIT 21
-    DB-->>Repo: List of 21 records
-    Note over Repo,Svc: Lookahead item 21 indicates hasMore=true
+    UI->>Svc: loadAgendaPage(doctorId, cursor, pageSize=25)
+    Svc->>Repo: queryAgenda(doctorId, cursor, limit=26)
+    Repo->>DB: Query appointments ordered by starts_at and id with LIMIT 26
+    DB-->>Repo: List of 26 records
+    Note over Repo,Svc: Lookahead item 26 indicates hasMore=true
     Svc-->>UI: CalendarSchedulePage(records, nextCursor, hasMore=true)
-    UI->>Doctor: Append 20 appointment cards seamlessly without duplicates
+    UI->>Doctor: Append 25 appointment cards seamlessly without duplicates
 ```

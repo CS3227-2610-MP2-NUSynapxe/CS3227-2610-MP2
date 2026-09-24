@@ -86,7 +86,7 @@ Individual focused commands for targeted development:
 # Run static analysis and linting
 .\gradlew.bat checkstyleMain checkstyleTest --no-daemon --console=plain
 .\gradlew.bat pmdMain --no-daemon --console=plain
-.\gradlew.bat spotbugsMain --no-daemon --console=plain
+.\gradlew.bat spotbugsMain spotbugsTest --no-daemon --console=plain
 
 # Generate coverage reports
 .\gradlew.bat jacocoTestReport --no-daemon --console=plain
@@ -94,7 +94,7 @@ Individual focused commands for targeted development:
 
 - `spotlessApply` formats Java sources according to Google Java Format. `spotlessCheck` is the read-only CI equivalent.
 - `check` runs JUnit, Checkstyle, PMD, SpotBugs with FindSecBugs, file size limit verification, and JaCoCo. Quality gates fail the build on any violation.
-- `pmdTest` is enabled with a test-specific ruleset; `spotbugsTest` is disabled because bytecode analysis of the TestFX harness is not part of the production contract.
+- Both `pmdTest` (using a test-specific ruleset) and `spotbugsTest` are enabled and enforced as part of the `check` quality gate.
 
 ### 2.3 Demo Database Tooling
 
@@ -270,7 +270,7 @@ The project documentation website is built with Docusaurus 3.10.2:
 
 ### 8.2 Continuous Integration Pipeline
 
-The GitHub Actions workflow (`.github/workflows/ci.yml`) executes on every push and pull request:
+The GitHub Actions workflow (`.github/workflows/ci.yml`) executes on every push to `master`, pull request, and manual workflow dispatch:
 1. Sets up JDK 25 and Node.js 24.
 2. Executes `./gradlew spotlessCheck` to enforce formatting.
 3. Executes `./gradlew check javadoc` under `xvfb-run` to run the complete test suite and static analysis.
@@ -343,9 +343,9 @@ On every tag push matching `v*.*.*`, `.github/workflows/release.yml` executes pa
 | **Arrival Check-in Gate with Singapore Time** | `AppointmentService`, `ReceptionistCheckoutPanel` | `AppointmentServiceTest`, `ReceptionistBookingTest` |
 | **Assigned Doctor Consultation & Prescriptions** | `ClinicalService`, `ClinicalRecordRepository` | `ClinicalServiceTest`, `DoctorDashboardTest` |
 | **Cross-Doctor Consultation History** | `ClinicalService`, `ClinicalHistoryView` | `ClinicalServiceTest`, `DoctorDashboardTest` |
-| **Doctor Calendar, Agenda & Working Intervals** | `CalendarService`, `DoctorCalendarSettingsRepository` | `CalendarServiceTest`, `DoctorCalendarSettingsRepositoryTest` |
-| **Atomic Billing Checkout & Receipts** | `BillingService`, `PaymentRepository`, `ReceiptRepository` | `BillingServiceTest`, `PaymentRepositoryTest`, `ReceiptRepositoryTest` |
-| **Revenue Reports & CSV/JSON Exporting** | `RevenueReport`, `BillingService`, `ReportExporter` | `RevenueReportTest`, `ReceptionistRevenueViewTest` |
+| **Doctor Calendar, Agenda & Working Intervals** | `CalendarService`, `CalendarSettingsRepository` | `CalendarServiceTest`, `CalendarSettingsRepositoryTest` |
+| **Atomic Billing Checkout & Receipts** | `BillingService`, `PaymentRepository`, `ReceiptRepository` | `BillingServiceTest`, `ReceiptRepositoryTest` |
+| **Revenue Reports & CSV/JSON Exporting** | `RevenueReport`, `BillingService`, `ReportExporter` | `RevenueReportTest`, `ReceptionistRevenueTest` |
 | **Versioned Relational SQLite Storage** | `SqliteDatabase`, `SchemaInitializer` | `SqliteDatabaseTest`, `SchemaMigrationTest` |
 | **Layered Architecture & Package Direction** | Architecture and layer boundaries | `ArchitectureTest` |
 | **Cross-Platform Delivery & Packaging** | `build.gradle`, `.github/workflows/release.yml` | GitHub Actions multi-platform release matrix |

@@ -37,7 +37,7 @@ Priorities are designated as follows:
 | `* * *` | System Administrator | As an administrator, I want to initialize the root administrator account on first system launch, so that the clinic database is bootstrapped securely. | First-run setup wizard triggers only when the user table is empty. Requires username and password with a minimum length of 8 characters. Rejects subsequent setup attempts once configured. |
 | `* * *` | System Administrator | As an administrator, I want to provision staff accounts with distinct Doctor or Receptionist roles, so that employees can access their respective clinical or front-desk tools. | Creates unique user credentials with specified roles. System administrators cannot access patient medical records or book appointments. |
 | `* * *` | Staff Member | As a clinic staff member, I want to authenticate securely with my username and password, so that I am routed directly to my authorized workspace. | Passwords hashed using PBKDF2WithHmacSHA256 with per-account cryptographically secure salt. Sessions reside purely in volatile memory. Generic error returned on authentication failure. |
-| `* *` | System Administrator | As an administrator, I want to view all active staff accounts in a centralized directory, so that I can audit staff access and account statuses. | Renders compact table displaying username, staff display name, assigned role, active status, and creation timestamp. Plaintext passwords and salts are never exposed. |
+| `* *` | System Administrator | As an administrator, I want to view all active staff accounts in a centralized directory, so that I can audit staff access and account statuses. | Renders compact table displaying username, staff display name, assigned role, and active status. Plaintext passwords and salts are never exposed. |
 
 ### 2.2 Patient Identity & Directory Management Stories
 
@@ -256,7 +256,7 @@ Priorities are designated as follows:
 - **Preconditions**: Doctor is logged into Doctor Workspace.
 - **Main Success Scenario**:
   1. Doctor navigates to **Calendar** and clicks **Block time**.
-  2. Doctor enters Start Date/Time and End Date/Time.
+  2. Doctor selects the Date and enters the Start Time and End Time.
   3. System verifies non-overlapping intervals and commits time-off block.
   4. Calendar renders purple time-off block; front-desk bookings during this period are rejected.
 - **Extensions**:
