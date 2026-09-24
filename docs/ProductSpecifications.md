@@ -499,4 +499,4 @@ Feature: Checkout Billing, Daily Receipts, and Revenue Reporting
     When the receptionist clicks "Export CSV"
     Then the output CSV file formats fields according to RFC 4180
     And commas, double quotes, and line breaks within fields are escaped
-    And numeric cents are converted to decimal dollar amounts\n
+    And numeric cents are converted to decimal dollar amounts

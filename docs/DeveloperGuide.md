@@ -348,4 +348,4 @@ We gratefully acknowledge the following open-source projects, frameworks, specif
 | [JaCoCo](https://www.jacoco.org/jacoco/) | Branch and instruction code coverage analysis and report generation. |
 | [Docusaurus](https://docusaurus.io/) & [Mermaid](https://mermaid.js.org/) | Production documentation website generation, MDX rendering, and source-controlled architectural diagrams. |
 | [WiX Toolset](https://wixtoolset.org/) & `jpackage` | Native Windows (`.msi`), macOS (`.dmg`), and Linux (`.deb`) installer compilation. |
-| [CS3227 MP1 Developer Guide](https://johnwz123.github.io/CS3227-2610-MP1/DeveloperGuide) | Reference structure for user personas, prioritized user stories, use case specifications, and testing strategies. |\n
+| [CS3227 MP1 Developer Guide](https://johnwz123.github.io/CS3227-2610-MP1/DeveloperGuide) | Reference structure for user personas, prioritized user stories, use case specifications, and testing strategies. |

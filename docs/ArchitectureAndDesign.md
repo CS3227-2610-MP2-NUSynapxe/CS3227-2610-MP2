@@ -579,12 +579,12 @@ sequenceDiagram
     participant Repo as CalendarSettingsRepository
     participant DB as SQLite Database
 
-    Doctor->>UI: Select anchor date & scroll agenda
+    Doctor->>UI: Select anchor date and scroll agenda
     UI->>Svc: loadAgendaPage(doctorId, cursor, pageSize=20)
     Svc->>Repo: queryAgenda(doctorId, cursor, limit=21)
     Repo->>DB: Query appointments ordered by starts_at and id with LIMIT 21
     DB-->>Repo: List of 21 records
-    Note over Repo, Svc: Lookahead item 21 indicates hasMore=true
-    Svc-->>UI: CalendarSchedulePage(records[0..19], nextCursor=records[19], hasMore=true)
-    UI->>Doctor: Append 20 appointment cards seamlessly without duplicate items
-```\n
+    Note over Repo,Svc: Lookahead item 21 indicates hasMore=true
+    Svc-->>UI: CalendarSchedulePage(records, nextCursor, hasMore=true)
+    UI->>Doctor: Append 20 appointment cards seamlessly without duplicates
+```

@@ -183,4 +183,4 @@ Testers can manually execute these comprehensive end-to-end verification scenari
 5. Verify receipt preview displays sequence number `RCP-YYYYMMDD-0001` and appointment transitions to `CHECKED_OUT`.
 6. Navigate to **Revenue Reports**, select today's date range, and click **Generate report**.
 7. Verify total revenue shows `$65.50` under CARD method.
-8. Click **Export CSV** and **Export JSON** to verify exported file integrity.\n
+8. Click **Export CSV** and **Export JSON** to verify exported file integrity.
