@@ -214,10 +214,10 @@ Use the compact toggle in the toolbar to switch views:
 - **Agenda Mode**: Chronological, infinite-scrolling list of appointments:
   - Starts at its selected inclusive Singapore clinic date and loads future appointments in chronological pages as you scroll.
   - Groups rows by date and shows time range, patient name, and written status badge.
-  - Cancelled rows remain visible but are muted; a **Past** cue identifies elapsed appointments.
+  - A **Past** cue identifies elapsed appointments; cancelled and declined appointments are excluded from the agenda query.
   - The compact date picker sits between the previous/next arrows (`<` and `>`), moving one day at a time, while **Today** and refresh return to the anchor date.
   - Empty schedules, the end of the stream, and retryable loading failures display clear notices.
-  - Agenda rows are read-only and never show clinical notes or invented all-day events.
+  - Clicking or pressing Enter/Space on an eligible pending or accepted agenda row opens the appointment editor for rescheduling, cancellation, and decisions; the displayed row summary contains no clinical notes or invented all-day events.
   - At narrow window widths, **Add appointment** and **Block time** wrap cleanly onto a second toolbar row.
 
 ### 4.2 Blocking Personal Time-Off

@@ -129,7 +129,7 @@ flowchart TD
 | `ReceptionistView` & Workspace | Front-desk master view hosting navigation tabs: Patient Directory, Appointments Booking, Check-in Queue, Checkout Billing, and Revenue Reports. | `ReceptionistDataLoader`, `ReceptionistAppointmentPanel`, `ReceptionistCheckoutPanel` |
 | `DoctorView` & Workspace | Clinician master view hosting the daily 24-hour schedule grid, live Singapore clock line, active consultation editor, prescription builder, and historical records. | `DoctorConsultationPanel`, `DoctorDashboardDayView`, `DoctorCalendarView` |
 | `PatientDirectoryView` | Modular patient management interface embedded in both Receptionist and Doctor views. Handles live multi-field search, document registration, profile editing, and safe deletion. | `PatientService`, `PatientDirectoryTableView`, `PatientDirectoryFormView` |
-| `ClinicalHistoryView` | Clinician-exclusive modal browsing completed cross-doctor medical consultations, diagnoses, and issued prescriptions across all attending physicians. | `ClinicalService`, `Patient` |
+| `ClinicalHistoryView` | Clinician-exclusive embedded page browsing completed cross-doctor medical consultations, diagnoses, and issued prescriptions across all attending physicians (Doctor-only Patients workspace state). | `ClinicalService`, `Patient` |
 | `DoctorCalendarView` | Multi-day scheduling view supporting both 7-day interactive time grid and infinite-scrolling agenda, personal time-off blocking, and working hours settings. | `CalendarService`, `CalendarTimeGrid`, `DoctorCalendarSettingsView` |
 | `ReportExporter` | File export coordinator formatting and saving revenue records to RFC 4180 CSV and RFC 8259 JSON files. | `BillingService`, `RevenueReport` |
 
@@ -211,7 +211,7 @@ flowchart TD
 
 ### 3.2 Authorization & Role Access Matrix
 
-Every public service method verifies the caller's volatile `Session` against the formal security matrix:
+Service operations that accept an authenticated actor verify the caller's volatile `Session` against the formal security matrix (public queries like `AppointmentService.get(long)` and initial bootstrap/authentication endpoints operate without an active session):
 
 ```mermaid
 flowchart TD
@@ -266,9 +266,9 @@ flowchart TD
 | `SqliteQueries` | SQL utility class providing parameterized query construction and SQL `LIKE` wildcard escaping (safely escaping `%` and `_` characters to prevent query leakage). | `PreparedStatement` |
 | `AccountRepository` | Persists user credentials, salts, PBKDF2 verifiers, display names, and active status flags. Enforces unique username constraints. | `Account`, `AccountCredential` |
 | `PatientRepository` & `PatientQueryRepository` | Stores standardized patient profiles, executes multi-field search queries, enforces unique identity document tuples, and calculates preflight deletion blockers. | `Patient`, `PatientDeletionBlockers` |
-| `AppointmentRepository` & `AppointmentQueryRepository` | Manages appointment booking, status updates, check-in queue queries, and transactional interval conflict checks. | `Appointment`, `TimeSlot` |
+| `AppointmentRepository` & `AppointmentQueryRepository` | Manages appointment booking, status updates, check-in queue queries, transactional interval conflict checks, and personal time-off blocking ranges. | `Appointment`, `TimeSlot`, `DoctorTimeOff` |
 | `ClinicalRecordRepository` | Stores attending doctor consultation findings and coordinates atomic multi-drug prescription inserts. Executes batch queries for clinical histories. | `ClinicalRecord`, `Prescription` |
-| `CalendarSettingsRepository` | Persists doctor daily shift intervals, lunch break splits, and personal time-off blocking ranges. | `DoctorCalendarSettings`, `DoctorTimeOff` |
+| `CalendarSettingsRepository` | Persists doctor daily shift intervals, working hours, and lunch break splits. | `DoctorCalendarSettings`, `WorkingInterval` |
 | `PaymentRepository` & `ReceiptRepository` | Persists minor-unit payments, generates daily sequential receipt numbers, and executes revenue aggregation queries grouped by payment method and clinician. | `Payment`, `Receipt`, `RevenueReport` |
 
 ### 4.2 Relational Entity-Relationship Diagram

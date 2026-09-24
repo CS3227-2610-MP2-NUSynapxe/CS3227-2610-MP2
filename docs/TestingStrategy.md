@@ -17,7 +17,7 @@ Testing is distributed across four distinct tiers of automated verification:
 flowchart TD
     E2E["System & UI Headless Tests<br/>(TestFX Stage Navigation & Form Automation)"]
     Arch["Architectural Rules & Concurrency Tests<br/>(ArchUnit Rules, Race & Deadlock Verification)"]
-    Integ["Integration & Persistence Tests<br/>(SQLite In-Memory Migrations, Repositories, Workflows)"]
+    Integ["Integration & Persistence Tests<br/>(Temporary-File SQLite Migrations, Repositories, Workflows)"]
     Unit["Domain & Service Unit Tests<br/>(Validation, Boundary, State Machines, Password Hashing)"]
 
     E2E --> Arch

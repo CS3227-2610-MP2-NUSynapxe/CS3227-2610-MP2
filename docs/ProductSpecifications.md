@@ -236,7 +236,7 @@ Priorities are designated as follows:
   6. System atomically transitions appointment to `COMPLETED` and transfers the visit to the reception checkout queue.
 - **Extensions**:
   - 1a. Different doctor attempts to access or modify consultation.
-    - Service layer throws `AccessDeniedException`; UI detail card remains inaccessible.
+    - Service layer throws `AuthorizationException`; UI detail card remains inaccessible.
   - 4a. Doctor attempts to submit prescription with empty required field (medication name, dosage, frequency, duration, or instructions).
     - System highlights required fields and prevents addition.
 
@@ -293,7 +293,7 @@ Priorities are designated as follows:
   5. System displays receipt preview with Singapore timestamp.
 - **Extensions**:
   - 2a. Entered amount is negative, zero, or contains invalid characters.
-    - System rejects checkout and highlights amount field.
+    - System rejects checkout and displays validation error on feedback banner.
 
 ### UC16: Revenue Auditing & CSV/JSON Data Export
 - **Actor**: Clinic Receptionist

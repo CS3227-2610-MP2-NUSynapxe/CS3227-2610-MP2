@@ -291,6 +291,7 @@ stateDiagram-v2
     ACCEPTED --> CHECKED_IN: Receptionist checks in patient (at or after start time)
     ACCEPTED --> DECLINED: Doctor declines visit
     ACCEPTED --> CANCELLED: Receptionist cancels visit
+    DECLINED --> CANCELLED: Receptionist cancels visit
     CHECKED_IN --> COMPLETED: Doctor saves consultation & marks completed
     COMPLETED --> CHECKED_OUT: Receptionist records payment & issues receipt
     DECLINED --> [*]
@@ -300,7 +301,7 @@ stateDiagram-v2
 
 ### Lifecycle Rules Summary
 - **Initial Status**: Appointments booked by a Receptionist begin in `PENDING` awaiting Doctor confirmation. Appointments booked directly by an attending Doctor via the Calendar **Add appointment** action are created directly in `ACCEPTED`.
-- **Cancellation**: Available before completion from `PENDING` or `ACCEPTED`.
+- **Cancellation**: Available from `PENDING`, `ACCEPTED`, or `DECLINED` (before check-in).
 - **Declining**: Available to the Doctor from `PENDING` or `ACCEPTED`.
 - **Time Slot Reservation**: `PENDING`, `ACCEPTED`, `CHECKED_IN`, `COMPLETED`, and `CHECKED_OUT` visits reserve their intervals.
 - **Slot Release**: `DECLINED` and `CANCELLED` visits remain in historical logs but **release their time slots**. Booking, rescheduling, and blocking time may reuse those intervals unless another active visit occupies them.

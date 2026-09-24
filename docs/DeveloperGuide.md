@@ -10,11 +10,11 @@ sidebar_label: Developer Guide
 
 NUSynapxe is built on modern Java and desktop UI standards. The project uses:
 - **Java**: OpenJDK 25 (Java 25 toolchain)
-- **Build System**: Gradle Wrapper 9.2.1
-- **UI Toolkit**: JavaFX 25-ea+18 (resolved via the `org.openjfx.javafxplugin` Gradle plugin; no external JavaFX SDK installation is needed)
-- **Embedded Database**: SQLite JDBC 3.51.0.0 with Xerial SQLite driver
+- **Build System**: Gradle Wrapper 9.7.1
+- **UI Toolkit**: JavaFX 25.0.4 (resolved via the `org.openjfx.javafxplugin` Gradle plugin; no external JavaFX SDK installation is needed)
+- **Embedded Database**: SQLite JDBC 3.53.4.0 with Xerial SQLite driver
 - **Documentation Platform**: Node.js 24 and Docusaurus 3.10.2
-- **Testing & Verification**: JUnit 6.1.3 (via `junit-bom`), Mockito 5.23.0, TestFX 4.0.18, ArchUnit 1.5.0, Spotless 7.3.1 (Google Java Format 1.25.2), Checkstyle 14.1.0, PMD 7.26.0, SpotBugs 4.10.3 with FindSecBugs 1.14.0, and JaCoCo 0.8.14.
+- **Testing & Verification**: JUnit 6.1.3 (via `junit-bom`), Mockito 5.23.0, TestFX 4.0.18, ArchUnit 1.5.0, Spotless 8.10.2 (Google Java Format 1.36.1), Checkstyle 14.1.0, PMD 7.26.0, SpotBugs 4.10.3 with FindSecBugs 1.14.0, and JaCoCo 0.8.14.
 
 Use the checked-in Gradle Wrapper (`.\gradlew.bat` on Windows, `./gradlew` on macOS/Linux) rather than an externally installed Gradle binary. Native Windows packaging (`.msi`) additionally requires the [WiX Toolset v3](https://wixtoolset.org/) or newer on system `PATH`; WiX is not needed for routine development, compilation, or testing.
 
