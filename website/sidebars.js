@@ -15,7 +15,20 @@ const sidebars = {
         'docs/DoctorGuide',
       ],
     },
-    'docs/DeveloperGuide',
+    {
+      type: 'category',
+      label: 'Developer Guide',
+      link: {
+        type: 'doc',
+        id: 'docs/DeveloperGuide',
+      },
+      collapsed: false,
+      items: [
+        'docs/ProductSpecifications',
+        'docs/ArchitectureAndDesign',
+        'docs/TestingStrategy',
+      ],
+    },
   ],
 };
 
