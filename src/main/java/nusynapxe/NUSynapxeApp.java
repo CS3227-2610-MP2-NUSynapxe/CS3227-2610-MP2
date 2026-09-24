@@ -33,9 +33,11 @@ public final class NUSynapxeApp extends Application {
 
     stage.setTitle("NUSynapxe");
     router = new ApplicationRouter(stage, database, ClinicClock.system(), taskRunner);
-    router.showInitial();
-    stage.setMaximized(true);
-    stage.show();
+    router.showInitial(
+        () -> {
+          stage.setMaximized(true);
+          stage.show();
+        });
   }
 
   /**

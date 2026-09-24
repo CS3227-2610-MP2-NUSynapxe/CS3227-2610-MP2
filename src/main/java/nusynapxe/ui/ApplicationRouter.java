@@ -80,6 +80,17 @@ public final class ApplicationRouter {
 
   /** Shows first-run setup or login depending on persisted account state. */
   public void showInitial() {
+    showInitial(() -> {});
+  }
+
+  /**
+   * Shows first-run setup or login depending on persisted account state, then runs the callback.
+   *
+   * @param onReady callback invoked on the JavaFX thread after the initial view has been attached
+   * @throws NullPointerException if {@code onReady} is {@code null}
+   */
+  public void showInitial(Runnable onReady) {
+    Objects.requireNonNull(onReady, "onReady");
     taskRunner.submit(
         () -> services.accountService().needsInitialSetup(),
         needsSetup -> {
@@ -88,8 +99,12 @@ public final class ApplicationRouter {
           } else {
             showLogin();
           }
+          onReady.run();
         },
-        failure -> showStorageError());
+        failure -> {
+          showStorageError();
+          onReady.run();
+        });
   }
 
   /** Shows the login page and ensures no previous session remains. */
@@ -147,11 +162,16 @@ public final class ApplicationRouter {
   }
 
   private void setContent(Parent root) {
+    boolean wasMaximized = stage.isMaximized();
     Scene scene = stage.getScene();
     if (scene == null) {
       scene = new Scene(root, INITIAL_WIDTH, INITIAL_HEIGHT);
       UiComponents.applyStylesheet(scene);
       stage.setScene(scene);
+      if (wasMaximized) {
+        stage.setMaximized(false);
+        stage.setMaximized(true);
+      }
     } else {
       scene.setRoot(root);
     }

@@ -2,6 +2,7 @@ package nusynapxe.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.testfx.api.FxAssert.verifyThat;
@@ -110,6 +111,28 @@ final class ApplicationRouterTest extends ApplicationTest {
 
     fire("#logout-button");
     verifyThat("#login-view", isVisible());
+  }
+
+  @Test
+  void showInitialWithCallbackNotifiesWhenContentIsReady() {
+    Stage[] secondaryStage = new Stage[1];
+    boolean[] ready = new boolean[1];
+    interact(
+        () -> {
+          secondaryStage[0] = new Stage();
+          ApplicationRouter secondaryRouter = new ApplicationRouter(secondaryStage[0], database);
+          secondaryRouter.showInitial(
+              () -> {
+                ready[0] = true;
+                secondaryStage[0].setMaximized(true);
+                secondaryStage[0].show();
+              });
+        });
+    assertTrue(ready[0]);
+    assertTrue(secondaryStage[0].isShowing());
+    assertTrue(secondaryStage[0].isMaximized());
+    assertNotNull(secondaryStage[0].getScene());
+    interact(secondaryStage[0]::close);
   }
 
   private void waitForNode(String selector) {

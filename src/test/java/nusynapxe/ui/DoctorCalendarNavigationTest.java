@@ -218,30 +218,28 @@ final class DoctorCalendarNavigationTest extends DoctorCalendarViewTestSupport {
     loginAsDoctor();
     fire("#doctor-nav-calendar");
     waitForNode("#doctor-calendar-page");
+    HBox actionGroup = lookup("#doctor-calendar-action-group").queryAs(HBox.class);
+    VBox toolbar = lookup("#doctor-calendar-toolbar").queryAs(VBox.class);
+    Stage stage = (Stage) toolbar.getScene().getWindow();
     interact(
         () -> {
-          Stage stage = (Stage) lookup("#doctor-calendar-toolbar").query().getScene().getWindow();
           stage.setWidth(980);
+          stage.getScene().getRoot().applyCss();
+          stage.getScene().getRoot().layout();
+          toolbar.applyCss();
+          toolbar.layout();
         });
     WaitForAsyncUtils.waitForFxEvents();
-    interact(
-        () -> {
-          lookup("#doctor-calendar-toolbar").query().applyCss();
-          lookup("#doctor-calendar-toolbar").queryAs(VBox.class).layout();
-        });
-    HBox actionGroup = lookup("#doctor-calendar-action-group").queryAs(HBox.class);
     assertEquals("doctor-calendar-toolbar-actions", actionGroup.getParent().getId());
     interact(
         () -> {
-          Stage stage = (Stage) lookup("#doctor-calendar-toolbar").query().getScene().getWindow();
           stage.setWidth(1400);
+          stage.getScene().getRoot().applyCss();
+          stage.getScene().getRoot().layout();
+          toolbar.applyCss();
+          toolbar.layout();
         });
     WaitForAsyncUtils.waitForFxEvents();
-    interact(
-        () -> {
-          lookup("#doctor-calendar-toolbar").query().applyCss();
-          lookup("#doctor-calendar-toolbar").queryAs(VBox.class).layout();
-        });
     assertEquals("doctor-calendar-toolbar-main", actionGroup.getParent().getId());
   }
 }
