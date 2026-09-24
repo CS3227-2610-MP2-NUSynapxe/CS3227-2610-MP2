@@ -1,9 +1,9 @@
 ---
-title: Testing Strategy & Peer Testing
+title: Testing Strategy
 sidebar_label: Testing Strategy
 ---
 
-# Testing Strategy & Peer Testing
+# Testing Strategy
 
 This document details the multi-level testing architecture, risk priorities, automated test inventory, and manual peer-testing walkthrough scenarios for NUSynapxe.
 
@@ -15,13 +15,13 @@ For architectural decisions, see [Architecture & System Design](ArchitectureAndD
 
 ```mermaid
 flowchart TB
-    Domain["Domain Tests (9 tests)\nRecords, value objects, calculations, overflow rejection"]
-    Persistence["Persistence Tests (36 tests)\nReal temporary SQLite, migrations, foreign-key blockers, cursors"]
-    Service["Service Tests (51 tests)\nAuthorization, transactions, business validation, clinic lifecycle"]
-    Integration["Workflow Integration Tests (TestFX & Service)\nCross-role multi-step clinic flows"]
-    UI["TestFX UI Tests (63 tests)\nNavigation, reactive forms, time-grids, dialogs, headless Xvfb"]
-    Architecture["Architecture Tests (5 tests)\nArchUnit layer directions, package cycles, UI isolation"]
-    Tools["Tool Tests (2 tests)\nRepeatable database reset and deterministic demo seeding"]
+    Domain["Domain Tests\nRecords, value objects, calculations, overflow rejection"]
+    Persistence["Persistence Tests\nReal temporary SQLite, migrations, foreign-key blockers, cursors"]
+    Service["Service Tests\nAuthorization, transactions, business validation, clinic lifecycle"]
+    Integration["Workflow Integration Tests (TestFX and Service)\nCross-role multi-step clinic flows"]
+    UI["TestFX UI Tests\nNavigation, reactive forms, time-grids, dialogs, headless Xvfb"]
+    Architecture["Architecture Tests\nArchUnit layer directions, package cycles, UI isolation"]
+    Tools["Tool Tests\nRepeatable database reset and deterministic demo seeding"]
 
     Domain --> Service
     Persistence --> Service
@@ -39,18 +39,17 @@ flowchart TB
 
 ## 2. Automated Test Inventory
 
-The test suite comprises **168 test methods** across **35 test classes**:
+The test suite provides layered automated verification across all application tiers:
 
-| Test Package / Area | Test Classes | Method Count | Primary Verified Capabilities |
-| --- | :---: | :---: | --- |
-| **Application Root** | 1 | 2 | Default database directory creation and path normalization. |
-| **Architecture** | 1 | 5 | Package layering, slice cycles, persistence isolation, UI boundaries. |
-| **Domain** | 3 | 9 | Monetary minor-unit arithmetic, calendar math, cursor pagination values. |
-| **Persistence** | 8 | 36 | SQLite schema initialization, v1-v5 migrations, transactions, wildcard escapes, deletion blockers. |
-| **Service** | 14 | 51 | Authentication, authorization, patient validation, appointment conflict checking, billing checkout, clinical ownership. |
-| **Tools** | 1 | 2 | Protected database reset and deterministic demo data seeding. |
-| **UI (TestFX)** | 7 | 63 | Navigation rails, search suggestion fields, table rendering, calendar time-grids, consultation forms, checkout modals, receipt exports. |
-| **Total** | **35** | **168** | Automated quality gate rerun after every production change. |
+| Test Package / Area | Target Scope & Key Test Classes | Primary Verified Capabilities |
+| --- | --- | --- |
+| **Application Root** | Presentation Shell (`DatabasePathsTest`, `NUSynapxeAppTest`) | Default database directory creation, stage lifecycle, and path normalization. |
+| **Architecture** | Architectural Rules (`ArchitectureTest`) | Package layering, slice cycles, persistence isolation, and UI boundaries enforced by ArchUnit. |
+| **Domain** | Domain Models & Types (`PaymentTest`, `TimeRangeTest`, `CursorTest`) | Monetary minor-unit arithmetic, calendar math, and cursor pagination values. |
+| **Persistence** | SQLite Data Access (`SchemaMigrationTest`, `SqliteDatabaseTest`, `PatientRepositoryTest`) | SQLite schema initialization, transactional schema migrations, wildcard escapes, and deletion blockers. |
+| **Service** | Application Business Rules (`AuthenticationServiceTest`, `AppointmentServiceTest`, `BillingServiceTest`) | Authentication, authorization, patient validation, appointment conflict checking, billing checkout, and clinical ownership. |
+| **Tools** | Development Tooling (`DemoDataSeederTest`) | Protected database reset and deterministic demo data seeding. |
+| **UI (TestFX)** | Presentation & Interaction (`PatientDirectoryViewTest`, `DoctorCalendarViewTest`, `RevenueReportViewTest`) | Navigation rails, search suggestion fields, table rendering, calendar time-grids, consultation forms, checkout modals, and receipt exports. |
 
 ---
 

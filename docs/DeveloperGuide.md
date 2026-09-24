@@ -82,7 +82,7 @@ Individual focused commands for targeted development:
   ```powershell
   .\scripts\seed-demo-data.ps1 -Reset
   ```
-  - Creates 18 patients across active and inactive states.
+  - Creates realistic patient profiles across active and inactive states.
   - Provisions 2 non-overlapping appointments per doctor for every date from 7 days before today through 14 days after today.
   - Generates realistic clinical records, notes, and multi-drug prescriptions for completed and checked-out visits.
   - Outputs showcase credentials:
@@ -157,7 +157,7 @@ Technical design specifications, class layouts, database schemas, and sequence d
 The standalone design guide details:
 - **Component & Tier Architecture**: Strict unidirectional dependencies between JavaFX UI, Business Services, Persistence Projections, and SQLite storage.
 - **Package Layout & ArchUnit Rules**: Codified layer boundaries preventing architectural erosion.
-- **Persistence & Entity-Relationship Schema**: 10 relational tables, foreign key constraints, and transactional migrations (v1 through v5).
+- **Persistence & Entity-Relationship Schema**: Relational database schema, foreign key constraints, and transactional schema migrations.
 - **Safe Patient Deletion**: Multi-category preflight blocker inspection algorithm preventing orphan records.
 - **Cryptographic Security & Session Flow**: PBKDF2WithHmacSHA256 password hashing with per-account salt and volatile in-memory sessions.
 - **Appointment Finite State Machine**: State transitions (`PENDING` through `CHECKED_OUT`) and conflict validation.

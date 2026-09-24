@@ -406,7 +406,7 @@ The domain layer encapsulates immutable business records, value types, and domai
 
 | Category | Domain Models & Types | Characteristics & Invariants |
 | --- | --- | --- |
-| **Identity & Patient** | `Patient`, `IdentityType`, `Sex`, `PatientDeletionBlockers` | Immutable Java record holding standardized patient demographic details, computed age, and foreign key blocker metrics across 6 categories. |
+| **Identity & Patient** | `Patient`, `IdentityType`, `Sex`, `PatientDeletionBlockers` | Immutable Java record holding standardized patient demographic details, computed age, and foreign key blocker metrics across all related entity categories. |
 | **Authentication & Access** | `Account`, `AccountCredential`, `Role`, `Session` | Encapsulates staff accounts, roles (`SYSTEM_ADMIN`, `RECEPTIONIST`, `DOCTOR`), and volatile heap sessions containing login timestamps. |
 | **Appointments & Scheduling** | `Appointment`, `AppointmentStatus`, `AppointmentListRow`, `TimeSlot` | Enforces finite state transitions. Coordinates 30-minute interval slots and projection rows for front-desk list views. |
 | **Calendar & Availability** | `CalendarAppointment`, `CalendarScheduleCursor`, `CalendarSchedulePage`, `DoctorTimeOff`, `DoctorCalendarSettings`, `WorkingInterval` | Virtualized keyspaced pagination cursors `(startsAt, appointmentId)`, recurring daily shift intervals, and personal time-off date ranges. |
@@ -437,7 +437,7 @@ flowchart TD
     CLI["DemoDataCli<br/>(Command-line Argument Parser)"] --> Seeder["DemoDataSeeder<br/>(Master Seeding Orchestrator)"]
 
     Seeder --> AcctSeed["DemoDataAccountSeeder<br/>(Creates Admin, Doctors, Receptionists)"]
-    Seeder --> PatSeed["DemoDataPatientSeeder<br/>(Creates 18 Diverse Patient Profiles)"]
+    Seeder --> PatSeed["DemoDataPatientSeeder<br/>(Seeds Diverse Patient Profiles)"]
     Seeder --> SchedSeed["DemoDataScheduleSeeder<br/>(Creates Appointments from -7 to +14 days)"]
     Seeder --> ClinSeed["DemoDataClinicalSeeder<br/>(Creates Consultations, Prescriptions, Payments)"]
 
