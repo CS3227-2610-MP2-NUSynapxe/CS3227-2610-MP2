@@ -38,7 +38,6 @@ Priorities are designated as follows:
 | `* * *` | System Administrator | As an administrator, I want to provision staff accounts with distinct Doctor or Receptionist roles, so that employees can access their respective clinical or front-desk tools. | Creates unique user credentials with specified roles. System administrators cannot access patient medical records or book appointments. |
 | `* * *` | Staff Member | As a clinic staff member, I want to authenticate securely with my username and password, so that I am routed directly to my authorized workspace. | Passwords hashed using PBKDF2WithHmacSHA256 with per-account cryptographically secure salt. Sessions reside purely in volatile memory. Generic error returned on authentication failure. |
 | `* *` | System Administrator | As an administrator, I want to view all active staff accounts in a centralized directory, so that I can audit staff access and account statuses. | Renders compact table displaying username, staff display name, assigned role, active status, and creation timestamp. Plaintext passwords and salts are never exposed. |
-| `* *` | System Administrator | As an administrator, I want to deactivate staff accounts for departing personnel, so that former employees cannot access confidential clinic data. | Account deactivation flag sets `active = 0`, revoking login capability immediately while preserving historical author associations on clinical and financial records. |
 
 ### 2.2 Patient Identity & Directory Management Stories
 
@@ -58,7 +57,8 @@ Priorities are designated as follows:
 
 | Priority | Persona Role | User Story Text | Business Rationale & Acceptance Criteria |
 | :---: | --- | --- | --- |
-| `* * *` | Clinic Receptionist | As a receptionist, I want to book patient appointments across clinic doctors in 30-minute intervals, so that consultations are scheduled without conflicts. | Checks that `start < end` and verifies that no active appointment or doctor time-off overlaps: `existing_start < new_end && existing_end > new_start`. Blocks inactive patients. |
+| `* * *` | Clinic Receptionist | As a receptionist, I want to book patient appointments across clinic doctors in 30-minute intervals, so that consultations are scheduled without conflicts. | Checks that `start < end` and verifies that no active appointment or doctor time-off overlaps: `existing_start < new_end && existing_end > new_start`. Blocks inactive patients. Initial status is `PENDING`. |
+| `* * *` | Attending Physician | As a doctor, I want to book an appointment directly from my calendar, so that follow-up or ad-hoc visits are immediately confirmed on my schedule. | Creates appointment for the authenticated doctor directly with initial status `ACCEPTED`. Applies the same schedule and time-off conflict checks. |
 | `* * *` | Clinic Receptionist | As a receptionist, I want to check in patients whose scheduled appointment time has arrived, so that doctors are notified of patient arrival. | Check-in is permitted only at or after the scheduled appointment start time in Singapore local time (`Asia/Singapore`). Transitions status from `ACCEPTED` to `CHECKED_IN`. |
 | `* * *` | Attending Physician | As a doctor, I want to review pending appointments assigned to me and accept or decline them, so that my clinical schedule is managed with my approval. | Doctor can accept (transitions to `ACCEPTED`) or decline (transitions to `DECLINED`). Declining releases the time slot for future bookings while preserving audit trails. |
 | `* *` | Clinic Receptionist | As a receptionist, I want to reschedule an appointment to a new date or time, so that patient schedule changes are accommodated. | Modal dialog displays patient details and validates the new interval against doctor availability and conflicts before committing. |
@@ -83,30 +83,28 @@ Priorities are designated as follows:
 | `* * *` | Attending Physician | As a doctor, I want to block personal time-off on my calendar, so that receptionists cannot schedule appointments during my leave or administrative duties. | Validates non-overlapping intervals, renders purple blocked time cards, and enforces schedule conflict detection across booking operations. |
 | `* *` | Attending Physician | As a doctor, I want to remove previously scheduled time-off blocks if my plans change, so that my calendar reopens for patient appointments. | Removal verifies ownership against the authenticated doctor session before deleting the time-off record. |
 | `* *` | Attending Physician | As a doctor, I want to configure my recurring daily working hours and lunch breaks, so that my calendar displays visual working intervals. | Configures daily intervals up to 1440 minutes, supporting split intervals (e.g. morning and afternoon shifts around lunch). Visual shading only; does not block emergency bookings. |
-| `* *` | Attending Physician | As a doctor, I want to browse my schedule in an infinite-scrolling chronological agenda view, so that I can review upcoming appointments across weeks. | Keyspacing pagination with `(startsAt, appointmentId)` cursor preventing duplicates or skipped records across page boundaries. |
+| `* *` | Attending Physician | As a doctor, I want an infinite-scrolling agenda stream anchored to a chosen date, so that I can browse future appointments sequentially without pagination friction. | Dynamically loads appointment batches grouped by clinic date, displaying time ranges, patient names, and status badges. |
 
-### 2.6 Billing, Receipts & Revenue Reporting Stories
+### 2.6 Financial Billing, Receipts & Revenue Reporting Stories
 
 | Priority | Persona Role | User Story Text | Business Rationale & Acceptance Criteria |
 | :---: | --- | --- | --- |
-| `* * *` | Clinic Receptionist | As a receptionist, I want to complete checkout billing and record payment methods for completed visits, so that patients receive an itemized receipt. | Accepts positive minor currency units (cents), records payment method (Cash, Card, Transfer, Other), transitions status to `CHECKED_OUT`, and generates a sequential daily receipt. |
-| `* * *` | Clinic Receptionist | As a receptionist, I want receipts to have sequential, human-readable daily numbers, so that financial audits can track transactions chronologically. | Generates receipt numbers in format `RCP-YYYYMMDD-XXXX` using an atomic transactional sequence generator per calendar date. |
-| `* *` | Clinic Receptionist | As a receptionist, I want to generate revenue reports for any custom date range, so that clinic finances can be audited. | Aggregates successful payments, calculates total revenue in exact cents, breaks down revenue by payment method and doctor, and displays itemized receipt table. |
-| `* *` | Clinic Receptionist | As a receptionist, I want to export revenue reports to CSV and JSON formats, so that financial data can be ingested into external accounting systems. | Sanitizes CSV escaping (quotes, commas, line breaks) and JSON formatting without altering stored records. |
-| `* *` | Clinic Staff | As clinic staff, I want all financial amounts stored in integer minor units (cents), so that rounding errors and floating-point inaccuracies are eliminated. | Amounts stored as 64-bit integer cents (`amount_cents INTEGER`). Arithmetic operations use `Math.addExact()` to prevent silent integer overflow. |
+| `* * *` | Clinic Receptionist | As a receptionist, I want to collect payment for completed visits and issue receipts, so that billing is finalized immediately upon patient departure. | Enforces positive amount input, supports Cash, Card, Transfer, and Other payment methods, and generates sequential daily receipts (`RCP-YYYYMMDD-####`). |
+| `* *` | Clinic Receptionist | As a receptionist, I want to browse past receipts and review individual transaction details, so that patient billing inquiries can be resolved. | Receipt directory showing receipt ID, date, patient, doctor, payment method, and amount. Read-only audit view. |
+| `* *` | Clinic Receptionist | As a receptionist, I want to generate revenue reports across date ranges, doctors, and payment methods, so that clinic income can be audited. | Aggregates successful payments within inclusive date ranges. Breaks down totals by payment method and attending clinician. |
+| `* *` | Clinic Receptionist | As a receptionist, I want to export financial summaries to CSV and JSON formats, so that financial data can be imported into accounting systems. | Sanitized file export with proper escaping and formatting for external accounting and spreadsheet software. |
 
 ---
 
-## 3. Product Specifications & Formal Use Cases
+## 3. Formal Use Cases
 
-### UC01: System First-Run Setup & Administrator Provisioning
-- **Actor**: System Administrator
-- **Preconditions**: Database is uninitialized or user table contains zero records.
-- **Trigger**: Application is launched for the first time.
+### UC01: System Bootstrap and Root Administrator Setup
+- **Actor**: Unauthenticated User (Clinic Installer)
+- **Preconditions**: Clinic database is empty (no accounts exist in `users` table).
 - **Main Success Scenario**:
-  1. Application detects zero registered accounts and displays the setup wizard.
-  2. Administrator enters username, password (at least 8 non-blank characters), and matching confirmation.
-  3. Administrator selects **Create System Admin**.
+  1. User launches application.
+  2. System detects uninitialized database and displays **Create the first System Admin account** view.
+  3. User enters Administrator Username, Password (minimum 8 characters), and matching Confirmation Password.
   4. System hashes password with PBKDF2WithHmacSHA256 and unique random salt, writes administrator row to `users`, and redirects to Login screen.
 - **Extensions / Alternative Flows**:
   - 2a. Password is shorter than 8 characters or confirmation does not match.
@@ -114,7 +112,7 @@ Priorities are designated as follows:
   - 4a. User attempts to access setup wizard after an administrator exists.
     - System denies access and redirects immediately to Login screen.
 
-### UC02: Staff Account Management & Deactivation
+### UC02: Staff Account Creation & Directory Listing
 - **Actor**: System Administrator
 - **Preconditions**: Administrator is logged into System Admin Workspace.
 - **Main Success Scenario**:
@@ -186,15 +184,15 @@ Priorities are designated as follows:
     - System aborts deletion and opens the `Delete Blocked` dialog displaying itemized category counts and recommending deactivation instead.
 
 ### UC07: Multi-Day Clinic Appointment Booking & Conflict Detection
-- **Actor**: Clinic Receptionist
-- **Preconditions**: Receptionist is logged in; active patient and doctor exist.
+- **Actor**: Clinic Receptionist or Doctor (via Doctor Calendar **Add appointment**)
+- **Preconditions**: User is logged in; active patient and doctor exist.
 - **Main Success Scenario**:
-  1. Receptionist opens Appointments booking form or clicks empty slot in Calendar.
-  2. Receptionist selects active Patient, Doctor, Date, Start Time (`00:00`–`23:30`), and End Time.
-  3. Receptionist submits via **Book appointment**.
+  1. User opens Appointments booking form or clicks empty slot in Calendar (or uses **Add appointment** in Doctor Calendar).
+  2. User selects active Patient, Doctor, Date, Start Time (`00:00`–`23:30`), and End Time.
+  3. User submits via **Book appointment**.
   4. System executes transactional conflict query:
      `existing_start < new_end AND existing_end > new_start` across non-cancelled appointments and doctor time-off.
-  5. System inserts appointment with initial state `PENDING` and refreshes dashboard.
+  5. System inserts appointment with initial state `PENDING` (when booked by Receptionist) or `ACCEPTED` (when booked directly by the assigned Doctor) and refreshes schedule.
 - **Extensions**:
   - 2a. Patient is marked INACTIVE.
     - System excludes patient from search suggestions; service layer rejects booking.
@@ -299,34 +297,35 @@ Priorities are designated as follows:
 
 ### UC16: Revenue Auditing & CSV/JSON Data Export
 - **Actor**: Clinic Receptionist
-- **Preconditions**: Receipts exist in database.
+- **Preconditions**: Receptionist is logged into Receptionist Workspace.
 - **Main Success Scenario**:
-  1. Receptionist navigates to **Revenue Reports**, selects date range (From/To), and optional filters (Doctor, Patient, Payment Method).
-  2. Receptionist clicks **Generate report**.
-  3. System aggregates total revenue, breakdown by method, breakdown by clinician, and renders receipt table.
-  4. Receptionist clicks **Export CSV** or **Export JSON**.
-  5. System serializes report with proper escaping and prompts user to save file.
+  1. Receptionist opens **Revenue Reports**.
+  2. Receptionist chooses Date Range (`From` and `To` dates).
+  3. Receptionist selects optional filter criteria (Doctor, Payment Method).
+  4. Receptionist clicks **Generate report**.
+  5. System returns aggregated financial summaries: total gross revenue, transaction counts, breakdowns by clinician, and breakdowns by payment method.
+  6. Receptionist clicks **Export CSV** or **Export JSON**.
+  7. System serializes dataset into standard formatted file and saves to local file system.
+- **Extensions**:
+  - 2a. `From` date is chronologically after `To` date.
+    - System displays range validation warning and prevents query submission.
 
 ---
 
-## 4. Behavioral Specifications (Gherkin Scenarios)
-
-The following executable feature specifications formally define the system requirements using Gherkin syntax (`Feature`, `Scenario`, `Given`, `When`, `Then`, `And`, `But`).
-
-### 4.1 System Initialization & Staff Authentication
+## 4. Gherkin Product Specifications
 
 ```gherkin
-Feature: System Initialization and Staff Authentication
-  As a clinic administrator or staff member
-  I want robust account initialization and role-based login
-  So that clinic operations are secured against unauthorized access
+Feature: System Initialization and Authentication
+  As a clinic deployment administrator or staff member
+  I want secure initial setup and cryptographic authentication
+  So that unauthorized access to medical records is prevented
 
-  Scenario: Initial Administrator Setup on Empty System
-    Given the clinic database contains 0 user accounts
-    When the application is launched
-    Then the initial setup wizard is displayed
-    When the user enters username "admin" and password "AdminPass123!"
-    And confirms the password "AdminPass123!"
+  Scenario: First-Run Administrator Bootstrap
+    Given the clinic database is uninitialized with zero user accounts
+    When the installer launches the NUSynapxe application
+    Then the initial setup wizard "Create the first System Admin account" is presented
+    When the administrator provides username "admin" and password "AdminPass123!"
+    And confirms password "AdminPass123!"
     And clicks "Create System Admin"
     Then an administrator account is created with PBKDF2 hashing
     And the application routes to the Login screen
@@ -370,133 +369,95 @@ Feature: Patient Registration and Document Validation
     And the directory list is refreshed
 
   Scenario: Reject Duplicate Identity Document
-    Given an existing registered patient has NRIC "S1234567A" with country "SG"
-    When a receptionist attempts to register another patient with NRIC "S1234567A" and country "SG"
-    Then the registration is rejected
-    And a validation warning "A patient with this identity document already exists" is displayed
-    And no duplicate record is created
-
-  Scenario: Block Deletion of Patient with Prior Clinical Records
-    Given a registered patient has 2 completed appointments and 1 prescription
-    When a staff member attempts to delete the patient
-    Then the preflight blocker check detects 2 appointments and 1 prescription
-    And the permanent deletion transaction is blocked
-    And a dialog is displayed indicating the record counts and recommending deactivation
+    Given a patient already exists with identity "NRIC", country "SG", and number "S1234567A"
+    When a staff member attempts to register a new patient with identical identity details
+    Then the registration transaction is rejected
+    And the error message "A patient with this identity document already exists" is presented
+    And no duplicate record is written to the database
 ```
 
-### 4.3 Appointment Scheduling & Conflict Prevention
+### 4.3 Appointment Scheduling & Conflict Resolution
 
 ```gherkin
-Feature: Clinic Appointment Scheduling and Conflict Prevention
-  As a clinic receptionist
-  I want conflict-free appointment scheduling
-  So that doctors and patients have guaranteed consultation availability
+Feature: Appointment Scheduling and Interval Collision Protection
+  As a receptionist or attending physician
+  I want conflict-aware appointment booking
+  So that double bookings and scheduling overlaps are prevented
 
-  Scenario: Successfully Book Non-Overlapping Appointment
-    Given Doctor "Dr. Alice" has no appointments on "2026-10-15" between "10:00" and "10:30"
-    And Patient "Tan Ah Teck" is active
-    When the receptionist books an appointment for "Dr. Alice" from "10:00" to "10:30" on "2026-10-15"
-    Then the appointment is created with status "PENDING"
-    And the doctor schedule reflects the new visit
+  Scenario: Book Valid Appointment
+    Given an active patient "P000001" and active doctor "dr.smith"
+    When the receptionist books an appointment on "2026-10-15" from "09:00" to "09:30"
+    Then the system checks for overlapping visits and doctor time-off
+    And inserts the appointment with status "PENDING"
+    And the visit appears on the clinic schedule
 
-  Scenario: Reject Booking Overlapping Existing Appointment
-    Given Doctor "Dr. Alice" has an existing accepted appointment from "10:00" to "10:30"
-    When the receptionist attempts to book an appointment for "Dr. Alice" from "10:15" to "10:45"
-    Then the booking is rejected with a schedule conflict error
-    And the existing appointment remains unaffected
+  Scenario: Prevent Double Booking Collision
+    Given doctor "dr.smith" has an existing appointment on "2026-10-15" from "10:00" to "10:30"
+    When the receptionist attempts to book an appointment for "dr.smith" from "10:15" to "10:45"
+    Then the system rejects the booking due to an interval collision
+    And displays "The requested interval conflicts with an existing booking or time off"
 
-  Scenario: Reject Booking Overlapping Doctor Time-Off
-    Given Doctor "Dr. Alice" has scheduled time-off from "14:00" to "16:00"
-    When the receptionist attempts to book an appointment for "Dr. Alice" from "14:30" to "15:00"
-    Then the booking is rejected because the doctor is on leave
-    And no appointment is created
-
-  Scenario: Reject Booking for Inactive Patient
-    Given Patient "John Doe" is marked inactive
-    When the receptionist searches for "John Doe" in the booking selector
-    Then "John Doe" is excluded from selectable patients
-    And any direct booking attempt fails validation
+  Scenario: Doctor Blocks Personal Time-Off
+    Given doctor "dr.smith" is logged in
+    When the doctor blocks time on "2026-10-16" from "14:00" to "16:00"
+    Then a blocked time interval is recorded in "doctor_time_off"
+    And future booking attempts during "14:00" to "16:00" are rejected
 ```
 
-### 4.4 Arrival Check-in & Queue Management
+### 4.4 Clinical Consultations & Prescriptions
 
 ```gherkin
-Feature: Clinic Arrival Check-in and Queue Management
-  As a clinic receptionist
-  I want to process patient arrivals based on Singapore clinic time
-  So that doctors are notified of waiting patients in a timely manner
-
-  Scenario: Prevent Check-in Before Scheduled Appointment Time
-    Given an appointment is accepted for today at "14:00"
-    And the current Singapore time is "13:30"
-    When the receptionist views the appointment in the Check-in Queue
-    Then the "Check in patient" button is disabled
-    And explanatory text indicates check-in opens at "14:00"
-
-  Scenario: Successfully Check in Arrived Patient at Start Time
-    Given an appointment is accepted for today at "14:00"
-    And the current Singapore time is "14:02"
-    When the receptionist clicks "Check in patient"
-    Then the appointment status transitions from "ACCEPTED" to "CHECKED_IN"
-    And the appointment appears on the attending doctor's dashboard queue
-```
-
-### 4.5 Clinical Consultations & Prescriptions
-
-```gherkin
-Feature: Clinical Documentation and Multi-Medication Prescribing
+Feature: Clinical Documentation and Prescription Issuance
   As an attending physician
-  I want to document consultations and prescribe medications
-  So that patient care is recorded accurately and ready for pharmacy dispensing
+  I want to document clinical findings and prescribe medications
+  So that patient care is recorded and transferred for pharmacy checkout
 
-  Scenario: Record Clinical Diagnosis and Multi-Medication Prescription
-    Given Doctor "Dr. Alice" is attending a checked-in appointment for Patient "Tan Ah Teck"
-    When "Dr. Alice" enters diagnosis "Acute Pharyngitis"
-    And enters examination notes "Tonsils inflamed, no exudate"
-    And adds prescription for "Amoxicillin 500mg" with dosage "1 capsule TDS for 5 days"
-    And adds prescription for "Paracetamol 500mg" with dosage "2 tablets QDS PRN"
-    And clicks "Mark consultation completed"
-    Then the clinical record and 2 prescriptions are persisted atomically
-    And the appointment status transitions to "COMPLETED"
-    And the clinical notes are locked against future edits
-
-  Scenario: Cross-Doctor Historical Consultation Inspection
-    Given Patient "Tan Ah Teck" has a completed consultation with "Dr. Bob"
-    When Doctor "Dr. Alice" views the consultation history for "Tan Ah Teck"
-    Then the past consultation conducted by "Dr. Bob" is displayed read-only
-    And the recorded diagnosis, physician notes, and prescribed drugs are visible
-    But in-progress consultation drafts of other doctors are excluded
+  Scenario: Document Consultation and Complete Visit
+    Given an appointment is in status "CHECKED_IN" assigned to "dr.smith"
+    When "dr.smith" records diagnosis "Acute Bronchitis"
+    And records consultation notes "Bilateral wheezing on expiration"
+    And saves the clinical record
+    And adds prescription "Salbutamol Inhaler" with dosage "2 puffs" and frequency "PRN"
+    And selects "Mark consultation completed"
+    Then the appointment status updates to "COMPLETED"
+    And the clinical record is locked against further edits
+    And the visit becomes available in Receptionist Checkout
 ```
 
-### 4.6 Billing Checkout & Revenue Reporting
+### 4.5 Checkout Billing & Daily Receipts
 
 ```gherkin
-Feature: Checkout Billing, Daily Receipts, and Revenue Reporting
-  As a clinic receptionist
-  I want to settle patient bills and generate financial audit reports
-  So that clinic revenue is recorded accurately and exportable
+Feature: Checkout Billing and Receipt Issuance
+  As a receptionist
+  I want to collect payments and issue daily sequenced receipts
+  So that clinic revenue is tracked and patients receive payment confirmation
 
-  Scenario: Settle Payment and Generate Sequential Daily Receipt
-    Given an appointment is in "COMPLETED" status
-    When the receptionist enters payment amount "65.50"
-    And selects payment method "CARD"
+  Scenario: Finalize Checkout and Issue Receipt
+    Given an appointment is in status "COMPLETED"
+    When the receptionist opens the visit in Checkout
+    And enters payment amount "85.00" with method "CARD"
     And clicks "Complete checkout"
-    Then the payment is persisted as 6550 integer cents
-    And a unique receipt number formatted as "RCP-YYYYMMDD-XXXX" is generated
-    And the appointment status transitions to "CHECKED_OUT"
-    And a receipt confirmation preview is presented
+    Then a payment record of "8500" cents is stored in "payments"
+    And a receipt is generated with sequence "RCP-20261015-0001"
+    And the appointment status updates to "CHECKED_OUT"
+    And the revenue report reflects the new transaction
+```
 
-  Scenario: Generate Date-Bounded Revenue Report with Multi-Method Breakdown
-    Given multiple payments have been recorded between "2026-10-01" and "2026-10-07"
-    When the receptionist generates a revenue report for "2026-10-01" to "2026-10-07"
-    Then the total revenue equals the sum of all receipt cents within the date range
-    And the report displays revenue breakdown by payment method
-    And the report displays revenue breakdown by attending doctor
-    And an itemized receipt ledger is rendered
+---
 
-  Scenario: Export Revenue Report to CSV with Character Escaping
-    Given a generated revenue report contains patient names and payment details
-    When the receptionist clicks "Export CSV"
-    Then the output CSV file formats fields according to RFC 4180
-    And commas, double quotes, and line breaks within fields are escaped
-    And numeric cents are converted to decimal dollar amounts
+## 5. Non-Functional Specifications
+
+1. **Performance & Responsiveness**:
+   - Patient search queries across all database records execute in under 100 milliseconds.
+   - UI navigation and view switches complete instantaneously without UI freezing, using asynchronous task dispatching (`ClinicTaskRunner`).
+2. **Security & Cryptography**:
+   - Passwords hashed using PBKDF2 with HMAC-SHA256, 210,000 iterations, and 128-bit cryptographically secure random salt.
+   - Session identifiers reside in volatile memory and terminate upon application exit or logout.
+   - Role-based authorization enforced at the service layer prior to executing any repository read/write.
+3. **Data Integrity & Crash Safety**:
+   - SQLite Write-Ahead Logging (WAL) mode enabled for high-concurrency read/write transactions.
+   - Foreign key constraints enabled (`PRAGMA foreign_keys = ON`) on every database connection.
+   - All multi-table updates (e.g. checkout payment + receipt generation + appointment status update) execute within atomic transactions.
+4. **Usability & Ergonomics**:
+   - Compliant with accessibility standards: high-contrast clinical color palette, standard keyboard shortcuts, and clear focus states.
+   - Compact form controls with contextual validation feedback and automatic age derivation based on Singapore standard time.

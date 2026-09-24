@@ -5,103 +5,103 @@ sidebar_label: Testing Strategy
 
 # Testing Strategy
 
-This document details the multi-level testing architecture, risk priorities, automated test inventory, and manual peer-testing walkthrough scenarios for NUSynapxe.
-
-For architectural decisions, see [Architecture & System Design](ArchitectureAndDesign.md). For use cases and business rules, see [Product Specifications & Use Cases](ProductSpecifications.md).
+NUSynapxe employs a comprehensive, multi-layered quality assurance methodology to guarantee correctness, security, architectural integrity, and usability across desktop environments.
 
 ---
 
-## 1. Test Levels & Pyramid
+## 1. Test Pyramid & Verification Layers
+
+Testing is distributed across four distinct tiers of automated verification:
 
 ```mermaid
-flowchart TB
-    Domain["Domain Tests\nRecords, value objects, calculations, overflow rejection"]
-    Persistence["Persistence Tests\nReal temporary SQLite, migrations, foreign-key blockers, cursors"]
-    Service["Service Tests\nAuthorization, transactions, business validation, clinic lifecycle"]
-    Integration["Workflow Integration Tests (TestFX and Service)\nCross-role multi-step clinic flows"]
-    UI["TestFX UI Tests\nNavigation, reactive forms, time-grids, dialogs, headless Xvfb"]
-    Architecture["Architecture Tests\nArchUnit layer directions, package cycles, UI isolation"]
-    Tools["Tool Tests\nRepeatable database reset and deterministic demo seeding"]
+flowchart TD
+    E2E["System & UI Headless Tests<br/>(TestFX Stage Navigation & Form Automation)"]
+    Arch["Architectural Rules & Concurrency Tests<br/>(ArchUnit Rules, Race & Deadlock Verification)"]
+    Integ["Integration & Persistence Tests<br/>(SQLite In-Memory Migrations, Repositories, Workflows)"]
+    Unit["Domain & Service Unit Tests<br/>(Validation, Boundary, State Machines, Password Hashing)"]
 
-    Domain --> Service
-    Persistence --> Service
-    Service --> Integration
-    Integration --> UI
-    Architecture -. Structural Gate .-> Domain
-    Tools --> Persistence
+    E2E --> Arch
+    Arch --> Integ
+    Integ --> Unit
+
+    classDef default fill:#ffffff,stroke:#17324d,stroke-width:1.5px,color:#17324d;
+    classDef unit fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
+    classDef integ fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#1b5e20;
+    classDef arch fill:#fff8e1,stroke:#f57c00,stroke-width:2px,color:#e65100;
+    classDef e2e fill:#ede7f6,stroke:#7b1fa2,stroke-width:2px,color:#4a148c;
+
+    class Unit unit;
+    class Integ integ;
+    class Arch arch;
+    class E2E e2e;
 ```
-
-- **Isolated Temporary Databases**: All repository and service tests execute against isolated temporary SQLite databases initialized under JUnit 5 `@TempDir`. Tests never mutate or connect to the developer's default clinic database.
-- **Fixed System Clocks**: Time-sensitive appointment, check-in, and agenda tests inject fixed `Clock` instances set to Singapore local time (`Asia/Singapore`).
-- **Headless TestFX**: TestFX UI tests run headlessly in CI environments using `xvfb-run --auto-servernum`.
 
 ---
 
 ## 2. Automated Test Inventory
 
-The test suite provides layered automated verification across all application tiers:
+The automated test suite exercises all layers of the application without requiring a physical display:
 
-| Test Package / Area | Target Scope & Key Test Classes | Primary Verified Capabilities |
+| Layer / Test Suite | Primary Target Scope | Verified Invariants & Scenarios |
 | --- | --- | --- |
-| **Application Root** | Presentation Shell (`DatabasePathsTest`, `NUSynapxeAppTest`) | Default database directory creation, stage lifecycle, and path normalization. |
-| **Architecture** | Architectural Rules (`ArchitectureTest`) | Package layering, slice cycles, persistence isolation, and UI boundaries enforced by ArchUnit. |
-| **Domain** | Domain Models & Types (`PaymentTest`, `TimeRangeTest`, `CursorTest`) | Monetary minor-unit arithmetic, calendar math, and cursor pagination values. |
-| **Persistence** | SQLite Data Access (`SchemaMigrationTest`, `SqliteDatabaseTest`, `PatientRepositoryTest`) | SQLite schema initialization, transactional schema migrations, wildcard escapes, and deletion blockers. |
-| **Service** | Application Business Rules (`AuthenticationServiceTest`, `AppointmentServiceTest`, `BillingServiceTest`) | Authentication, authorization, patient validation, appointment conflict checking, billing checkout, and clinical ownership. |
-| **Tools** | Development Tooling (`DemoDataSeederTest`) | Protected database reset and deterministic demo data seeding. |
-| **UI (TestFX)** | Presentation & Interaction (`PatientDirectoryViewTest`, `DoctorCalendarViewTest`, `RevenueReportViewTest`) | Navigation rails, search suggestion fields, table rendering, calendar time-grids, consultation forms, checkout modals, and receipt exports. |
+| **Domain & Value Types** | `nusynapxe.domain` | Record value equality, immutability, date formatting, and revenue calculations. |
+| **Persistence & Transactions** | `nusynapxe.persistence` | Atomic schema migrations (v1–v5), constraint rollback, parameterized queries, and sequential receipt numbers. |
+| **Business Services** | `nusynapxe.service` | Authentication, PBKDF2 hashing, appointment state transitions, temporal collision checks, preflight blocker cascades, and calendar intervals. |
+| **UI Components (Headless TestFX)** | `nusynapxe.ui` | JavaFX stage routing, minimal date picker sizing, reactive appointment dialog validation, and doctor navigation. |
+| **Architectural Rules (ArchUnit)** | `nusynapxe.architecture` | Cyclic dependency prevention, package encapsulation, layer separation, and immutability invariants. |
 
 ---
 
-## 3. Risk-Based Coverage Priorities
+## 3. High-Risk Coverage Matrix
 
-| System Risk | Automated Mitigation & Evidence |
-| --- | --- |
-| **Unauthorized Access to Clinical Data** | Service role guards, assigned-doctor checks, projection-specific repositories (`AuthorizationTest`, `ClinicalServiceTest`, `ClinicWorkflowIntegrationTest`). |
-| **Partial Transaction Writes** | SQLite atomic transactions with rollback tests covering multi-statement appointment booking, checkout, and deletion. |
-| **Appointment Scheduling Conflicts** | Boundary tests for overlapping/adjacent intervals, released declined slots, and check-in timing constraints (`AppointmentServiceTest`). |
-| **Monetary & Overflow Errors** | 64-bit integer minor unit storage, `BigDecimal.longValueExact()` parsing, `BillingServiceTest`, and `RevenueReportTest` (including `Long.MAX_VALUE`). |
-| **Database Migration Data Loss** | `SchemaMigrationTest` covers incremental step-by-step upgrades from v1 through v5 with rollback validation. |
-| **SQL Wildcard Injection / Leakage** | Repository tests verify that user input containing `%` or `_` is escaped and treated as literal characters. |
-| **Agenda Skipping / Duplication** | Keyspacing cursor pagination tests verify stable continuous scrolling with `(startsAt, appointmentId)`. |
-| **CSV / JSON Export Malformation** | Receptionist export tests verify proper quoting and escaping of commas, quotes, line breaks, and control characters. |
+| Risk Domain | Potential Failure Mode | Mitigation & Test Verification |
+| --- | --- | --- |
+| **Double Booking / Collisions** | Two appointments or doctor time-off booked on overlapping half-hour intervals. | Evaluated via `AppointmentTransitionsTest` and `AppointmentRepositoryScheduleTest` using boundary conditions (`starts_at < other_ends && ends_at > other_starts`). |
+| **Accidental Medical Record Deletion** | Deleting a patient who has active visits, clinical notes, or receipts. | Preflight blocker inspection (`PatientServiceMaintenanceTest`) asserts that deletion is refused if any dependent records exist across related categories. |
+| **Credential & Session Tampering** | Password exposure or session privilege escalation. | PBKDF2 with 210,000 iterations and per-user cryptographic salt (`PasswordHasherTest`); volatile memory sessions (`SessionManagerTest`). |
+| **Financial Reporting Inaccuracies** | Receipt gaps, duplicate daily numbers, or rounding discrepancies. | Atomic SQLite transactions (`ReceiptRepositoryTest`, `BillingServiceTest`) enforce daily monotonically increasing sequence numbers. |
+| **Timezone & Local Clock Drift** | Visits scheduled or checked in against inconsistent system clocks. | All temporal boundaries normalized to `Asia/Singapore` via `ClinicClock` (`ClinicClockTest`). |
 
 ---
 
-## 4. Local Verification Commands
+## 4. Quality Verification Gates
 
-From the repository root:
+NUSynapxe enforces automated quality gates configured in `build.gradle`:
 
-```powershell
-# Windows PowerShell
-.\gradlew.bat spotlessApply
-.\gradlew.bat test --no-daemon --console=plain
-.\gradlew.bat check javadoc --no-daemon --console=plain
-git diff --check
+```mermaid
+flowchart LR
+    Compile["javac<br/>(JDK 25)"] --> Spotless["Spotless<br/>(Google Format)"]
+    Spotless --> Checkstyle["Checkstyle<br/>(14.1.0)"]
+    Checkstyle --> PMD["PMD<br/>(7.26.0)"]
+    PMD --> SpotBugs["SpotBugs & FindSecBugs<br/>(4.10.3)"]
+    SpotBugs --> FileSize["File Size Check<br/>(Max 500 lines)"]
+    FileSize --> Tests["JUnit 5 & TestFX<br/>(Automated Suite)"]
+    Tests --> JaCoCo["JaCoCo Gate<br/>(80%+ Coverage)"]
+
+    classDef default fill:#ffffff,stroke:#17324d,stroke-width:1.5px,color:#17324d;
+    classDef pass fill:#e8f5e9,stroke:#388e3c,stroke-width:1.5px,color:#1b5e20;
+    class Pass pass;
 ```
 
-```bash
-# macOS / Linux
-./gradlew spotlessApply
-./gradlew test --no-daemon --console=plain
-xvfb-run --auto-servernum ./gradlew check javadoc --no-daemon --console=plain
-git diff --check
-```
+1. **Spotless Code Formatting**: Enforces Google Java Format across all source and test files.
+2. **Checkstyle Syntax Linting**: Enforces strict javadoc, naming conventions, import ordering, and whitespace rules.
+3. **PMD Static Analysis**: Guards against empty blocks, unused variables, complex cyclomatic structures, and antipatterns.
+4. **SpotBugs & FindSecBugs**: Max-effort bytecode inspection detecting potential null dereferences, resource leaks, and security risks.
+5. **File Size Enforcement**: `sourceFileSizeCheck` task fails the build if any Java source or test file exceeds 500 lines of code.
+6. **JaCoCo Coverage Thresholds**: Requires 80%+ instruction and branch coverage across production domain, service, and persistence packages.
 
 ---
 
-## 5. Quality Tasks and Reports
+## 5. Local Quality Gate Execution Commands
 
-| Task or Tool | Purpose | Output or Failure Policy |
+Before opening a pull request, run the following verification commands:
+
+| Command | Purpose | Acceptance Threshold |
 | --- | --- | --- |
-| `spotlessApply` / `spotlessCheck` | Apply or verify Google Java Format. | Formatting differences fail `spotlessCheck`. |
-| `checkstyleMain`, `checkstyleTest` | Enforce Java style rules. | Reports under `build/reports/checkstyle/`; violations fail. |
-| `pmdMain`, `pmdTest` | Run production and test PMD rulesets. | Reports under `build/reports/pmd/`; violations fail. |
-| `spotbugsMain` with FindSecBugs | Analyze production bytecode at maximum effort. | Reports under `build/reports/spotbugs/`; medium-confidence findings fail. |
-| `test` | Run unit, ArchUnit, repository, service, and TestFX suites. | JUnit XML and HTML reports generated under `build/`. |
-| `jacocoTestReport` | Generate instruction and branch coverage evidence. | HTML/XML reports generated under `build/reports/jacoco/`. |
-| `javadoc` | Verify and compile public API documentation. | Output under `build/docs/javadoc/`; warnings fail where configured. |
-| `npm ci && npm run build` in `website/` | Build the documentation website. | Broken site links fail the production build. |
+| `.\gradlew.bat spotlessApply` | Auto-format source code to Google Java Format standard. | Zero diff after formatting. |
+| `.\gradlew.bat check` | Run all unit tests, TestFX tests, Checkstyle, PMD, SpotBugs, and JaCoCo verification. | Build Successful, 0 errors, 0 warnings. |
+| `.\gradlew.bat javadoc` | Verify Javadoc documentation compilation. | Zero broken tags or missing parameters. |
+| `cd website && npm run build` | Validate Docusaurus documentation, MDX syntax, and Mermaid diagrams. | Zero broken links, zero diagram syntax errors. |
 | `git diff --check` | Detect trailing whitespace and carriage-return errors. | Must produce zero warnings before commit. |
 
 ---
@@ -111,7 +111,7 @@ git diff --check
 Testers can manually execute these comprehensive end-to-end verification scenarios to validate the latest release of NUSynapxe:
 
 ### Scenario 1: First-Run Setup & Administrator Provisioning
-1. Launch NUSynapxe with a clean database (`-Dnusynapxe.database="build/peer-test.db"`).
+1. Launch NUSynapxe with a clean database (e.g. `.\gradlew.bat run -PdemoDatabasePath="build/peer-test.db"` or `java -Dnusynapxe.database="build/peer-test.db" -jar ...`).
 2. Verify that the **Create the first System Admin account** form is displayed.
 3. Attempt to submit with password `short` (under 8 characters). Verify error banner appears.
 4. Enter username `admin`, password `Admin1234!`, matching confirmation, and submit.
@@ -126,7 +126,7 @@ Testers can manually execute these comprehensive end-to-end verification scenari
 
 ### Scenario 3: Patient Registration & NRIC Validation
 1. Log in as `mary` / `Recept123!`.
-2. Open Patient Directory and select **Register new patient**.
+2. Open Patient Directory and select **Register new patient**`.
 3. Choose Identity Type `NRIC`. Verify Issuing Country is automatically locked to Singapore (`SG`).
 4. Enter an invalid NRIC (e.g. `S123456`). Verify validation error is displayed.
 5. Enter valid NRIC `S1234567A`, Name `Tan Ah Teck`, DOB `1990-05-15`, Sex `Male`, Phone `91234567`, Email `tan@example.com`, Address `123 Orchard Road`.
@@ -143,11 +143,11 @@ Testers can manually execute these comprehensive end-to-end verification scenari
 2. Select patient `Tan Ah Teck` and doctor `Dr. John Doe`.
 3. Select tomorrow's date, start time `10:00`, end time `10:30`, and book appointment.
 4. Verify appointment appears in dashboard with status `PENDING`.
-5. Attempt to book a second appointment for `Dr. John Doe` at the overlapping time `10:15`–`10:45`.
+5. Attempt to book a second appointment for `Dr. John Doe` at an overlapping time (e.g. `10:00`–`11:00`).
 6. Verify booking is rejected with a scheduling conflict notice.
 
 ### Scenario 6: Doctor Schedule Acceptance & Personal Time-Off
-1. Log in as `dr.john` / `Doctor123!`.
+1. Log in as `dr.john` / `Doctor123!``.
 2. On Dashboard, locate the pending appointment for `Tan Ah Teck`.
 3. Click **Accept**. Verify status badge updates to `ACCEPTED`.
 4. Switch to **Calendar**, click **Block time**, and block tomorrow `14:00`–`16:00`.

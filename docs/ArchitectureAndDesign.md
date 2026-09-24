@@ -279,43 +279,49 @@ erDiagram
     users ||--o{ doctor_calendar_settings : "doctor owns"
     users ||--o{ doctor_working_intervals : "doctor owns"
     users ||--o{ clinical_records : "doctor authors"
-    users ||--o{ payments : "receptionist / doctor links"
+    users ||--o{ payments : "receptionist records"
 
     patients ||--o{ appointments : "books"
+    patients ||--o{ clinical_records : "diagnosed for"
     patients ||--o{ payments : "pays"
+    patients ||--o{ receipts : "issued to"
 
     appointments ||--o| clinical_records : "documents"
     appointments ||--o| payments : "settles"
+    appointments ||--o{ receipts : "receipts for"
 
     clinical_records ||--o{ prescriptions : "prescribes"
+
+    payments ||--|| receipts : "generates"
 
     users {
         INTEGER id PK
         TEXT username UK
-        TEXT display_name
+        BLOB password_hash
+        BLOB salt
         TEXT role
-        INTEGER active
-        BLOB password_salt
-        BLOB password_verifier
+        TEXT display_name
         TEXT created_at
     }
 
     patients {
         INTEGER id PK
         TEXT identity_type
-        TEXT issuing_country
         TEXT identity_number
-        TEXT full_name
+        TEXT issuing_country
+        TEXT first_name
+        TEXT last_name
         TEXT date_of_birth
         TEXT sex
         TEXT phone_country_code
         TEXT phone_number
         TEXT email
-        TEXT residential_address
-        INTEGER height_cm
+        TEXT address
+        REAL height_cm
         REAL weight_kg
         INTEGER active
         TEXT created_at
+        TEXT updated_at
     }
 
     appointments {
@@ -326,6 +332,7 @@ erDiagram
         TEXT ends_at
         TEXT status
         TEXT created_at
+        TEXT updated_at
     }
 
     doctor_time_off {
@@ -333,53 +340,63 @@ erDiagram
         INTEGER doctor_id FK
         TEXT starts_at
         TEXT ends_at
-        TEXT created_at
     }
 
     doctor_calendar_settings {
-        INTEGER id PK
-        INTEGER doctor_id FK
-        INTEGER first_day_of_week
-        TEXT created_at
+        INTEGER doctor_id PK_FK
+        TEXT first_day_of_week
     }
 
     doctor_working_intervals {
-        INTEGER id PK
-        INTEGER doctor_id FK
-        INTEGER day_of_week
-        INTEGER start_minute
+        INTEGER doctor_id PK_FK
+        TEXT day_of_week PK
+        INTEGER start_minute PK
         INTEGER end_minute
     }
 
     clinical_records {
         INTEGER id PK
-        INTEGER appointment_id FK
         INTEGER patient_id FK
+        INTEGER appointment_id FK_UK
         INTEGER doctor_id FK
         TEXT diagnosis
-        TEXT examination_notes
-        TEXT follow_up_instructions
-        TEXT created_at
+        TEXT consultation_notes
+        TEXT follow_up_notes
+        TEXT updated_at
     }
 
     prescriptions {
         INTEGER id PK
         INTEGER clinical_record_id FK
-        TEXT medication_name
+        TEXT medication
         TEXT dosage
         TEXT frequency
         TEXT duration
         TEXT instructions
+        TEXT created_at
     }
 
     payments {
         INTEGER id PK
+        INTEGER appointment_id FK_UK
+        INTEGER patient_id FK
+        INTEGER receptionist_id FK
+        INTEGER amount_minor
+        TEXT method
+        TEXT status
+        TEXT recorded_at
+    }
+
+    receipts {
+        INTEGER id PK
+        INTEGER payment_id FK_UK
         INTEGER appointment_id FK
         INTEGER patient_id FK
-        INTEGER amount_cents
-        TEXT payment_method
-        TEXT receipt_number UK
-        TEXT paid_at
+        INTEGER amount_minor
+        TEXT method
+        TEXT receipt_date
+        INTEGER sequence_number
+        TEXT recorded_at
     }
 
     app_metadata {
@@ -392,7 +409,7 @@ erDiagram
 
 All schema changes are versioned and executed through `SchemaInitializer.java`. When upgrading an existing clinic installation, migrations run incrementally in an explicit SQLite transaction:
 
-- **Version 1 (Baseline)**: Initial operational tables: `users`, `patients`, `appointments`, `clinical_records`, `prescriptions`, `payments`, `app_metadata`.
+- **Version 1 (Baseline)**: Initial operational tables: `users`, `patients`, `appointments`, `doctor_time_off`, `clinical_records`, `prescriptions`, `payments`, `receipts`, and `app_metadata`.
 - **Version 2 (Identity Document Enhancements)**: Adds nullable columns `identity_type`, `issuing_country`, `identity_number`, `sex`, `height_cm`, `weight_kg`, and `active` flag to `patients` to preserve backward compatibility with legacy demo data.
 - **Version 3 (Data Hygiene & Normalization)**: Drops unused `billing_information` column from `patients` table (payment details are strictly stored in `payments`) and normalizes historical sex values to uppercase `MALE` or `FEMALE`.
 - **Version 4 (International Telephony Normalization)**: Renames `phone` to `phone_number`, introduces `phone_country_code`, and requires standardized calling codes for subsequent patient profile updates.
@@ -411,7 +428,7 @@ The domain layer encapsulates immutable business records, value types, and domai
 | **Appointments & Scheduling** | `Appointment`, `AppointmentStatus`, `AppointmentListRow`, `TimeSlot` | Enforces finite state transitions. Coordinates 30-minute interval slots and projection rows for front-desk list views. |
 | **Calendar & Availability** | `CalendarAppointment`, `CalendarScheduleCursor`, `CalendarSchedulePage`, `DoctorTimeOff`, `DoctorCalendarSettings`, `WorkingInterval` | Virtualized keyspaced pagination cursors `(startsAt, appointmentId)`, recurring daily shift intervals, and personal time-off date ranges. |
 | **Clinical Records** | `ClinicalRecord`, `ClinicalHistoryEntry`, `Prescription` | Attending doctor clinical findings, examination notes, and itemized multi-drug prescriptions (drug name, dosage, frequency, duration). |
-| **Billing & Finance** | `Payment`, `PaymentMethod`, `PaymentStatus`, `Receipt`, `RevenueReport`, `RevenueSummary` | 64-bit integer minor unit representation (`amount_cents`), payment methods (`CASH`, `CARD`, `TRANSFER`, `OTHER`), and date-bounded revenue summaries. |
+| **Billing & Finance** | `Payment`, `PaymentMethod`, `PaymentStatus`, `Receipt`, `RevenueReport`, `RevenueSummary` | 64-bit integer minor unit representation (`amount_minor`), payment methods (`CASH`, `CARD`, `TRANSFER`, `OTHER`), and date-bounded revenue summaries. |
 
 ---
 

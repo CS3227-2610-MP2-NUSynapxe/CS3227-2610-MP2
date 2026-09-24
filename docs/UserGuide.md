@@ -284,6 +284,7 @@ Every appointment in NUSynapxe progresses through a deterministic finite-state m
 ```mermaid
 stateDiagram-v2
     [*] --> PENDING: Receptionist books visit
+    [*] --> ACCEPTED: Doctor books visit from Calendar
     PENDING --> ACCEPTED: Doctor accepts visit
     PENDING --> DECLINED: Doctor declines visit
     PENDING --> CANCELLED: Receptionist cancels visit
@@ -298,6 +299,7 @@ stateDiagram-v2
 ```
 
 ### Lifecycle Rules Summary
+- **Initial Status**: Appointments booked by a Receptionist begin in `PENDING` awaiting Doctor confirmation. Appointments booked directly by an attending Doctor via the Calendar **Add appointment** action are created directly in `ACCEPTED`.
 - **Cancellation**: Available before completion from `PENDING` or `ACCEPTED`.
 - **Declining**: Available to the Doctor from `PENDING` or `ACCEPTED`.
 - **Time Slot Reservation**: `PENDING`, `ACCEPTED`, `CHECKED_IN`, `COMPLETED`, and `CHECKED_OUT` visits reserve their intervals.
@@ -315,7 +317,7 @@ By default, the SQLite database is stored locally per user:
 The database resides locally on your computer and contains identity document numbers, patient contact details, and clinical records.
 - **Privacy Rules**: Do not commit the database to version control, paste it into issue trackers, or attach it to bug reports. Screenshots and bug logs must not expose real patient identity numbers.
 - **File Management**: Close the NUSynapxe application before copying, backing up, or deleting the database file.
-- **Isolated Testing**: For isolated development or testing, pass the `-Dnusynapxe.database=<path>` Java system property to point to an alternative database path.
+- **Isolated Testing**: For isolated development or testing, pass the `-PdemoDatabasePath=<path>` project property when running via Gradle (`.\gradlew.bat run -PdemoDatabasePath="build/test.db"`), or the `-Dnusynapxe.database=<path>` JVM property when launching the standalone JAR directly.
 
 ---
 
