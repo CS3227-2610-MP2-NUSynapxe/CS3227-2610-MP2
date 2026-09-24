@@ -614,3 +614,57 @@ sequenceDiagram
     Svc-->>UI: CalendarSchedulePage(records, nextCursor, hasMore=true)
     UI->>Doctor: Append 25 appointment cards seamlessly without duplicates
 ```
+
+---
+
+## 9. Design Decisions
+
+This section documents the key architectural and technical design decisions made throughout NUSynapxe, their rationale, alternatives considered, and trade-offs.
+
+### 9.1 Layered Architecture with Enforced Package Boundaries
+- **Decision**: Structure the application into strict unidirectional layers (`domain`, `persistence`, `service`, `ui`, `tools`), verified at build time by automated ArchUnit rules (`ArchitectureTest.java`).
+- **Rationale**: Keeps domain logic and business rules decoupled from presentation and storage. Prevents UI components from executing direct database queries or bypassing business and authorization validation.
+- **Alternatives Considered**: Direct presentation-to-database access (ActiveRecord pattern or Smart UI). Rejected because it entangles business rules with JavaFX components, makes headless unit testing difficult, and risks leaking clinical data across role boundaries.
+- **Trade-off**: Requires explicit data transfer records and service delegate methods, but guarantees modularity and testability.
+
+### 9.2 Programmatic JavaFX without FXML
+- **Decision**: Construct all UI views and dialogs entirely in pure programmatic JavaFX rather than using FXML markup files.
+- **Rationale**: Provides compile-time type safety for event handling and control wiring, eliminates runtime reflection and XML parsing overhead, and guarantees deterministic semantic component IDs (`node.setId(...)`) for headless TestFX automated UI testing.
+- **Alternatives Considered**: FXML with `@FXML` controller injection. Rejected because FXML uses string-based controller and event bindings that fail at runtime rather than compile time, increases startup latency, and complicates custom view lifecycle management.
+- **Trade-off**: View layouts are defined in Java code rather than declarative XML, but code reuse is handled cleanly through standard design system factory methods in `UiComponents`.
+
+### 9.3 In-Memory Volatile Sessions & Scrubbed Password Cryptography
+- **Decision**: Store authenticated staff identity in a volatile in-memory `Session` object on the JVM heap, and hash credentials using `PBKDF2WithHmacSHA256` with a per-account 16-byte random salt and 210,000 iterations.
+- **Rationale**: Sessions are never written to disk or stored in SQLite, ensuring that terminating the application or logging out instantly invalidates the session. Clearing password character arrays immediately after verification prevents credential lingering in memory dumps.
+- **Alternatives Considered**: Storing active session tokens in the database or using third-party auth libraries. Rejected because NUSynapxe is a self-contained offline desktop application, and JDK cryptographic primitives (`SecretKeyFactory`, `SecureRandom`) satisfy security requirements without extra external dependencies.
+- **Trade-off**: Sessions cannot be persisted across application restarts, requiring staff to re-authenticate when the application is reopened, which aligns with clinical confidentiality standards.
+
+### 9.4 Service-Layer Authorization & Clinical Ownership Separation
+- **Decision**: Centralize all role-based access control (RBAC) and ownership verification inside domain services (`Authorization.java`) rather than relying solely on UI control visibility.
+- **Rationale**: Hiding a UI button does not constitute a security boundary. Enforcing role checks in service methods ensures unauthorized operations cannot be invoked via background tasks, keyboard shortcuts, or programmatic test invocations. Doctors can only author and modify consultation notes for their assigned visits, while completed consultations remain accessible cross-doctor for clinical continuity.
+- **Alternatives Considered**: Enforcing access control strictly at the UI layer or via database row-level security. Rejected because UI-level checks are prone to bypass and hard to verify headlessly, and SQLite does not natively support row-level permissions.
+- **Trade-off**: Requires passing the authenticated `Session` into service methods, but provides a deterministic security perimeter verified by unit tests.
+
+### 9.5 Single-Connection SQLite with Transactional Schema Migrations
+- **Decision**: Manage a single SQLite JDBC connection per application instance, enforce `PRAGMA foreign_keys = ON;`, execute schema evolution via an incremental migration runner (`SchemaInitializer.java`, versions v1 to v7), and disallow `ON DELETE CASCADE`.
+- **Rationale**: Desktop SQLite operates most reliably with a single connection managing transactional boundaries. Preflight blocker checks prevent accidental deletion of patients with historical appointments, clinical records, prescriptions, payments, or receipts without risking cascade data loss.
+- **Alternatives Considered**: Multi-connection pooling or external database engines (PostgreSQL/MySQL). Rejected because NUSynapxe is designed as an offline, zero-configuration local desktop application without external database server prerequisites.
+- **Trade-off**: Preflight blocker inspection requires explicit count queries across linked tables before deletion, but protects patient medical and billing histories from unintended removal.
+
+### 9.6 Keyspace Cursor Pagination for Doctor Agenda
+- **Decision**: Implement infinite-scrolling agenda pagination using a deterministic keyspaced cursor `CalendarScheduleCursor` comprising `(startsAt, appointmentId)` and an SQL query with `LIMIT pageSize + 1`.
+- **Rationale**: Offset-based pagination (`OFFSET N`) suffers from performance degradation on large datasets and produces duplicate or skipped rows if appointments are booked or cancelled while scrolling. Reading a lookahead item (`pageSize + 1 = 26`) allows `CalendarSchedulePage` to determine `hasMore` without executing a separate `COUNT(*)` query.
+- **Alternatives Considered**: Offset-based pagination or loading all upcoming appointments at once. Rejected because offset pagination is unstable under concurrent schedule changes and full loading increases memory and query overhead.
+- **Trade-off**: Requires composite sorting on `starts_at ASC, id ASC`, which is indexed and natively supported by SQLite.
+
+### 9.7 Exact Minor-Unit Currency Storage & Transactional Receipt Generation
+- **Decision**: Persist monetary values strictly as 64-bit integer cents (`amount_minor INTEGER`) and generate daily sequential receipt numbers within the same atomic SQLite transaction as the payment recording.
+- **Rationale**: Floating-point numbers (`double`/`float`) suffer from IEEE-754 rounding inaccuracies that compromise financial audits. Allocating sequential receipt numbers (`MAX(sequence_number) + 1` per `receipt_date`) inside the transaction ensures no gaps, duplicate numbers, or orphan payment records can occur.
+- **Alternatives Considered**: Storing decimal dollars as `REAL` or generating receipt numbers asynchronously in Java. Rejected because `REAL` introduces rounding errors in revenue summaries and asynchronous receipt generation can produce orphaned payments without receipts if the application crashes.
+- **Trade-off**: Dollar inputs must be converted to cents via `BigDecimal` at the UI/service boundary, and formatted back for display.
+
+### 9.8 Asynchronous Execution with Serialized Background Tasks
+- **Decision**: Execute all database transactions, reports, and search queries on background worker threads via `ClinicTaskRunner` and `SerializedClinicTaskRunner`, marshaling completion callbacks to the JavaFX Application Thread using `Platform.runLater()`.
+- **Rationale**: Prevents long-running SQL queries or file exports from freezing the JavaFX UI thread, keeping animations, cursor feedback, and window interactions responsive. Task serialization prevents race conditions on rapid successive operations (e.g. rapid double-clicking of appointment booking or checkout).
+- **Alternatives Considered**: Running operations synchronously on the JavaFX Application Thread or using uncoordinated ad-hoc worker threads. Synchronous execution causes noticeable UI stutter and unresponsiveness, while uncoordinated threads introduce race conditions and state corruption.
+- **Trade-off**: Requires snapshotting UI input fields into immutable records before dispatching background tasks and managing callback token invalidation when navigating between views.
