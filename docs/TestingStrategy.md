@@ -45,7 +45,7 @@ The automated test suite exercises all layers of the application without requiri
 | Layer / Test Suite | Primary Target Scope | Verified Invariants & Scenarios |
 | --- | --- | --- |
 | **Domain & Value Types** | `nusynapxe.domain` | Record value equality, immutability, date formatting, and revenue calculations. |
-| **Persistence & Transactions** | `nusynapxe.persistence` | Atomic schema migrations (v1–v5), constraint rollback, parameterized queries, and sequential receipt numbers. |
+| **Persistence & Transactions** | `nusynapxe.persistence` | Atomic schema migrations (v1–v7), constraint rollback, parameterized queries, and sequential receipt numbers. |
 | **Business Services** | `nusynapxe.service` | Authentication, PBKDF2 hashing, appointment state transitions, temporal collision checks, preflight blocker cascades, and calendar intervals. |
 | **UI Components (Headless TestFX)** | `nusynapxe.ui` | JavaFX stage routing, minimal date picker sizing, reactive appointment dialog validation, and doctor navigation. |
 | **Architectural Rules (ArchUnit)** | `nusynapxe.architecture` | Cyclic dependency prevention, package encapsulation, layer separation, and immutability invariants. |

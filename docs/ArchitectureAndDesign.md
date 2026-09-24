@@ -236,7 +236,7 @@ flowchart TD
     subgraph CoreStorage["Database Engine"]
         SqliteDb["SqliteDatabase<br/>(Connection Factory and PRAGMA Settings)"]
         TxHelper["SqliteTransactions<br/>(Atomic Commit and Rollback Wrapper)"]
-        Migrator["SchemaInitializer<br/>(v1 to v5 Schema Migration Engine)"]
+        Migrator["SchemaInitializer<br/>(v1 to v7 Schema Migration Engine)"]
         Queries["SqliteQueries<br/>(SQL Helpers and Wildcard Escaping)"]
     end
 
@@ -276,7 +276,7 @@ flowchart TD
 erDiagram
     users ||--o{ appointments : "doctor assigns"
     users ||--o{ doctor_time_off : "doctor owns"
-    users ||--o{ doctor_calendar_settings : "doctor owns"
+    users ||--o| doctor_calendar_settings : "doctor owns"
     users ||--o{ doctor_working_intervals : "doctor owns"
     users ||--o{ clinical_records : "doctor authors"
     users ||--o{ payments : "receptionist records"
@@ -292,15 +292,16 @@ erDiagram
 
     clinical_records ||--o{ prescriptions : "prescribes"
 
-    payments ||--|| receipts : "generates"
+    payments ||--o| receipts : "generates"
 
     users {
         INTEGER id PK
         TEXT username UK
-        BLOB password_hash
-        BLOB salt
-        TEXT role
         TEXT display_name
+        TEXT role
+        INTEGER enabled
+        BLOB password_salt
+        BLOB password_verifier
         TEXT created_at
     }
 
@@ -405,7 +406,7 @@ erDiagram
     }
 ```
 
-### 4.3 Database Schema Migration Ledger (v1 to v5)
+### 4.3 Database Schema Migration Ledger (v1 to v7)
 
 All schema changes are versioned and executed through `SchemaInitializer.java`. When upgrading an existing clinic installation, migrations run incrementally in an explicit SQLite transaction:
 
@@ -414,6 +415,8 @@ All schema changes are versioned and executed through `SchemaInitializer.java`. 
 - **Version 3 (Data Hygiene & Normalization)**: Drops unused `billing_information` column from `patients` table (payment details are strictly stored in `payments`) and normalizes historical sex values to uppercase `MALE` or `FEMALE`.
 - **Version 4 (International Telephony Normalization)**: Renames `phone` to `phone_number`, introduces `phone_country_code`, and requires standardized calling codes for subsequent patient profile updates.
 - **Version 5 (Custom Working Hours & Shift Splits)**: Creates `doctor_calendar_settings` and `doctor_working_intervals`, enabling doctors to define split working shifts and lunch breaks (up to 1440 minutes per day). Defaults to Mon-Fri `08:00`–`18:00`.
+- **Version 6 (Appointment Status Constraint Rebuild)**: Rebuilds `appointments` table using a temporary table migration to expand the SQLite status check constraint to include `DECLINED`, `CHECKED_OUT`, and `CANCELLED`.
+- **Version 7 (Prescription History Index Optimization)**: Adds index `idx_prescriptions_clinical_record_id` on `prescriptions(clinical_record_id, id)` to optimize batch cross-doctor clinical history queries.
 
 ---
 
