@@ -76,7 +76,7 @@ flowchart LR
     PMD --> SpotBugs["SpotBugs & FindSecBugs<br/>(4.10.3)"]
     SpotBugs --> FileSize["File Size Check<br/>(Max 500 lines)"]
     FileSize --> Tests["JUnit 5 & TestFX<br/>(Automated Suite)"]
-    Tests --> JaCoCo["JaCoCo Gate<br/>(80%+ Coverage)"]
+    Tests --> JaCoCo["JaCoCo Gate<br/>(85% Inst / 70% Branch / 85% Line)"]
 
     classDef default fill:#ffffff,stroke:#17324d,stroke-width:1.5px,color:#17324d;
     classDef pass fill:#e8f5e9,stroke:#388e3c,stroke-width:1.5px,color:#1b5e20;
@@ -88,7 +88,7 @@ flowchart LR
 3. **PMD Static Analysis**: Guards against empty blocks, unused variables, complex cyclomatic structures, and antipatterns.
 4. **SpotBugs & FindSecBugs**: Max-effort bytecode inspection detecting potential null dereferences, resource leaks, and security risks.
 5. **File Size Enforcement**: `sourceFileSizeCheck` task fails the build if any Java source or test file exceeds 500 lines of code.
-6. **JaCoCo Coverage Thresholds**: Requires 80%+ instruction and branch coverage across production domain, service, and persistence packages.
+6. **JaCoCo Coverage Thresholds**: Requires 85% instruction coverage, 70% branch coverage, and 85% line coverage repo-wide across all compiled classes.
 
 ---
 
@@ -157,7 +157,7 @@ Testers can manually execute these comprehensive end-to-end verification scenari
 ### Scenario 7: Arrival Check-in Gate
 1. Log in as `mary`. Open **Check in** queue.
 2. Select an accepted appointment whose scheduled time has not yet arrived.
-3. Verify that **Check in patient** button is disabled with explanatory text.
+3. Verify that **Check in patient** button is disabled in the dialog (as current time is before the scheduled start time).
 4. Select an accepted appointment whose start time is in the past or present.
 5. Click **Check in patient**. Verify status transitions to `CHECKED_IN`.
 
@@ -179,7 +179,7 @@ Testers can manually execute these comprehensive end-to-end verification scenari
 2. Select the completed appointment for `Tan Ah Teck`.
 3. Enter amount `65.50` and select payment method `CARD`.
 4. Click **Complete checkout**.
-5. Verify receipt preview displays sequence number `RCP-YYYYMMDD-0001` and appointment transitions to `CHECKED_OUT`.
+5. Verify receipt preview displays receipt sequence formatted as `Receipt YYYY-MM-DD-0001` (e.g. `Receipt 2026-10-15-0001`) and appointment transitions to `CHECKED_OUT`.
 6. Navigate to **Revenue Reports**, select today's date range, and click **Generate report**.
 7. Verify total revenue shows `$65.50` under CARD method.
 8. Click **Export CSV** and **Export JSON** to verify exported file integrity.

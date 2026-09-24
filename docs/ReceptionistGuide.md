@@ -198,11 +198,11 @@ The **Revenue Reports** tab provides financial auditing and summary reporting.
 3. Click **Generate report**.
 4. The generated report displays:
    - **Summary Totals**: Total gross revenue in SGD and successful payment transaction count.
-   - **Breakdown by Payment Method**: Amount and count for Cash, Card, Transfer, and Other.
-   - **Breakdown by Doctor**: Attributed revenue and visit count per clinician.
+   - **Breakdown by Payment Method**: Subtotal dollar amounts attributed to each payment method (Cash, Card, Transfer, Other).
+   - **Breakdown by Doctor**: Subtotal dollar amounts attributed to each clinician.
    - **Itemized Receipts Table**: Chronological list of matching receipts (date/time, receipt number, patient name, doctor name, payment method, amount).
    - *Note*: Cancelled visits and unsuccessful payments do not contribute to revenue totals.
-5. Click **Export CSV** to save an itemized spreadsheet for Excel/Sheets, or click **Export JSON** to export structured accounting data.
+5. Click **Export CSV** to save an itemized RFC 4180 compliant CSV file, or click **Export JSON** to export structured accounting data.
 
 ---
 

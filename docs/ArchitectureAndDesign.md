@@ -21,7 +21,7 @@ flowchart TD
     SVC["Service Layer (Business Logic and Rules)<br/>ClinicServices, Authentication, Authorization Guards, Validation"]
     REPO["Persistence Layer (Data Access and SQL)<br/>SqliteDatabase, Transactions, SchemaInitializer, Repositories"]
     DOM["Domain Layer (Shared Models and Enums)<br/>Immutable Records, Value Objects, Domain Enums"]
-    DB[("Embedded Storage<br/>SQLite WAL Database")]
+    DB[("Embedded Storage<br/>SQLite Database")]
 
     UI --> SVC
     SVC --> REPO
@@ -62,9 +62,9 @@ sequenceDiagram
     User->>App: Launch NUSynapxe
     App->>Router: init() & start(Stage)
     Router->>DB: SqliteDatabase.open(DatabasePaths.resolve())
-    DB->>DB: Configure PRAGMAs (foreign_keys = ON, journal_mode = WAL)
+    DB->>DB: Configure PRAGMAs (foreign_keys = ON)
     DB->>Migrator: initialize(connection)
-    Migrator->>DB: Execute versioned migrations (v1 -> v5)
+    Migrator->>DB: Execute versioned migrations (v1 -> v7)
     Router->>Auth: hasAccounts()
     alt Empty Database (First Launch)
         Router->>UI: Show SetupView (First-Run Admin Setup)
@@ -201,12 +201,12 @@ flowchart TD
 | `ClinicServices` | Immutable service container providing centralized instantiation and access to all domain services. | All service interfaces |
 | `AuthenticationService` | Handles user authentication, credential verification against PBKDF2 hashes, account active flag inspection, and session initialization. | `AccountRepository`, `PasswordHasher`, `Session` |
 | `Authorization` | Static security guard enforcing role authorization matrices (e.g. `requireRole()`, `requireDoctorOwnership()`, `requirePatientAdministration()`). Throws `AuthorizationException`. | `Session`, `Role` |
-| `PasswordHasher` | Cryptographic password management. Hashes passwords using `PBKDF2WithHmacSHA256` with 16-byte random salt and 65,536 iterations. Scrubs password byte buffers immediately after use. | `SecureRandom`, `SecretKeyFactory` |
+| `PasswordHasher` | Cryptographic password management. Hashes passwords using `PBKDF2WithHmacSHA256` with 16-byte random salt and 210,000 iterations. Scrubs password byte buffers immediately after use. | `SecureRandom`, `SecretKeyFactory` |
 | `PatientService` | Validates NRIC/FIN/Passport document syntax, locks Singapore issuing country, normalizes international calling codes, executes preflight deletion blocker checks, and toggles active state. | `PatientRepository`, `PatientDeletionBlockers` |
 | `AppointmentService` | Enforces 30-minute interval boundaries, executes interval overlap conflict detection (`existing_start < new_end AND existing_end > new_start`), checks Singapore check-in time gate, and manages state transitions. | `AppointmentRepository`, `AppointmentTransitions` |
 | `ClinicalService` | Enforces attending doctor consultation ownership, persists diagnostic notes, manages itemized multi-drug prescriptions, and joins completed cross-doctor medical histories. | `ClinicalRecordRepository`, `Prescription` |
 | `CalendarService` | Computes 24-hour visual time slot layouts, discretizes doctor working intervals, filters personal time-off blocks, and handles keyspaced cursor-based agenda pagination. | `CalendarSettingsRepository`, `DoctorTimeOff` |
-| `BillingService` | Converts dollar amounts to exact integer cents (`amount_cents INTEGER`), enforces positive payments, generates daily sequential receipt numbers (`RCP-YYYYMMDD-XXXX`), and aggregates revenue reports. | `PaymentRepository`, `ReceiptRepository`, `RevenueReport` |
+| `BillingService` | Converts dollar amounts to exact integer cents (`amount_minor INTEGER`), enforces positive payments, generates daily sequential receipt numbers (`receipt_date` and `sequence_number`), and aggregates revenue reports. | `PaymentRepository`, `ReceiptRepository`, `RevenueReport` |
 
 ### 3.2 Authorization & Role Access Matrix
 
@@ -229,7 +229,7 @@ flowchart TD
 
 ## 4. Persistence Layer (`nusynapxe.persistence`)
 
-The persistence layer manages all embedded SQLite database interactions, connection pooling, transactional rollbacks, query projection sanitization, and automated schema migrations.
+The persistence layer manages all embedded SQLite database interactions, single-connection lifecycle, transactional rollbacks, query projection sanitization, and automated schema migrations.
 
 ```mermaid
 flowchart TD
@@ -259,9 +259,9 @@ flowchart TD
 
 | Class / File | Primary Role & Responsibilities | Key Collaborators |
 | --- | --- | --- |
-| `SqliteDatabase` | Manages SQLite JDBC connection lifecycle. Sets `PRAGMA foreign_keys = ON;` and `PRAGMA journal_mode = WAL;`. Provides pooled and single-connection access. | `org.sqlite.JDBC`, `DatabasePaths` |
+| `SqliteDatabase` | Manages the application's single SQLite JDBC connection lifecycle. Ensures parent directories exist and enforces `PRAGMA foreign_keys = ON;`. | `org.sqlite.JDBC`, `DatabasePaths` |
 | `SqliteTransactions` | Functional transaction helper executing multi-statement operations within explicit `BEGIN TRANSACTION` and `COMMIT` blocks, automatically rolling back on `SQLException`. | `Connection` |
-| `SchemaInitializer` | Incremental database migration runner. Inspects `app_metadata.schema_version` and executes migrations v1 through v5 sequentially within an atomic transaction. | `SqliteTransactions` |
+| `SchemaInitializer` | Incremental database migration runner. Inspects `app_metadata.schema_version` and executes migrations v1 through v7 sequentially within an atomic transaction. | `Connection` |
 | `SqliteQueries` | SQL utility class providing parameterized query construction and SQL `LIKE` wildcard escaping (safely escaping `%` and `_` characters to prevent query leakage). | `PreparedStatement` |
 | `AccountRepository` | Persists user credentials, salts, PBKDF2 verifiers, display names, and active status flags. Enforces unique username constraints. | `Account`, `AccountCredential` |
 | `PatientRepository` & `PatientQueryRepository` | Stores standardized patient profiles, executes multi-field search queries, enforces unique identity document tuples, and calculates preflight deletion blockers. | `Patient`, `PatientDeletionBlockers` |
@@ -571,15 +571,16 @@ sequenceDiagram
     Doctor->>UI_D: Click "Mark consultation completed"
     UI_D->>ClinSvc: completeConsultation(session, apptId)
     ClinSvc->>DB: UPDATE appointments SET status = 'COMPLETED'
-    ClinSvc-->>UI_D: Consultation finalized & locked
+    ClinSvc-->>UI_D: Consultation completed
 
     Note over Receptionist, UI_R: 3. Billing & Daily Receipt Generation
     Receptionist->>UI_R: Open Checkout Tab & Select Completed Visit
     Receptionist->>UI_R: Enter Amount ($45.00) & Method (CARD)
     UI_R->>BillSvc: completeCheckout(session, apptId, 4500, CARD)
     BillSvc->>DB: BEGIN TRANSACTION
-    BillSvc->>DB: Generate sequence: RCP-YYYYMMDD-XXXX
-    BillSvc->>DB: INSERT INTO payments (amount_cents=4500, receipt_number=...)
+    BillSvc->>DB: Next sequence: MAX(sequence_number) + 1
+    BillSvc->>DB: INSERT INTO payments (amount_minor=4500, ...)
+    BillSvc->>DB: INSERT INTO receipts (payment_id, receipt_date, sequence_number, ...)
     BillSvc->>DB: UPDATE appointments SET status = 'CHECKED_OUT'
     BillSvc->>DB: COMMIT
     BillSvc-->>UI_R: Receipt Details

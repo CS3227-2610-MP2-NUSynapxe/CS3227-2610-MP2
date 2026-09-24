@@ -1,94 +1,86 @@
 ---
+sidebar_position: 1
 title: Developer Guide
-sidebar_label: Developer Guide
+description: Engineering architecture, development workflows, quality gates, and technical specifications for NUSynapxe.
 ---
 
-# Developer Guide
+# NUSynapxe Developer Guide
 
-## 1. Development Prerequisites
+## 1. Introduction
 
-NUSynapxe is built on modern Java and desktop UI standards. The project uses:
-- **Java**: OpenJDK 25 (Java 25 toolchain)
-- **Build System**: Gradle Wrapper 9.7.1
-- **UI Toolkit**: JavaFX 25.0.4 (resolved via the `org.openjfx.javafxplugin` Gradle plugin; no external JavaFX SDK installation is needed)
-- **Embedded Database**: SQLite JDBC 3.53.4.0 with Xerial SQLite driver
-- **Documentation Platform**: Node.js 24 and Docusaurus 3.10.2
-- **Testing & Verification**: JUnit 6.1.3 (via `junit-bom`), Mockito 5.23.0, TestFX 4.0.18, ArchUnit 1.5.0, Spotless 8.10.2 (Google Java Format 1.36.1), Checkstyle 14.1.0, PMD 7.26.0, SpotBugs 4.10.3 with FindSecBugs 1.14.0, and JaCoCo 0.8.14.
+NUSynapxe is a modern, responsive, offline-first desktop clinic management system engineered in Java 25 and JavaFX 25-ea+18. It provides a cohesive, role-tailored workstation experience for clinic staff across administrative, front-desk, and clinical domains.
 
-Use the checked-in Gradle Wrapper (`.\gradlew.bat` on Windows, `./gradlew` on macOS/Linux) rather than an externally installed Gradle binary. Native Windows packaging (`.msi`) additionally requires the [WiX Toolset v3](https://wixtoolset.org/) or newer on system `PATH`; WiX is not needed for routine development, compilation, or testing.
+### 1.1 Purpose and Scope
+
+This Developer Guide describes the software architecture, design principles, persistence data model, testing philosophy, and engineering processes governing NUSynapxe. It serves as the primary technical onboarding reference for new contributors, maintainers, and system evaluators.
+
+### 1.2 System Overview
+
+NUSynapxe coordinates four operational core domains:
+- **Administrative Bootstrap & Provisioning**: System initialization, root administrator setup, role-based staff account lifecycle (`SYSTEM_ADMIN`, `RECEPTIONIST`, `DOCTOR`), and directory listing.
+- **Patient Registration & Demographics**: Deduplicated patient indexing supporting Singapore NRIC, FIN, and International Passports, complete with phone normalization and cascade-safe deletion blocker preflight audits.
+- **Appointment Scheduling & Multi-Doctor Agenda**: Temporal conflict detection, stateful lifecycle tracking (`PENDING` &rarr; `ACCEPTED` &rarr; `CHECKED_IN` &rarr; `COMPLETED` &rarr; `CHECKED_OUT`), arrival time gating in Asia/Singapore local time, recurring doctor working hours, and personal time-off blocking.
+- **Clinical Documentation & Financial Auditing**: Confidential doctor consultation workspace, multi-medication itemized prescription builder, cross-doctor historical clinical record browser, transactional payment settlement, sequenced daily receipt issuance, and multi-format (`CSV` / `JSON`) revenue report aggregation.
+
+```mermaid
+flowchart LR
+    subgraph Users["Clinic Staff Personas"]
+        Admin["System Administrator"]
+        Recept["Clinic Receptionist"]
+        Doc["Attending Physician"]
+    end
+
+    subgraph App["NUSynapxe Application Core"]
+        UI["JavaFX Desktop Workspaces"]
+        Services["Business Logic & Service Layer"]
+        Domain["Domain Entities & Value Types"]
+        Storage["Relational SQLite Persistence"]
+    end
+
+    Admin -->|Staff Provisioning| UI
+    Recept -->|Patients, Appointments, Billing| UI
+    Doc -->|Consultations, Prescriptions, Calendar| UI
+
+    UI --> Services
+    Services --> Domain
+    Services --> Storage
+
+    classDef default fill:#ffffff,stroke:#17324d,stroke-width:1.5px,color:#17324d;
+    classDef highlight fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
+    class UI,Services,Storage highlight;
+```
 
 ---
 
-## 2. Getting Started
+## 2. Technical Prerequisites & Stack
 
-### 2.1 Running NUSynapxe from Source
+NUSynapxe requires a modern Java toolchain and Node.js environment for building documentation:
 
-Start the desktop application from the repository root:
-
-```powershell
-# Windows PowerShell
-.\gradlew.bat run
-```
-
-```bash
-# macOS / Linux
-./gradlew run
-```
-
-The application creates or opens the local SQLite database described in the [User Guide](UserGuide.md) at `%USERPROFILE%\.nusynapxe\nusynapxe.db` (Windows) or `~/.nusynapxe/nusynapxe.db` (macOS/Linux). To isolate development data from your personal environment when running via Gradle, pass the `-PdemoDatabasePath` project property (which the `run` task in `build.gradle` forwards to the forked application JVM as the `nusynapxe.database` system property):
-
-```powershell
-# Windows PowerShell
-.\gradlew.bat run -PdemoDatabasePath="build/dev-test.db"
-```
-
-```bash
-# macOS / Linux
-./gradlew run -PdemoDatabasePath="build/dev-test.db"
-```
-
-*(Note: When launching a standalone fat JAR directly via `java -jar`, pass `-Dnusynapxe.database="build/dev-test.db"` directly to the JVM).*
-
-### 2.2 Useful Build and Quality Commands
-
-Execute the complete local Java quality gate:
-
-```powershell
-.\gradlew.bat spotlessApply check javadoc --no-daemon --console=plain
-```
-
-Individual focused commands for targeted development:
-
-```powershell
-# Run the complete test suite
-.\gradlew.bat test --no-daemon --console=plain
-
-# Run specific unit/service tests
-.\gradlew.bat test --tests nusynapxe.service.AppointmentServiceTest --no-daemon --console=plain
-.\gradlew.bat test --tests nusynapxe.persistence.SchemaMigrationTest --tests nusynapxe.persistence.PatientDirectoryRepositoryTest --no-daemon --console=plain
-.\gradlew.bat test --tests nusynapxe.service.PatientServiceValidationTest --tests nusynapxe.ui.ReceptionistBookingTest --no-daemon --console=plain
-.\gradlew.bat test --tests nusynapxe.service.PatientServiceMaintenanceTest --tests nusynapxe.persistence.PatientDirectoryRepositoryTest --tests nusynapxe.ui.DoctorDashboardTest --no-daemon --console=plain
-
-# Run static analysis and linting
-.\gradlew.bat checkstyleMain checkstyleTest --no-daemon --console=plain
-.\gradlew.bat pmdMain --no-daemon --console=plain
-.\gradlew.bat spotbugsMain --no-daemon --console=plain
-
-# Generate coverage reports
-.\gradlew.bat jacocoTestReport --no-daemon --console=plain
-```
+| Component | Required Version | Pinned Build Specification | Role in Architecture |
+| --- | --- | --- | --- |
+| **Java Development Kit (JDK)** | 25 | Eclipse Temurin 25 | Application runtime, virtual thread scheduling, pattern matching, records |
+| **JavaFX SDK** | 25-ea+18 | `openjfx:javafx-controls:25-ea+18` | Cross-platform desktop user interface controls and scene graph rendering |
+| **Relational Database** | 3.51.0.0 | `org.xerial:sqlite-jdbc:3.51.0.0` | Embedded local relational SQL database |
+| **Build Automation** | 9.2.1 | Gradle Wrapper (`gradlew`) | Dependency resolution, multi-task orchestration, packaging |
+| **Documentation Engine** | 3.10.2 | Docusaurus (`@docusaurus/core: 3.10.2`) | Documentation static site generator and live portal |
+| **Automated Testing** | 6.1.3 | JUnit 6.1.3 (`junit-jupiter`) | Unit, parameterized, and integration test execution |
+| **Mocking Framework** | 5.23.0 | Mockito 5.23.0 (`mockito-core`, `mockito-junit-jupiter`) | Isolated boundary mocking |
+| **Code Formatting** | 7.3.1 | Spotless 7.3.1 (`google-java-format: 1.25.2`) | Deterministic source code formatting |
+| **Static Code Analysis** | 14.1.0 / 7.26.0 | Checkstyle 14.1.0 & PMD 7.26.0 | Enforce coding standards and detect antipatterns |
+| **Bytecode Analysis** | 4.10.3 / 1.14.0 | SpotBugs 4.10.3 + FindSecBugs 1.14.0 | Detect concurrency, nullability, and security vulnerabilities |
+| **Code Coverage** | 0.8.14 | JaCoCo 0.8.14 | Bytecode test coverage verification gates |
 
 ---
 
 ## 3. Product Specifications
 
-The system functional requirements, target user personas, priority-rated user stories, structured use cases (UC01–UC16), non-functional specifications, and Gherkin BDD specifications are maintained in the standalone [**Product Specifications**](ProductSpecifications.md) reference.
+The system functional requirements, target user personas, priority-rated user stories, structured use cases (UC01–UC16), non-functional specifications, and Gherkin behavioral specifications are maintained in the standalone [**Product Specifications**](ProductSpecifications.md) reference.
 
 Key specifications include:
 - **Target User Personas**: System Administrator (system bootstrap & staff provisioning), Clinic Receptionist (front-desk coordination & billing), and Attending Physician / Doctor (clinical workflow & scheduling).
 - **User Stories**: Prioritized stories covering administrative, identity, appointment, consultation, time-off, and financial domains.
 - **Use Cases (UC01–UC16)**: Formal definitions with preconditions, main success scenarios, and failure extensions covering authentication, patient registration, conflict-aware scheduling, check-in, clinical notes, prescriptions, checkout billing, and reporting.
-- **Gherkin Specifications**: Executable BDD acceptance scenarios for automated validation.
+- **Gherkin Specifications**: Illustrative Given-When-Then behavioral specifications specifying end-to-end user journeys and system invariants.
 
 ---
 
@@ -114,7 +106,7 @@ The complete testing methodology, test pyramid distribution, quality gates, auto
 
 Key testing policies include:
 - **Comprehensive Test Pyramid**: Layered automated verification spanning unit, parameterized, ArchUnit structural, and TestFX UI headless tests.
-- **Quality Verification Gates**: Strict enforcement of Spotless code formatting, Checkstyle syntax linting, PMD static analysis, SpotBugs + FindSecBugs security rules, maximum 500-line source file limits, and 80%+ JaCoCo branch and line coverage thresholds.
+- **Quality Verification Gates**: Strict enforcement of Spotless code formatting, Checkstyle syntax linting, PMD static analysis, SpotBugs + FindSecBugs security rules, maximum 500-line source file limits, and repo-wide JaCoCo coverage thresholds (85% instruction, 70% branch, 85% line).
 - **Manual Verification Walkthroughs**: Deterministic test scenarios with step-by-step test vectors for peer testing.
 
 ---
@@ -123,55 +115,64 @@ Key testing policies include:
 
 ### 6.1 Running Demonstration Seed Data
 
-For local feature exploration or manual validation, populate a realistic database containing doctors, receptionists, diverse patient profiles, appointments, clinical notes, prescriptions, and receipts:
+To launch NUSynapxe with isolated demonstration showcase data without mutating your local user environment database:
 
 ```powershell
 # Windows PowerShell
-.\scripts\seed-demo-data.ps1 -Reset
+.\gradlew.bat run -PdemoDatabasePath="build/demo/showcase.db" --no-daemon --console=plain
 ```
 
 ```bash
-# macOS / Linux
-./gradlew demoData -PdemoDataCommand=seed -PdemoDatabasePath="build/demo.db" -PdemoDataReset=true
+# macOS / Linux Bash
+./gradlew run -PdemoDatabasePath="build/demo/showcase.db" --no-daemon --console=plain
 ```
 
-The seeder initializes sample accounts:
-- **System Admin**: `admin.demo` / `DemoAdmin123!`
-- **Doctors**: `ada` / `ada1234!`, `grace` / `grace123!`
-- **Receptionist**: `reception` / `recept123!`
+The database seeder automatically initializes the schema and creates demo accounts:
+- **System Administrator**: `admin` / `admin123`
+- **Clinic Receptionist**: `mary` / `reception123`
+- **Attending Physician**: `dr.john` / `doctor123`
 
-Creates realistic patient profiles across active and inactive states, multi-week appointment schedules, recurring working intervals, and historical clinical records.
+### 6.2 Focused Automated Test Execution
+
+Execute specific test classes or packages without running the full test suite:
+
+```powershell
+# Run a specific service test suite
+.\gradlew.bat test --tests "nusynapxe.service.PatientServiceValidationTest" --info
+
+# Run persistence migration tests
+.\gradlew.bat test --tests "nusynapxe.persistence.SchemaMigrationTest" --info
+
+# Run front-desk booking tests
+.\gradlew.bat test --tests "nusynapxe.service.ReceptionistBookingTest" --info
+```
 
 ---
 
-## 7. Documentation Site Maintenance
+## 7. Build Automation and Verification Gates
 
-The project documentation website is powered by [Docusaurus 3](https://docusaurus.io/). All documentation sources reside in `docs/` and configuration in `website/`.
+All code pushed to repository branches is evaluated against strict automated quality gates configured in `build.gradle`:
 
-### 7.1 Running the Documentation Server Locally
+```mermaid
+flowchart TD
+    Build["./gradlew check"] --> Format["Spotless<br/>(Google Java Format)"]
+    Build --> Lint["Checkstyle 14.1.0<br/>(Strict Style Rules)"]
+    Build --> Static["PMD 7.26.0<br/>(Rule Compliance)"]
+    Build --> Sec["SpotBugs 4.10.3<br/>+ FindSecBugs 1.14.0"]
+    Build --> Limit["File Size Rule<br/>(<= 500 LOC/File)"]
+    Build --> Unit["Unit & Integration Tests<br/>(JUnit 6.1.3 + Mockito 5.23.0)"]
+    Build --> Cov["JaCoCo Gate<br/>(85% Inst / 70% Branch / 85% Line)"]
 
-```bash
-cd website
-npm install
-npm run start
+    Format & Lint & Static & Sec & Limit & Unit & Cov --> Success(["Quality Gate Passed"])
+
+    classDef default fill:#ffffff,stroke:#17324d,stroke-width:1.5px,color:#17324d;
+    classDef pass fill:#e8f5e9,stroke:#388e3c,stroke-width:1.5px,color:#1b5e20;
+    class Success pass;
 ```
-
-Runs the development server at `http://localhost:3000/` with live hot-reloading.
-
-### 7.2 Verifying Documentation Build
-
-To verify that all Markdown files, Mermaid diagrams, and internal links compile without broken references:
-
-```bash
-cd website
-npm run build
-```
-
-Generates static HTML files in `website/build/` and fails if broken links, malformed frontmatter, or syntax errors are detected.
 
 ---
 
-## 8. Cross-Platform Release Packaging
+## 8. Distribution Packaging and Release Management
 
 NUSynapxe produces native desktop installers and fat JARs for cross-platform distribution.
 
@@ -179,20 +180,26 @@ NUSynapxe produces native desktop installers and fat JARs for cross-platform dis
 
 ```powershell
 # Universal Fat JAR (Windows x64, Linux x64, macOS ARM64)
-.\gradlew.bat fatJar --no-daemon --console=plain
+.\gradlew.bat universalFatJar --no-daemon --console=plain
 
-# Dedicated Platform JAR (e.g. Windows x64)
-.\gradlew.bat fatJarWindowsX64 --no-daemon --console=plain
+# Platform-Specific Fat JAR for current host
+.\gradlew.bat fatJar --no-daemon --console=plain
 ```
 
 Output JARs are located in `build/libs/`.
 
 ### 8.2 Building Native Platform Installers
 
-The project uses `jpackage` to compile self-contained native installers bundling a dedicated Java 25 runtime:
-- **Windows (`.msi`)**: `.\gradlew.bat packageMsi` (requires WiX Toolset v3+ on `PATH`).
-- **macOS (`.dmg`)**: `./gradlew packageDmg` (executed on macOS host).
-- **Linux (`.deb`)**: `./gradlew packageDeb` (requires `fakeroot` on Debian/Ubuntu).
+The project uses `jpackage` through the unified `packageNative` Gradle task (which requires `-PreleaseVersion=<major>.<minor>.<patch>`) to compile a self-contained native installer bundling a dedicated Java 25 runtime for the host operating system:
+
+```powershell
+# Build native installer for the current host OS (e.g. .msi on Windows, .dmg on macOS, .deb on Linux)
+.\gradlew.bat packageNative -PreleaseVersion=1.0.0 --no-daemon --console=plain
+```
+
+- **Windows (`.msi`)**: Run `packageNative` on Windows (requires WiX Toolset v3+ on `PATH`).
+- **macOS (`.dmg`)**: Run `packageNative` on macOS.
+- **Linux (`.deb`)**: Run `packageNative` on Linux (requires `fakeroot`).
 
 ---
 
@@ -231,7 +238,7 @@ The project uses `jpackage` to compile self-contained native installers bundling
 
 ## 11. Known Limitations & Future Work
 
-1. **Single-Workstation Concurrency**: The application is optimized for single-workstation local desktop use with SQLite WAL mode. Future iterations could incorporate an optional remote PostgreSQL sync connector for multi-counter clinic networks.
+1. **Single-Workstation Concurrency**: The application is optimized for single-workstation local desktop use with a dedicated SQLite database connection. Future iterations could incorporate an optional remote PostgreSQL sync connector for multi-counter clinic networks.
 2. **External Identity Verification**: Identity document syntax (NRIC/FIN/Passport) is strictly verified via pattern matching and issuing country checks, but does not query government identity registries (e.g. Singpass API).
 3. **Calendar Shading vs Booking Policy**: Doctor working intervals and lunch breaks provide visual calendar shading to assist front-desk scheduling without strictly blocking emergency walk-in bookings.
 4. **Code Signing**: Open-source binaries are unsigned. Operating systems may present a one-time trust prompt on first run. Future releases could integrate Apple Developer ID and Microsoft Authenticode code-signing certificates.
@@ -239,21 +246,18 @@ The project uses `jpackage` to compile self-contained native installers bundling
 
 ---
 
-## 12. Acknowledgements
+## 12. Documentation and Code Reuse Acknowledgements
 
-We gratefully acknowledge the following open-source projects, frameworks, specifications, and reference documentation that made the development of NUSynapxe possible:
+NUSynapxe builds upon established software engineering methodologies and open-source foundations:
 
-| Source / Project | Role and Utilization in NUSynapxe |
-| --- | --- |
-| [OpenJFX](https://openjfx.io/) | High-performance desktop UI controls, scene graph, layouts, and JavaFX application lifecycle. |
-| [SQLite](https://www.sqlite.org/docs.html) & [Xerial SQLite JDBC](https://github.com/xerial/sqlite-jdbc) | Zero-configuration embedded relational persistence, transactional schema initialization, and foreign key enforcement. |
-| [Google libphonenumber](https://github.com/google/libphonenumber) | International telephone country calling-code mapping and metadata resolution. |
-| [JUnit 5](https://junit.org/junit5/) & [Mockito](https://site.mockito.org/) | Comprehensive unit, parameterized, and service layer mock testing. |
-| [TestFX](https://github.com/TestFX/TestFX) | Automated headless JavaFX user interface interaction, form automation, and scene assertion. |
-| [ArchUnit](https://www.archunit.org/) | Automated structural linting and architectural dependency direction enforcement. |
-| [Spotless](https://github.com/diffplug/spotless) & [Google Java Format](https://github.com/google/google-java-format) | Deterministic code formatting and automated style checking. |
-| [Checkstyle](https://checkstyle.org/) & [PMD](https://pmd.github.io/) | Static source analysis, maintainability rules, and coding standards enforcement. |
-| [SpotBugs](https://spotbugs.github.io/) & [FindSecBugs](https://find-sec-bugs.github.io/) | Bytecode security vulnerability detection and static bug pattern analysis. |
-| [JaCoCo](https://www.jacoco.org/jacoco/) | Branch and instruction code coverage analysis and report generation. |
-| [Docusaurus](https://docusaurus.io/) & [Mermaid](https://mermaid.js.org/) | Production documentation website generation, MDX rendering, and source-controlled architectural diagrams. |
-| [WiX Toolset](https://wixtoolset.org/) & `jpackage` | Native Windows (`.msi`), macOS (`.dmg`), and Linux (`.deb`) installer compilation. |
+1. **Architectural Foundations & Guidelines**:
+   - Reference curriculum materials, design principles, and developer documentation structure adapted from [CS3227 Software Engineering](https://johnwz123.github.io/CS3227-2610-MP1/DeveloperGuide).
+2. **Cryptographic Standards**:
+   - Password hashing adheres strictly to RFC 2898 / NIST SP 800-132 recommendations using PBKDF2 with HMAC-SHA256, 210,000 iterations, and a cryptographically secure 128-bit salt (`java.security.SecureRandom`).
+3. **Open-Source Libraries & Dependencies**:
+   - [OpenJFX](https://openjfx.io/): JavaFX UI toolkit for cross-platform desktop UI controls.
+   - [SQLite JDBC](https://github.com/xerial/sqlite-jdbc): Embedded database engine and driver by Taro L. Saito.
+   - [JUnit 6](https://junit.org/junit5/): Developer testing framework.
+   - [Mockito](https://site.mockito.org/): Mocking framework for unit testing.
+   - [Docusaurus](https://docusaurus.io/): Modern static website generator for documentation.
+   - [Mermaid.js](https://mermaid.js.org/): Diagramming and charting tool integrated with Docusaurus.

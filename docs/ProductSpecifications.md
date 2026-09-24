@@ -5,7 +5,7 @@ sidebar_label: Product Specifications
 
 # Product Specifications
 
-This document defines the formal behavioral specifications, target personas, prioritized user stories, use cases, and executable Gherkin feature scenarios for NUSynapxe.
+This document defines the formal behavioral specifications, target personas, prioritized user stories, use cases, and illustrative Gherkin feature scenarios for NUSynapxe.
 
 For architectural decisions, class layouts, and database schema, see [Architecture & System Design](ArchitectureAndDesign.md). For verification procedures and test execution, see [Testing Strategy](TestingStrategy.md).
 
@@ -71,8 +71,8 @@ Priorities are designated as follows:
 | :---: | --- | --- | --- |
 | `* * *` | Attending Physician | As a doctor, I want a daily master-detail dashboard schedule, so that I can see today's agenda alongside the selected patient's clinical file. | Left pane displays scrollable 24-hour visual schedule with live Singapore clock line; right pane displays status-aware consultation workspace. |
 | `* * *` | Attending Physician | As a doctor, I want to record diagnosis, consultation examination notes, and follow-up instructions for a checked-in patient, so that clinical care is documented. | Clinical records are editable only by the assigned doctor for visits in `CHECKED_IN` status. Notes are saved atomically with the consultation. |
-| `* * *` | Attending Physician | As a doctor, I want to prescribe multiple medications with dosage, frequency, duration, and instructions, so that patients receive their prescriptions upon checkout. | Itemized prescription builder supporting multiple drugs per consultation. Requires non-empty drug name, dosage, frequency, and duration. |
-| `* * *` | Attending Physician | As a doctor, I want to mark consultations completed, so that the appointment transfers to the receptionist for payment collection. | Atomically transitions status from `CHECKED_IN` to `COMPLETED` and locks clinical consultation records against further modification. |
+| `* * *` | Attending Physician | As a doctor, I want to prescribe multiple medications with dosage, frequency, duration, and instructions, so that patients receive their prescriptions upon checkout. | Itemized prescription builder supporting multiple drugs per consultation. Requires non-empty drug name, dosage, frequency, duration, and instructions. |
+| `* * *` | Attending Physician | As a doctor, I want to mark consultations completed, so that the appointment transfers to the receptionist for payment collection. | Atomically transitions status from `CHECKED_IN` to `COMPLETED` and routes the visit to the front-desk checkout queue for payment collection. |
 | `* *` | Attending Physician | As a doctor, I want to inspect a patient's historical consultations conducted across all clinic doctors, so that I understand past medical history for continuity of care. | Read-only consultation history browser displaying completed/checked-out visits across all clinic physicians. Strictly excludes in-progress consultations of other doctors. |
 | `* *` | Clinic Staff | As clinic staff, I want strict confidentiality boundaries between front-desk and clinical data, so that receptionists cannot view clinical notes. | Database queries use projection-specific SQL. Receptionist appointment queries join only administrative patient data and exclude clinical record tables. |
 
@@ -89,10 +89,10 @@ Priorities are designated as follows:
 
 | Priority | Persona Role | User Story Text | Business Rationale & Acceptance Criteria |
 | :---: | --- | --- | --- |
-| `* * *` | Clinic Receptionist | As a receptionist, I want to collect payment for completed visits and issue receipts, so that billing is finalized immediately upon patient departure. | Enforces positive amount input, supports Cash, Card, Transfer, and Other payment methods, and generates sequential daily receipts (`RCP-YYYYMMDD-####`). |
+| `* * *` | Clinic Receptionist | As a receptionist, I want to collect payment for completed visits and issue receipts, so that billing is finalized immediately upon patient departure. | Enforces positive amount input, supports Cash, Card, Transfer, and Other payment methods, and generates sequential daily receipts (formatted as `Receipt YYYY-MM-DD-####` in receipt details and `YYYY-MM-DD-N` in the history list). |
 | `* *` | Clinic Receptionist | As a receptionist, I want to browse past receipts and review individual transaction details, so that patient billing inquiries can be resolved. | Receipt directory showing receipt ID, date, patient, doctor, payment method, and amount. Read-only audit view. |
 | `* *` | Clinic Receptionist | As a receptionist, I want to generate revenue reports across date ranges, doctors, and payment methods, so that clinic income can be audited. | Aggregates successful payments within inclusive date ranges. Breaks down totals by payment method and attending clinician. |
-| `* *` | Clinic Receptionist | As a receptionist, I want to export financial summaries to CSV and JSON formats, so that financial data can be imported into accounting systems. | Sanitized file export with proper escaping and formatting for external accounting and spreadsheet software. |
+| `* *` | Clinic Receptionist | As a receptionist, I want to export financial summaries to CSV and JSON formats, so that financial data can be imported into accounting systems. | Exports UTF-8 encoded files formatted according to RFC 4180 CSV specifications (quoting delimiters and escaping embedded quotes) and structured JSON for accounting ingestion. |
 
 ---
 
@@ -222,7 +222,7 @@ Priorities are designated as follows:
   5. System transitions status to `CHECKED_IN` and updates queue.
 - **Extensions**:
   - 3a. Current time is earlier than scheduled start time.
-    - Check-in action is disabled with message indicating check-in is only available at or after start time.
+    - **Check in patient** button is disabled in the appointment dialog until the appointment start time is reached.
 
 ### UC10: Doctor Clinical Consultation & Multi-Medication Prescription
 - **Actor**: Assigned Doctor
@@ -233,11 +233,11 @@ Priorities are designated as follows:
   3. Doctor clicks **Save consultation**.
   4. Doctor enters Medication Name, Dosage, Frequency, Duration, and Instructions, and clicks **Add prescription**.
   5. Doctor reviews completed consultation and selects **Mark consultation completed**.
-  6. System atomically transitions appointment to `COMPLETED` and locks clinical notes.
+  6. System atomically transitions appointment to `COMPLETED` and transfers the visit to the reception checkout queue.
 - **Extensions**:
   - 1a. Different doctor attempts to access or modify consultation.
     - Service layer throws `AccessDeniedException`; UI detail card remains inaccessible.
-  - 4a. Doctor attempts to submit prescription with empty medication name or dosage.
+  - 4a. Doctor attempts to submit prescription with empty required field (medication name, dosage, frequency, duration, or instructions).
     - System highlights required fields and prevents addition.
 
 ### UC11: Cross-Doctor Historical Consultation Inspection
@@ -289,7 +289,7 @@ Priorities are designated as follows:
   1. Receptionist selects completed visit in **Checkout** tab.
   2. Receptionist enters payment charge (e.g. `45.00`) and selects payment method (`CASH`, `CARD`, `TRANSFER`, `OTHER`).
   3. Receptionist clicks **Complete checkout**.
-  4. System converts dollars to integer cents (`4500`), persists payment, generates unique daily receipt number (`RCP-<date>-<seq>`), and transitions status to `CHECKED_OUT`.
+  4. System converts dollars to integer cents (`4500`), persists payment, generates unique daily receipt sequence number (e.g. `2026-10-15-1`), and transitions status to `CHECKED_OUT`.
   5. System displays receipt preview with Singapore timestamp.
 - **Extensions**:
   - 2a. Entered amount is negative, zero, or contains invalid characters.
@@ -420,7 +420,7 @@ Feature: Clinical Documentation and Prescription Issuance
     And adds prescription "Salbutamol Inhaler" with dosage "2 puffs" and frequency "PRN"
     And selects "Mark consultation completed"
     Then the appointment status updates to "COMPLETED"
-    And the clinical record is locked against further edits
+    And the consultation is marked as completed and ready for checkout
     And the visit becomes available in Receptionist Checkout
 ```
 
@@ -438,7 +438,7 @@ Feature: Checkout Billing and Receipt Issuance
     And enters payment amount "85.00" with method "CARD"
     And clicks "Complete checkout"
     Then a payment record of "8500" cents is stored in "payments"
-    And a receipt is generated with sequence "RCP-20261015-0001"
+    And a receipt is generated with sequence "2026-10-15-1"
     And the appointment status updates to "CHECKED_OUT"
     And the revenue report reflects the new transaction
 ```
@@ -455,8 +455,7 @@ Feature: Checkout Billing and Receipt Issuance
    - Session identifiers reside in volatile memory and terminate upon application exit or logout.
    - Role-based authorization enforced at the service layer prior to executing any repository read/write.
 3. **Data Integrity & Crash Safety**:
-   - SQLite Write-Ahead Logging (WAL) mode enabled for high-concurrency read/write transactions.
-   - Foreign key constraints enabled (`PRAGMA foreign_keys = ON`) on every database connection.
+   - Foreign key constraints enabled (`PRAGMA foreign_keys = ON`) on the database connection.
    - All multi-table updates (e.g. checkout payment + receipt generation + appointment status update) execute within atomic transactions.
 4. **Usability & Ergonomics**:
    - Compliant with accessibility standards: high-contrast clinical color palette, standard keyboard shortcuts, and clear focus states.
