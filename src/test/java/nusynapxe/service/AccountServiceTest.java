@@ -86,6 +86,27 @@ final class AccountServiceTest {
     }
   }
 
+  @Test
+  void listDoctorsOmitsDisabledAccounts() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      AccountRepository accounts = new AccountRepository(database);
+      AccountService service = new AccountService(accounts);
+      Account admin = service.createInitialAdmin("admin", "secure-pass".toCharArray());
+      Session adminSession = new Session(admin.id(), admin.username(), admin.role());
+      Session receptionist = new Session(999, "reception", Role.RECEPTIONIST);
+      Account enabled =
+          service.createStaff(
+              adminSession, "enabled", "Dr. Enabled", Role.DOCTOR, "doctor-pass".toCharArray());
+      Account disabled =
+          service.createStaff(
+              adminSession, "disabled", "Dr. Disabled", Role.DOCTOR, "doctor-pass".toCharArray());
+      accounts.setEnabled(disabled.id(), false);
+
+      assertEquals(java.util.List.of(enabled), service.listDoctors(receptionist));
+      assertEquals(java.util.List.of(enabled), service.listDoctors(adminSession));
+    }
+  }
+
   private SqliteDatabase openDatabase() throws SQLException {
     SqliteDatabase database = new SqliteDatabase(temporaryDirectory.resolve("service.db"));
     database.open();

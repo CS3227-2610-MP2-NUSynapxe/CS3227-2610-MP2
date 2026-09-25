@@ -173,6 +173,47 @@ final class ClinicalServiceTest {
   }
 
   @Test
+  void completedAndCheckedOutConsultationsAreReadOnly() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      Fixture fixture = fixture(database);
+      AppointmentRepository appointments = new AppointmentRepository(database);
+      ClinicalService service =
+          new ClinicalService(appointments, new ClinicalRecordRepository(database));
+
+      service.saveConsultation(
+          fixture.doctorSession(),
+          fixture.appointment().id(),
+          "Diagnosis",
+          "Final notes",
+          "Review");
+      service.addPrescription(
+          fixture.doctorSession(),
+          fixture.appointment().id(),
+          "Medicine",
+          "10 mg",
+          "Daily",
+          "7 days",
+          "Take with food");
+      appointments.updateStatus(fixture.appointment().id(), AppointmentStatus.COMPLETED);
+
+      assertClinicalChangesRejected(service, fixture);
+      appointments.updateStatus(fixture.appointment().id(), AppointmentStatus.CHECKED_OUT);
+      assertClinicalChangesRejected(service, fixture);
+      assertEquals(
+          "Final notes",
+          service
+              .findForDoctor(fixture.doctorSession(), fixture.appointment().id())
+              .orElseThrow()
+              .consultationNotes());
+      assertEquals(
+          1,
+          service
+              .prescriptionsForDoctor(fixture.doctorSession(), fixture.appointment().id())
+              .size());
+    }
+  }
+
+  @Test
   void historyForDoctorReturnsCompleteTerminalProjectionForAnyDoctor() throws SQLException {
     try (SqliteDatabase database = openDatabase()) {
       Fixture fixture = fixture(database);
@@ -202,13 +243,14 @@ final class ClinicalServiceTest {
               fixture.otherDoctorSession().accountId(),
               LocalDateTime.of(2026, 9, 2, 9, 0),
               LocalDateTime.of(2026, 9, 2, 9, 30),
-              AppointmentStatus.CHECKED_OUT);
+              AppointmentStatus.CHECKED_IN);
       service.saveConsultation(
           fixture.otherDoctorSession(),
           secondAppointment.id(),
           "Second diagnosis",
           "Second notes",
           "Second follow-up");
+      appointments.updateStatus(secondAppointment.id(), AppointmentStatus.CHECKED_OUT);
 
       Appointment inProgress =
           appointments.create(
@@ -346,6 +388,29 @@ final class ClinicalServiceTest {
         new Session(doctor.id(), doctor.username(), doctor.role()),
         new Session(otherDoctor.id(), otherDoctor.username(), otherDoctor.role()),
         new Session(receptionist.id(), receptionist.username(), receptionist.role()));
+  }
+
+  private static void assertClinicalChangesRejected(ClinicalService service, Fixture fixture) {
+    assertThrows(
+        ValidationException.class,
+        () ->
+            service.saveConsultation(
+                fixture.doctorSession(),
+                fixture.appointment().id(),
+                "Changed diagnosis",
+                "Changed notes",
+                "Changed follow-up"));
+    assertThrows(
+        ValidationException.class,
+        () ->
+            service.addPrescription(
+                fixture.doctorSession(),
+                fixture.appointment().id(),
+                "Other medicine",
+                "20 mg",
+                "Twice daily",
+                "5 days",
+                "Changed instructions"));
   }
 
   private SqliteDatabase openDatabase() throws SQLException {

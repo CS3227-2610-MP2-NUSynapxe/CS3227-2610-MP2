@@ -7,15 +7,27 @@ import nusynapxe.domain.RevenueReport;
 /** Tracks whether a revenue report is safe to export while a replacement loads. */
 final class ReportExportState {
   private Optional<RevenueReport> currentReport = Optional.empty();
+  private long generation;
 
   /** Marks the previous report as stale before starting a replacement load. */
-  void begin() {
+  long begin() {
     currentReport = Optional.empty();
+    generation++;
+    return generation;
   }
 
   /** Publishes a successfully loaded report for export. */
-  void complete(RevenueReport report) {
+  boolean complete(long reportGeneration, RevenueReport report) {
+    if (reportGeneration != generation) {
+      return false;
+    }
     currentReport = Optional.of(Objects.requireNonNull(report, "report"));
+    return true;
+  }
+
+  /** Returns whether a callback belongs to the latest requested report. */
+  boolean isCurrent(long reportGeneration) {
+    return reportGeneration == generation;
   }
 
   /** Returns whether an exportable report is available. */

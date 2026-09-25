@@ -40,6 +40,8 @@ final class DoctorAppointmentActions {
       Button checkIn,
       Button reschedule,
       Button complete,
+      Button saveConsultation,
+      Button addPrescription,
       ClinicServices services,
       Session session,
       SelectionState selection,
@@ -58,6 +60,7 @@ final class DoctorAppointmentActions {
                 "Appointment accepted",
                 refreshDashboard,
                 lifecycle,
+                false,
                 actions));
     decline.setOnAction(
         event ->
@@ -69,6 +72,7 @@ final class DoctorAppointmentActions {
                 "Appointment declined",
                 refreshDashboard,
                 lifecycle,
+                false,
                 actions));
     checkIn.setOnAction(
         event ->
@@ -80,6 +84,7 @@ final class DoctorAppointmentActions {
                 "Patient checked in",
                 refreshDashboard,
                 lifecycle,
+                false,
                 actions));
     reschedule.setOnAction(
         event -> {
@@ -113,7 +118,14 @@ final class DoctorAppointmentActions {
                 "Appointment marked completed",
                 refreshDashboard,
                 lifecycle,
-                actions));
+                true,
+                accept,
+                decline,
+                checkIn,
+                reschedule,
+                complete,
+                saveConsultation,
+                addPrescription));
   }
 
   static void updateSelectionState(
@@ -328,6 +340,7 @@ final class DoctorAppointmentActions {
       String successMessage,
       Runnable refreshDashboard,
       WorkspaceLifecycle lifecycle,
+      boolean keepDisabledAfterSuccess,
       Button... actionButtons) {
     try {
       DoctorAppointmentTarget target = captureSelection(selection);
@@ -338,19 +351,23 @@ final class DoctorAppointmentActions {
             return null;
           },
           ignored -> {
-            setActionsDisabled(false, actionButtons);
             if (!lifecycle.isActive()
                 || !target.isCurrent(selection.appointmentId, selection.generation)) {
               return;
+            }
+            if (!keepDisabledAfterSuccess) {
+              setActionsDisabled(false, actionButtons);
             }
             feedback.setText(successMessage);
             refreshDashboard.run();
           },
           failure -> {
-            setActionsDisabled(false, actionButtons);
-            if (lifecycle.isActive()) {
-              showOperationError(feedback, failure);
+            if (!lifecycle.isActive()
+                || !target.isCurrent(selection.appointmentId, selection.generation)) {
+              return;
             }
+            setActionsDisabled(false, actionButtons);
+            showOperationError(feedback, failure);
           });
     } catch (ValidationException exception) {
       setActionsDisabled(false, actionButtons);

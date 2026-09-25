@@ -29,6 +29,46 @@ final class AppointmentRepositoryScheduleTest {
   @TempDir private Path temporaryDirectory;
 
   @Test
+  void expectedStatusUpdatesDoNotOverwriteAConcurrentLifecycleChange() throws SQLException {
+    try (SqliteDatabase database = openDatabase()) {
+      Account doctor = createAccount(database, "doctor", "Dr. Ada", Role.DOCTOR);
+      Patient patient = createPatient(database, "Grace", "Hopper");
+      AppointmentRepository appointments = new AppointmentRepository(database);
+      Appointment appointment =
+          createAppointment(
+              appointments,
+              patient,
+              doctor,
+              LocalDateTime.of(2026, 9, 1, 9, 0),
+              AppointmentStatus.PENDING);
+
+      assertEquals(
+          AppointmentStatus.CANCELLED,
+          appointments
+              .updateStatus(
+                  appointment.id(), AppointmentStatus.PENDING, AppointmentStatus.CANCELLED)
+              .orElseThrow()
+              .status());
+      assertEquals(
+          java.util.Optional.empty(),
+          appointments.updateStatus(
+              appointment.id(), AppointmentStatus.PENDING, AppointmentStatus.ACCEPTED));
+      assertEquals(
+          java.util.Optional.empty(),
+          appointments.reschedule(
+              appointment.id(),
+              LocalDateTime.of(2026, 9, 1, 10, 0),
+              LocalDateTime.of(2026, 9, 1, 10, 30),
+              AppointmentStatus.PENDING,
+              AppointmentStatus.ACCEPTED));
+
+      Appointment unchanged = appointments.findById(appointment.id()).orElseThrow();
+      assertEquals(AppointmentStatus.CANCELLED, unchanged.status());
+      assertEquals(appointment.startsAt(), unchanged.startsAt());
+    }
+  }
+
+  @Test
   void appointmentListRowsContainNamesFromOneJoinedProjection() throws SQLException {
     try (SqliteDatabase database = openDatabase()) {
       Account doctor = createAccount(database, "doctor", "Dr. Ada", Role.DOCTOR);

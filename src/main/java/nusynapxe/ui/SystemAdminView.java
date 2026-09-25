@@ -2,6 +2,7 @@ package nusynapxe.ui;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Function;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
@@ -57,6 +58,7 @@ public final class SystemAdminView {
    */
   public static Parent create(
       AccountService accounts, Session session, Runnable onLogout, ClinicTaskRunner taskRunner) {
+    WorkspaceLifecycle lifecycle = new WorkspaceLifecycle();
     TextField username = new TextField();
     username.setId("admin-account-username");
     TextField displayName = new TextField();
@@ -78,6 +80,9 @@ public final class SystemAdminView {
     Button create = UiComponents.primaryButton("Create account", "admin-account-submit");
     create.setOnAction(
         event -> {
+          if (!lifecycle.isActive()) {
+            return;
+          }
           if (!password.getText().equals(confirmation.getText())) {
             UiComponents.showError(feedback, "Passwords do not match");
             return;
@@ -88,45 +93,64 @@ public final class SystemAdminView {
           String submittedPasswordText = password.getText();
           char[] submittedPassword = submittedPasswordText.toCharArray();
           create.setDisable(true);
-          taskRunner.submit(
-              () -> {
-                try {
-                  accounts.createStaff(
-                      session,
-                      submittedUsername,
-                      submittedDisplayName,
-                      submittedRole,
-                      submittedPassword);
-                  return null;
-                } finally {
-                  Arrays.fill(submittedPassword, '\0');
-                }
-              },
-              ignored -> {
-                create.setDisable(false);
-                UiComponents.showMessage(feedback, "Account created");
-                if (username.getText().equals(submittedUsername)) {
-                  username.clear();
-                }
-                if (displayName.getText().equals(submittedDisplayName)) {
-                  displayName.clear();
-                }
-                if (password.getText().equals(submittedPasswordText)) {
-                  password.clear();
-                }
-                if (confirmation.getText().equals(submittedPasswordText)) {
-                  confirmation.clear();
-                }
-                refreshAccounts(accounts, session, accountTable, feedback, taskRunner);
-              },
-              failure -> {
-                create.setDisable(false);
-                showAccountError(feedback, failure);
-              });
+          try {
+            taskRunner.submit(
+                () -> {
+                  try {
+                    if (!lifecycle.isActive()) {
+                      return false;
+                    }
+                    accounts.createStaff(
+                        session,
+                        submittedUsername,
+                        submittedDisplayName,
+                        submittedRole,
+                        submittedPassword);
+                    return true;
+                  } finally {
+                    Arrays.fill(submittedPassword, '\0');
+                  }
+                },
+                created -> {
+                  if (!lifecycle.isActive() || !Boolean.TRUE.equals(created)) {
+                    return;
+                  }
+                  create.setDisable(false);
+                  UiComponents.showMessage(feedback, "Account created");
+                  if (username.getText().equals(submittedUsername)) {
+                    username.clear();
+                  }
+                  if (displayName.getText().equals(submittedDisplayName)) {
+                    displayName.clear();
+                  }
+                  if (password.getText().equals(submittedPasswordText)) {
+                    password.clear();
+                  }
+                  if (confirmation.getText().equals(submittedPasswordText)) {
+                    confirmation.clear();
+                  }
+                  refreshAccounts(accounts, session, accountTable, feedback, taskRunner, lifecycle);
+                },
+                failure -> {
+                  if (!lifecycle.isActive()) {
+                    return;
+                  }
+                  create.setDisable(false);
+                  showAccountError(feedback, failure);
+                });
+          } catch (RejectedExecutionException exception) {
+            Arrays.fill(submittedPassword, '\0');
+            create.setDisable(false);
+            showAccountError(feedback, exception);
+          }
         });
     Button logout = new Button("Log out");
     logout.setId("logout-button");
-    logout.setOnAction(event -> onLogout.run());
+    logout.setOnAction(
+        event -> {
+          lifecycle.invalidate();
+          onLogout.run();
+        });
     HBox header =
         UiComponents.workspaceHeader("SYSTEM ADMIN workspace", session.username(), logout);
     BorderPane root = new BorderPane();
@@ -155,7 +179,7 @@ public final class SystemAdminView {
     ScrollPane scroll = new ScrollPane(content);
     scroll.setFitToWidth(true);
     root.setCenter(scroll);
-    refreshAccounts(accounts, session, accountTable, feedback, taskRunner);
+    refreshAccounts(accounts, session, accountTable, feedback, taskRunner, lifecycle);
     return UiComponents.notificationOverlay(root, feedback);
   }
 
@@ -219,16 +243,24 @@ public final class SystemAdminView {
       Session session,
       TableView<Account> accountTable,
       Label feedback,
-      ClinicTaskRunner taskRunner) {
+      ClinicTaskRunner taskRunner,
+      WorkspaceLifecycle lifecycle) {
     taskRunner.submit(
         () -> accounts.listAccounts(session),
         accountsList -> {
+          if (!lifecycle.isActive()) {
+            return;
+          }
           accountTable.setItems(FXCollections.observableArrayList(accountsList));
           accountTable.getSelectionModel().clearSelection();
           int visibleRows = Math.min(Math.max(accountTable.getItems().size(), 1), 5);
           accountTable.setPrefHeight(40 + visibleRows * 40);
         },
-        failure -> showAccountError(feedback, failure));
+        failure -> {
+          if (lifecycle.isActive()) {
+            showAccountError(feedback, failure);
+          }
+        });
   }
 
   private static void showAccountError(Label feedback, Throwable failure) {

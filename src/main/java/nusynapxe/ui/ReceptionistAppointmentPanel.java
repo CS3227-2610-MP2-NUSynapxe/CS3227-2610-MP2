@@ -11,6 +11,7 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.VBox;
+import javafx.util.Duration;
 import nusynapxe.ClinicClock;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
@@ -52,6 +53,7 @@ final class ReceptionistAppointmentPanel {
   private final DatePicker appointmentDate;
   private final SelectionState selection = new SelectionState();
   private final SelectorLoadGeneration patientGenerations = new SelectorLoadGeneration();
+  private final FxDebouncer scheduleSearchDebouncer;
   private final VBox view;
   private Runnable refreshCheckout =
       () -> {
@@ -114,6 +116,7 @@ final class ReceptionistAppointmentPanel {
     scheduleSummary = new Label();
     scheduleSummary.setId("reception-schedule-summary");
     appointmentList = ReceptionistAppointmentView.appointmentTable("reception-appointment-list");
+    scheduleSearchDebouncer = new FxDebouncer(Duration.millis(250), this::refreshSchedule);
 
     Button book = button("Book appointment", "reception-book");
     Button reschedule = button("Reschedule selected", "reception-reschedule");
@@ -181,32 +184,40 @@ final class ReceptionistAppointmentPanel {
         .addListener((observable, previous, selected) -> refreshSchedule());
     schedulePatient
         .textProperty()
-        .addListener((observable, previous, selected) -> refreshSchedule());
+        .addListener((observable, previous, selected) -> scheduleSearchDebouncer.request());
   }
 
   private void configureActions(Button book, Button reschedule, Button cancel, Button checkIn) {
     book.setOnAction(
         event -> {
+          if (book.isDisable()) {
+            return;
+          }
           try {
             if (patientSearch.getValue() == null || doctor.getValue() == null) {
               throw new ValidationException("Select a patient and Doctor first");
             }
+            book.setDisable(true);
             dataLoader.book(
                 patientSearch.getValue().id(),
                 doctor.getValue().id(),
                 AppointmentDialog.parseDateTime(appointmentDate, startsAt, "Start time"),
                 AppointmentDialog.parseDateTime(appointmentDate, endsAt, "End time"),
                 appointment -> {
+                  book.setDisable(false);
                   selection.appointmentId = appointment.id();
                   UiComponents.showMessage(
                       feedback, "Appointment booked and awaiting Doctor acceptance");
                   refreshSchedule();
                   refreshCheckout.run();
                 },
-                failure ->
-                    showTaskError(
-                        feedback, failure, "Appointment booking is temporarily unavailable"));
+                failure -> {
+                  book.setDisable(false);
+                  showTaskError(
+                      feedback, failure, "Appointment booking is temporarily unavailable");
+                });
           } catch (ValidationException | IllegalArgumentException exception) {
+            book.setDisable(false);
             UiComponents.showError(feedback, exception.getMessage());
           }
         });
@@ -231,8 +242,12 @@ final class ReceptionistAppointmentPanel {
         });
     cancel.setOnAction(
         event -> {
+          if (cancel.isDisable()) {
+            return;
+          }
           try {
             requireSelection(selection.appointmentId);
+            cancel.setDisable(true);
             dataLoader.cancel(
                 selection.appointmentId,
                 () -> {
@@ -240,17 +255,24 @@ final class ReceptionistAppointmentPanel {
                   refreshSchedule();
                   refreshCheckout.run();
                 },
-                failure ->
-                    showTaskError(
-                        feedback, failure, "Appointment cancellation is temporarily unavailable"));
+                failure -> {
+                  restoreCancelAvailability(cancel);
+                  showTaskError(
+                      feedback, failure, "Appointment cancellation is temporarily unavailable");
+                });
           } catch (ValidationException exception) {
+            restoreCancelAvailability(cancel);
             UiComponents.showError(feedback, exception.getMessage());
           }
         });
     checkIn.setOnAction(
         event -> {
+          if (checkIn.isDisable()) {
+            return;
+          }
           try {
             requireSelection(selection.appointmentId);
+            checkIn.setDisable(true);
             dataLoader.checkIn(
                 selection.appointmentId,
                 () -> {
@@ -258,8 +280,12 @@ final class ReceptionistAppointmentPanel {
                   refreshSchedule();
                   refreshCheckout.run();
                 },
-                failure -> showTaskError(feedback, failure, "Check-in is temporarily unavailable"));
+                failure -> {
+                  restoreCheckInAvailability(checkIn);
+                  showTaskError(feedback, failure, "Check-in is temporarily unavailable");
+                });
           } catch (ValidationException exception) {
+            restoreCheckInAvailability(checkIn);
             UiComponents.showError(feedback, exception.getMessage());
           }
         });
@@ -336,6 +362,22 @@ final class ReceptionistAppointmentPanel {
         schedulePatient.getText(),
         scheduleStatus.getValue(),
         scheduleSummary);
+  }
+
+  private void restoreCancelAvailability(Button cancel) {
+    AppointmentListRow selected = appointmentList.getSelectionModel().getSelectedItem();
+    Appointment appointment = selected == null ? null : selected.appointment();
+    cancel.setDisable(
+        appointment == null
+            || (appointment.status() != AppointmentStatus.PENDING
+                && appointment.status() != AppointmentStatus.ACCEPTED
+                && appointment.status() != AppointmentStatus.DECLINED));
+  }
+
+  private void restoreCheckInAvailability(Button checkIn) {
+    AppointmentListRow selected = appointmentList.getSelectionModel().getSelectedItem();
+    Appointment appointment = selected == null ? null : selected.appointment();
+    checkIn.setDisable(appointment == null || appointment.status() != AppointmentStatus.ACCEPTED);
   }
 
   private static SearchSuggestionField<Account> doctorSelector(String id, String prompt) {

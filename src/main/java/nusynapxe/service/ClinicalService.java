@@ -101,7 +101,7 @@ public final class ClinicalService {
       String consultationNotes,
       String followUpNotes)
       throws SQLException {
-    Appointment appointment = checkedInOrLater(appointmentId);
+    Appointment appointment = checkedIn(appointmentId);
     Authorization.requireDoctorOwnership(actor, appointment.doctorId());
     String validDiagnosis = required(diagnosis, "Diagnosis");
     String validNotes = required(consultationNotes, "Consultation notes");
@@ -141,7 +141,7 @@ public final class ClinicalService {
       String duration,
       String instructions)
       throws SQLException {
-    Appointment appointment = checkedInOrLater(appointmentId);
+    Appointment appointment = checkedIn(appointmentId);
     Authorization.requireDoctorOwnership(actor, appointment.doctorId());
     ClinicalRecord record =
         clinicalRecords
@@ -213,12 +213,11 @@ public final class ClinicalService {
     return appointment;
   }
 
-  private Appointment checkedInOrLater(long appointmentId) throws SQLException {
+  private Appointment checkedIn(long appointmentId) throws SQLException {
     Appointment appointment = appointment(appointmentId);
-    if (appointment.status() != AppointmentStatus.CHECKED_IN
-        && appointment.status() != AppointmentStatus.COMPLETED
-        && appointment.status() != AppointmentStatus.CHECKED_OUT) {
-      throw new ValidationException("Clinical information requires a checked-in appointment");
+    if (appointment.status() != AppointmentStatus.CHECKED_IN) {
+      throw new ValidationException(
+          "Clinical information can only be changed while the appointment is checked in");
     }
     return appointment;
   }

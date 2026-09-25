@@ -358,6 +358,9 @@ final class ReceptionistDataLoader {
       ClinicTaskRunner.ClinicTask<T> task,
       java.util.function.Consumer<T> onSuccess,
       java.util.function.Consumer<Throwable> onFailure) {
+    if (disposed) {
+      return;
+    }
     Consumer<T> guardedSuccess =
         value -> {
           if (!disposed) {

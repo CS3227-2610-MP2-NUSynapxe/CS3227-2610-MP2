@@ -146,7 +146,9 @@ public final class AccountService {
     if (actor == null || (actor.role() != Role.RECEPTIONIST && actor.role() != Role.SYSTEM_ADMIN)) {
       throw new AuthorizationException("You are not allowed to list Doctors");
     }
-    return accounts.findAll().stream().filter(account -> account.role() == Role.DOCTOR).toList();
+    return accounts.findAll().stream()
+        .filter(account -> account.role() == Role.DOCTOR && account.enabled())
+        .toList();
   }
 
   private PasswordHash hashPassword(char[] password) {

@@ -30,6 +30,8 @@ final class DoctorAppointmentActionsTest extends ApplicationTest {
   private Button checkIn;
   private Button reschedule;
   private Button complete;
+  private Button saveConsultation;
+  private Button addPrescription;
   private Label feedback;
   private boolean refreshed;
 
@@ -40,6 +42,8 @@ final class DoctorAppointmentActionsTest extends ApplicationTest {
     checkIn = new Button("Check in");
     reschedule = new Button("Reschedule");
     complete = new Button("Complete");
+    saveConsultation = new Button("Save consultation");
+    addPrescription = new Button("Add prescription");
     feedback = new Label();
     ClinicServices services = mock(ClinicServices.class);
     Session session = new Session(10, "doc", Role.DOCTOR);
@@ -52,6 +56,8 @@ final class DoctorAppointmentActionsTest extends ApplicationTest {
         checkIn,
         reschedule,
         complete,
+        saveConsultation,
+        addPrescription,
         services,
         session,
         selection,
@@ -60,7 +66,16 @@ final class DoctorAppointmentActionsTest extends ApplicationTest {
         () -> refreshed = true,
         lifecycle);
 
-    VBox root = new VBox(accept, decline, checkIn, reschedule, complete, feedback);
+    VBox root =
+        new VBox(
+            accept,
+            decline,
+            checkIn,
+            reschedule,
+            complete,
+            saveConsultation,
+            addPrescription,
+            feedback);
     stage.setScene(new Scene(root));
     stage.show();
   }
@@ -120,6 +135,33 @@ final class DoctorAppointmentActionsTest extends ApplicationTest {
     assertFalse(reschedule.isDisable());
     assertFalse(complete.isDisable());
     assertEquals("The requested operation is temporarily unavailable", feedback.getText());
+  }
+
+  @Test
+  void completionBlocksClinicalMutationsAndKeepsThemBlockedAfterSuccess() {
+    interact(complete::fire);
+
+    assertTrue(saveConsultation.isDisable());
+    assertTrue(addPrescription.isDisable());
+
+    interact(() -> taskRunner.submissions.getFirst().success().accept(null));
+
+    assertTrue(saveConsultation.isDisable());
+    assertTrue(addPrescription.isDisable());
+    assertEquals("Appointment marked completed", feedback.getText());
+  }
+
+  @Test
+  void staleActionFailureDoesNotOverwriteFeedbackForANewerSelection() {
+    interact(decline::fire);
+    interact(
+        () -> {
+          selection.generation++;
+          feedback.setText("New appointment selected");
+          taskRunner.submissions.getFirst().failure().accept(new RuntimeException("old failure"));
+        });
+
+    assertEquals("New appointment selected", feedback.getText());
   }
 
   private static final class CapturingTaskRunner implements ClinicTaskRunner {

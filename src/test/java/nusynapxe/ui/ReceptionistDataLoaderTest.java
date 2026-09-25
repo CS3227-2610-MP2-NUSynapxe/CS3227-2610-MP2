@@ -220,6 +220,19 @@ final class ReceptionistDataLoaderTest {
   }
 
   @Test
+  void disposalPreventsNewWorkAndIgnoresAlreadyQueuedCallbacks() throws Exception {
+    List<ReceptionistDataLoader.AppointmentDetails> loaded = new ArrayList<>();
+    loader.loadCheckInDetails(7, loaded::add, failure -> {});
+
+    loader.dispose();
+    loader.loadCheckInDetails(8, loaded::add, failure -> {});
+    deliver(0, appointmentDetails(7));
+
+    assertEquals(1, submissions.size());
+    assertTrue(loaded.isEmpty());
+  }
+
+  @Test
   void scheduleRefreshUpdatesSummaryAndClearsAnEmptySelection() throws Exception {
     TableView<AppointmentListRow> schedule = onFx(TableView::new);
     Label feedback = onFx(Label::new);

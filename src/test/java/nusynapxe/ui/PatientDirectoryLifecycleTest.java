@@ -216,17 +216,18 @@ final class PatientDirectoryLifecycleTest extends ApplicationTest {
   }
 
   @Test
-  void discardedPatientEditIgnoresSubsequentUpdateCallback() {
+  void patientEditCannotBeDiscardedWhileUpdateIsPending() {
     interact(() -> lookup("#test-patient-view-42").queryAs(Button.class).fire());
     interact(() -> lookup("#test-patient-edit").queryAs(Button.class).fire());
     interact(() -> lookup("#test-patient-update").queryAs(Button.class).fire());
     assertEquals(2, taskRunner.submissions.size());
 
-    // User discards changes before background update finishes
+    // A submitted update cannot be presented as discarded while it is still pending.
+    assertTrue(lookup("#test-patient-edit-cancel").queryAs(Button.class).isDisable());
     interact(() -> lookup("#test-patient-edit-cancel").queryAs(Button.class).fire());
-    assertFalse(lookup("#test-patient-edit-card").tryQuery().isPresent());
+    assertTrue(lookup("#test-patient-edit-card").tryQuery().isPresent());
 
-    // When update finishes, it should not resurrect or replace with the edit callback
+    // Completion leaves the edit page through the normal saved-patient path.
     Patient updatedPatient =
         new Patient(42, "Updated", "Name", "1990-01-01", "555-0100", "test@example.com", "Address");
     interact(() -> taskRunner.submissions.getLast().success().accept(updatedPatient));

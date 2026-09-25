@@ -171,6 +171,8 @@ final class DoctorWorkspace {
         checkIn,
         reschedule,
         complete,
+        saveConsultation,
+        addPrescription,
         services,
         session,
         selection,

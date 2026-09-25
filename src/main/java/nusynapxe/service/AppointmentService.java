@@ -78,7 +78,7 @@ public final class AppointmentService {
       initialStatus = AppointmentStatus.PENDING;
     }
     requirePatient(patientId);
-    requireDoctor(doctorId);
+    requireEnabledDoctor(doctorId);
     AppointmentStatus status = initialStatus;
     return persist(() -> appointments.create(patientId, doctorId, startsAt, endsAt, status));
   }
@@ -179,7 +179,7 @@ public final class AppointmentService {
     Appointment appointment = appointment(appointmentId);
     Authorization.requireDoctorOwnership(actor, appointment.doctorId());
     AppointmentTransitions.requireAllowed(appointment.status(), AppointmentStatus.ACCEPTED);
-    return appointments.updateStatus(appointmentId, AppointmentStatus.ACCEPTED);
+    return updateStatus(appointment, AppointmentStatus.ACCEPTED);
   }
 
   /**
@@ -196,7 +196,7 @@ public final class AppointmentService {
     Appointment appointment = appointment(appointmentId);
     Authorization.requireDoctorOwnership(actor, appointment.doctorId());
     AppointmentTransitions.requireAllowed(appointment.status(), AppointmentStatus.DECLINED);
-    return appointments.updateStatus(appointmentId, AppointmentStatus.DECLINED);
+    return updateStatus(appointment, AppointmentStatus.DECLINED);
   }
 
   /**
@@ -233,7 +233,11 @@ public final class AppointmentService {
       rescheduledStatus = AppointmentStatus.PENDING;
     }
     return persist(
-        () -> appointments.reschedule(appointmentId, startsAt, endsAt, rescheduledStatus));
+        () ->
+            appointments
+                .reschedule(
+                    appointmentId, startsAt, endsAt, appointment.status(), rescheduledStatus)
+                .orElseThrow(AppointmentService::staleAppointment));
   }
 
   /**
@@ -250,7 +254,7 @@ public final class AppointmentService {
     Appointment appointment = appointment(appointmentId);
     requireScheduleOwnerOrReceptionist(actor, appointment.doctorId());
     AppointmentTransitions.requireAllowed(appointment.status(), AppointmentStatus.CANCELLED);
-    return appointments.updateStatus(appointmentId, AppointmentStatus.CANCELLED);
+    return updateStatus(appointment, AppointmentStatus.CANCELLED);
   }
 
   /**
@@ -270,7 +274,7 @@ public final class AppointmentService {
     if (LocalDateTime.now(clock).isBefore(appointment.startsAt())) {
       throw new ValidationException("An appointment cannot be checked in before its start time");
     }
-    return appointments.updateStatus(appointmentId, AppointmentStatus.CHECKED_IN);
+    return updateStatus(appointment, AppointmentStatus.CHECKED_IN);
   }
 
   /**
@@ -287,7 +291,7 @@ public final class AppointmentService {
     Appointment appointment = appointment(appointmentId);
     Authorization.requireDoctorOwnership(actor, appointment.doctorId());
     AppointmentTransitions.requireAllowed(appointment.status(), AppointmentStatus.COMPLETED);
-    return appointments.updateStatus(appointmentId, AppointmentStatus.COMPLETED);
+    return updateStatus(appointment, AppointmentStatus.COMPLETED);
   }
 
   /**
@@ -349,6 +353,30 @@ public final class AppointmentService {
     if (account.role() != Role.DOCTOR) {
       throw new ValidationException("The selected account is not a Doctor");
     }
+  }
+
+  private void requireEnabledDoctor(long doctorId) throws SQLException {
+    Account account =
+        accounts
+            .findById(doctorId)
+            .orElseThrow(() -> new ValidationException("Doctor does not exist"));
+    if (account.role() != Role.DOCTOR) {
+      throw new ValidationException("The selected account is not a Doctor");
+    }
+    if (!account.enabled()) {
+      throw new ValidationException("Disabled Doctors cannot receive new appointments");
+    }
+  }
+
+  private Appointment updateStatus(Appointment appointment, AppointmentStatus status)
+      throws SQLException {
+    return appointments
+        .updateStatus(appointment.id(), appointment.status(), status)
+        .orElseThrow(AppointmentService::staleAppointment);
+  }
+
+  private static ValidationException staleAppointment() {
+    return new ValidationException("The appointment changed; refresh and try again");
   }
 
   private void requirePatient(long patientId) throws SQLException {
