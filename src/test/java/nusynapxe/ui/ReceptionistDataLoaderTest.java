@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -26,7 +27,10 @@ import nusynapxe.domain.Patient;
 import nusynapxe.domain.Receipt;
 import nusynapxe.domain.Role;
 import nusynapxe.domain.Session;
+import nusynapxe.service.AccountService;
+import nusynapxe.service.AppointmentService;
 import nusynapxe.service.ClinicServices;
+import nusynapxe.service.PatientService;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -217,6 +221,38 @@ final class ReceptionistDataLoaderTest {
     loader.invalidateAppointmentDetails();
     deliver(2, appointmentDetails(9));
     assertEquals(List.of(second), loaded);
+  }
+
+  @Test
+  void appointmentDetailsPreserveDisabledDoctorName() throws Exception {
+    ClinicServices services = mock(ClinicServices.class);
+    AppointmentService appointmentService = mock(AppointmentService.class);
+    PatientService patientService = mock(PatientService.class);
+    AccountService accountService = mock(AccountService.class);
+    Session receptionist = new Session(1, "reception", Role.RECEPTIONIST);
+    Appointment appointment =
+        new Appointment(
+            7,
+            2,
+            3,
+            LocalDateTime.of(2026, 9, 23, 10, 0),
+            LocalDateTime.of(2026, 9, 23, 10, 30),
+            AppointmentStatus.COMPLETED);
+    Patient patient = new Patient(2, "Patient", "Example", "", "555-0100", "", "");
+    Account disabledDoctor = new Account(3, "disabled", "Dr. Historical", Role.DOCTOR, false);
+    when(services.appointmentService()).thenReturn(appointmentService);
+    when(services.patientService()).thenReturn(patientService);
+    when(services.accountService()).thenReturn(accountService);
+    when(appointmentService.get(7)).thenReturn(appointment);
+    when(patientService.getAdministrative(receptionist, 2)).thenReturn(patient);
+    when(accountService.getDoctor(receptionist, 3)).thenReturn(disabledDoctor);
+    ReceptionistDataLoader immediateLoader =
+        new ReceptionistDataLoader(services, receptionist, ClinicTaskRunner.immediate());
+    AtomicReference<ReceptionistDataLoader.AppointmentDetails> loaded = new AtomicReference<>();
+
+    immediateLoader.loadCheckInDetails(7, loaded::set, failure -> {});
+
+    assertEquals("Dr. Historical", loaded.get().doctorName());
   }
 
   @Test

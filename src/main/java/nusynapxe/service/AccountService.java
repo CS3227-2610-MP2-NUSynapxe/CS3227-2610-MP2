@@ -143,12 +143,38 @@ public final class AccountService {
    * @throws SQLException if the account query fails
    */
   public List<Account> listDoctors(Session actor) throws SQLException {
-    if (actor == null || (actor.role() != Role.RECEPTIONIST && actor.role() != Role.SYSTEM_ADMIN)) {
-      throw new AuthorizationException("You are not allowed to list Doctors");
-    }
+    requireDoctorDirectoryAccess(actor);
     return accounts.findAll().stream()
         .filter(account -> account.role() == Role.DOCTOR && account.enabled())
         .toList();
+  }
+
+  /**
+   * Returns a Doctor account for administrative or historical display, including disabled Doctors.
+   *
+   * @param actor authenticated Receptionist or System Admin session
+   * @param doctorId Doctor account identifier
+   * @return matching Doctor account
+   * @throws AuthorizationException if the actor is not permitted
+   * @throws SQLException if the account query fails
+   * @throws ValidationException if the account does not exist or is not a Doctor
+   */
+  public Account getDoctor(Session actor, long doctorId) throws SQLException {
+    requireDoctorDirectoryAccess(actor);
+    Account account =
+        accounts
+            .findById(doctorId)
+            .orElseThrow(() -> new ValidationException("Doctor does not exist"));
+    if (account.role() != Role.DOCTOR) {
+      throw new ValidationException("The selected account is not a Doctor");
+    }
+    return account;
+  }
+
+  private static void requireDoctorDirectoryAccess(Session actor) {
+    if (actor == null || (actor.role() != Role.RECEPTIONIST && actor.role() != Role.SYSTEM_ADMIN)) {
+      throw new AuthorizationException("You are not allowed to access the Doctor directory");
+    }
   }
 
   private PasswordHash hashPassword(char[] password) {

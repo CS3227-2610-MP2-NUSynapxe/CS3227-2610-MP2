@@ -104,6 +104,9 @@ final class AccountServiceTest {
 
       assertEquals(java.util.List.of(enabled), service.listDoctors(receptionist));
       assertEquals(java.util.List.of(enabled), service.listDoctors(adminSession));
+      Account historicalDoctor = service.getDoctor(receptionist, disabled.id());
+      assertEquals(disabled.id(), historicalDoctor.id());
+      assertFalse(historicalDoctor.enabled());
     }
   }
 

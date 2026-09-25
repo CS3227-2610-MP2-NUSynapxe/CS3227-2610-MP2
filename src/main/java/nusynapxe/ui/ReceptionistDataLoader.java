@@ -157,11 +157,7 @@ final class ReceptionistDataLoader {
           Patient patient =
               services.patientService().getAdministrative(session, appointment.patientId());
           String doctorName =
-              services.accountService().listDoctors(session).stream()
-                  .filter(doctor -> doctor.id() == appointment.doctorId())
-                  .map(Account::displayName)
-                  .findFirst()
-                  .orElse("Doctor unavailable");
+              services.accountService().getDoctor(session, appointment.doctorId()).displayName();
           return new AppointmentDetails(appointment, patient, doctorName);
         },
         details -> {

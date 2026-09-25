@@ -267,6 +267,34 @@ final class AppointmentEditorViewTest extends ApplicationTest {
     assertEquals("Time slot is already occupied", feedback.getText());
   }
 
+  @Test
+  void existingAppointmentDisplaysDisabledDoctorName() throws Exception {
+    Session receptionist = new Session(2, "reception", Role.RECEPTIONIST);
+    when(accountService.getDoctor(receptionist, 1))
+        .thenReturn(new Account(1, "doc", "Dr. Historical", Role.DOCTOR, false));
+
+    interact(
+        () ->
+            AppointmentDialogLoader.showEditor(
+                services,
+                receptionist,
+                appointment,
+                1,
+                appointment.startsAt(),
+                "test-disabled-doctor",
+                "Edit Appointment",
+                "Save",
+                false,
+                new Label(),
+                () -> {},
+                taskRunner,
+                () -> true));
+    interact(() -> taskRunner.runSubmission(0));
+
+    Label assignedDoctor = lookup("#test-disabled-doctor-doctor").queryAs(Label.class);
+    assertEquals("Doctor: Dr. Historical", assignedDoctor.getText());
+  }
+
   private static final class CapturingTaskRunner implements ClinicTaskRunner {
     private final ClinicTaskRunner immediateRunner = ClinicTaskRunner.immediate();
     private final List<PendingSubmission> submissions = new ArrayList<>();
