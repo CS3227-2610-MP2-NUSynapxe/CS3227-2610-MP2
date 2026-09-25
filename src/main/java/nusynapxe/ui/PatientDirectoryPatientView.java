@@ -118,6 +118,7 @@ final class PatientDirectoryPatientView {
       Label workspaceFeedback,
       LongConsumer onPatientChanged,
       ClinicTaskRunner taskRunner,
+      BooleanSupplier directoryActive,
       Runnable refresh,
       Runnable showEditing,
       Consumer<Patient> showView) {
@@ -134,32 +135,46 @@ final class PatientDirectoryPatientView {
 
     update.setOnAction(
         event -> {
+          if (update.isDisable() || !directoryActive.getAsBoolean()) {
+            return;
+          }
           try {
             Patient draft =
                 PatientDirectoryFormView.fromForm(form, current[0].id(), current[0].active());
             update.setDisable(true);
-            taskRunner.submit(
-                () -> services.patientService().updateAdministrative(session, draft),
-                updated -> {
-                  if (!editActive[0] || !editingContent.isVisible()) {
+            cancel.setDisable(true);
+            try {
+              taskRunner.submit(
+                  () -> services.patientService().updateAdministrative(session, draft),
+                  updated -> {
+                    if (!directoryActive.getAsBoolean()
+                        || !editActive[0]
+                        || !editingContent.isVisible()) {
+                      return;
+                    }
+                    current[0] = updated;
+                    PatientDirectoryFormView.populate(updated, form);
+                    UiComponents.showMessage(feedback, "Patient changes saved");
+                    UiComponents.showMessage(workspaceFeedback, "Patient changes saved");
                     refresh.run();
-                    return;
-                  }
-                  current[0] = updated;
-                  PatientDirectoryFormView.populate(updated, form);
-                  UiComponents.showMessage(feedback, "Patient changes saved");
-                  UiComponents.showMessage(workspaceFeedback, "Patient changes saved");
-                  refresh.run();
-                  onPatientChanged.accept(updated.id());
-                  editingContent.getChildren().clear();
-                  showView.accept(updated);
-                },
-                failure -> {
-                  if (editActive[0] && editingContent.isVisible()) {
-                    update.setDisable(false);
-                    showTaskError(feedback, failure, "Patient update is temporarily unavailable");
-                  }
-                });
+                    onPatientChanged.accept(updated.id());
+                    editingContent.getChildren().clear();
+                    showView.accept(updated);
+                  },
+                  failure -> {
+                    if (directoryActive.getAsBoolean()
+                        && editActive[0]
+                        && editingContent.isVisible()) {
+                      update.setDisable(false);
+                      cancel.setDisable(false);
+                      showTaskError(feedback, failure, "Patient update is temporarily unavailable");
+                    }
+                  });
+            } catch (RejectedExecutionException exception) {
+              update.setDisable(false);
+              cancel.setDisable(false);
+              showTaskError(feedback, exception, "Patient update is temporarily unavailable");
+            }
           } catch (ValidationException exception) {
             UiComponents.showError(feedback, exception.getMessage());
           }

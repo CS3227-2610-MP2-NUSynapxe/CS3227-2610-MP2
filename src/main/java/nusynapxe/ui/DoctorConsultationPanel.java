@@ -119,6 +119,7 @@ final class DoctorConsultationPanel {
   }
 
   void load(Appointment appointment, long generation) {
+    resetPendingState();
     DoctorConsultationView.loadClinicalAsync(
         services,
         session,
@@ -134,7 +135,7 @@ final class DoctorConsultationPanel {
   }
 
   void clear() {
-    setConsultationDisabled(false);
+    resetPendingState();
     DoctorConsultationView.clearClinical(
         diagnosis, consultationNotes, followUpNotes, prescriptions);
   }
@@ -235,11 +236,15 @@ final class DoctorConsultationPanel {
             load(appointment, generation);
           },
           failure -> {
-            if (generation == selectionGeneration.getAsLong()) {
-              setConsultationDisabled(false);
+            if (generation != selectionGeneration.getAsLong()) {
+              return;
             }
+            setConsultationDisabled(false);
             showError(failure, "Consultation could not be saved");
           });
+    } catch (RejectedExecutionException exception) {
+      setConsultationDisabled(false);
+      showError(exception, "Consultation could not be saved");
     } catch (ValidationException exception) {
       showError(exception, "Consultation could not be saved");
     }
@@ -280,15 +285,18 @@ final class DoctorConsultationPanel {
             return services.appointmentService().get(selectedAppointmentId);
           },
           appointment -> {
-            addPrescription.setDisable(false);
             if (generation != selectionGeneration.getAsLong()) {
               return;
             }
+            addPrescription.setDisable(false);
             feedback.setText("Prescription added");
             clear(medication, dosage, frequency, duration, instructions);
             load(appointment, generation);
           },
           failure -> {
+            if (generation != selectionGeneration.getAsLong()) {
+              return;
+            }
             addPrescription.setDisable(false);
             showError(failure, "Prescription could not be added");
           });
@@ -306,6 +314,11 @@ final class DoctorConsultationPanel {
       throw new ValidationException("Select an appointment first");
     }
     return selectedAppointmentId;
+  }
+
+  private void resetPendingState() {
+    setConsultationDisabled(false);
+    addPrescription.setDisable(false);
   }
 
   private void showError(Throwable failure, String fallback) {

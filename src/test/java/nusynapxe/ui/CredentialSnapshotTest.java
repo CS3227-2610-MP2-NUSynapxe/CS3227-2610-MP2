@@ -78,7 +78,7 @@ final class CredentialSnapshotTest extends ApplicationTest {
     assertEquals(Role.DOCTOR, submittedRole.get());
     assertArrayEquals("before-pass".toCharArray(), submittedPassword.get());
 
-    interact(() -> taskRunner.submissions.getLast().success().accept(null));
+    interact(() -> taskRunner.submissions.getLast().success().accept(Boolean.TRUE));
     assertFalse(lookup("#admin-account-submit").queryAs(Button.class).isDisable());
     assertEquals(
         "doctor-after-queue",
@@ -106,7 +106,7 @@ final class CredentialSnapshotTest extends ApplicationTest {
     setText("#admin-account-confirm-password", "clean-pass");
     fire("#admin-account-submit");
 
-    interact(() -> taskRunner.submissions.getLast().success().accept(null));
+    interact(() -> taskRunner.submissions.getLast().success().accept(Boolean.TRUE));
 
     assertEquals("", lookup("#admin-account-username").queryAs(TextInputControl.class).getText());
     assertEquals(

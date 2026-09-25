@@ -123,7 +123,7 @@ final class ReceptionistRevenuePanel {
   }
 
   private void generateReport() {
-    exportState.begin();
+    long generation = exportState.begin();
     setExportEnabled(false);
     rows.getItems().clear();
     summary.setText("Generating report…");
@@ -135,17 +135,31 @@ final class ReceptionistRevenuePanel {
           doctor.getValue() == null ? null : doctor.getValue().id(),
           selectedPaymentMethod(method.getValue()),
           report -> {
-            exportState.complete(report);
+            if (!exportState.complete(generation, report)) {
+              return;
+            }
             setExportEnabled(true);
             rows.setItems(FXCollections.observableArrayList(report.receipts()));
             summary.setText(ReceptionistRevenueView.formatSummary(report));
             UiComponents.showMessage(feedback, "Revenue report generated");
           },
-          failure -> showTaskError("Revenue report is temporarily unavailable", failure));
+          failure -> {
+            if (!exportState.isCurrent(generation)) {
+              return;
+            }
+            summary.setText("Report generation failed");
+            showTaskError("Revenue report is temporarily unavailable", failure);
+          });
     } catch (ValidationException exception) {
-      UiComponents.showError(feedback, exception.getMessage());
+      if (exportState.isCurrent(generation)) {
+        summary.setText("Report generation failed");
+        UiComponents.showError(feedback, exception.getMessage());
+      }
     } catch (ArithmeticException exception) {
-      UiComponents.showError(feedback, "Revenue total exceeds the supported range");
+      if (exportState.isCurrent(generation)) {
+        summary.setText("Report generation failed");
+        UiComponents.showError(feedback, "Revenue total exceeds the supported range");
+      }
     }
   }
 

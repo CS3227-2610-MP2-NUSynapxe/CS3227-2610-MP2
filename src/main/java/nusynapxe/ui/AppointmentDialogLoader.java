@@ -8,7 +8,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import javafx.scene.control.Label;
-import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.Patient;
 import nusynapxe.domain.Role;
@@ -147,11 +146,7 @@ final class AppointmentDialogLoader {
     if (session.accountId() == doctorId && session.role() == Role.DOCTOR) {
       return session.username();
     }
-    return services.accountService().listDoctors(session).stream()
-        .filter(doctor -> doctor.id() == doctorId)
-        .map(Account::displayName)
-        .findFirst()
-        .orElse("Assigned doctor");
+    return services.accountService().getDoctor(session, doctorId).displayName();
   }
 
   private static String message(Throwable exception) {

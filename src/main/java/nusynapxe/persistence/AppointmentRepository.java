@@ -26,6 +26,7 @@ public final class AppointmentRepository {
   private final SqliteDatabase database;
   private final Clock clock;
   private final AppointmentQueryRepository queries;
+  private final AppointmentLifecycleWriter lifecycleWriter;
 
   /**
    * Creates an appointment repository using the Singapore clinic system clock.
@@ -48,6 +49,7 @@ public final class AppointmentRepository {
     this.database = Objects.requireNonNull(database, "database");
     this.clock = ClinicClock.withClinicZone(clock);
     this.queries = new AppointmentQueryRepository(database);
+    this.lifecycleWriter = new AppointmentLifecycleWriter(database, this.clock);
   }
 
   /**
@@ -132,6 +134,30 @@ public final class AppointmentRepository {
     return rescheduleInternal(id, startsAt, endsAt, status);
   }
 
+  /**
+   * Reschedules an appointment only when its lifecycle status still matches the caller's snapshot.
+   *
+   * @param id appointment identifier
+   * @param startsAt new appointment start timestamp
+   * @param endsAt new appointment end timestamp
+   * @param expectedStatus lifecycle status observed by the caller
+   * @param status new lifecycle status
+   * @return the rescheduled appointment, or empty when its status changed concurrently
+   * @throws SQLException if the appointment is missing or the new interval conflicts
+   */
+  public Optional<Appointment> reschedule(
+      long id,
+      LocalDateTime startsAt,
+      LocalDateTime endsAt,
+      AppointmentStatus expectedStatus,
+      AppointmentStatus status)
+      throws SQLException {
+    validateInterval(startsAt, endsAt);
+    Objects.requireNonNull(expectedStatus, "expectedStatus");
+    Objects.requireNonNull(status, STATUS_COLUMN);
+    return lifecycleWriter.reschedule(id, startsAt, endsAt, expectedStatus, status);
+  }
+
   private Appointment rescheduleInternal(
       long id, LocalDateTime startsAt, LocalDateTime endsAt, AppointmentStatus status)
       throws SQLException {
@@ -196,6 +222,23 @@ public final class AppointmentRepository {
               current.endsAt(),
               status);
         });
+  }
+
+  /**
+   * Changes an appointment's lifecycle status only when its current status matches the expected
+   * status.
+   *
+   * @param id appointment identifier
+   * @param expectedStatus lifecycle status observed by the caller
+   * @param status new lifecycle status
+   * @return the updated appointment, or empty when its status changed concurrently
+   * @throws SQLException if the appointment is missing or cannot be updated
+   */
+  public Optional<Appointment> updateStatus(
+      long id, AppointmentStatus expectedStatus, AppointmentStatus status) throws SQLException {
+    Objects.requireNonNull(expectedStatus, "expectedStatus");
+    Objects.requireNonNull(status, STATUS_COLUMN);
+    return lifecycleWriter.updateStatus(id, expectedStatus, status);
   }
 
   /**
@@ -385,7 +428,7 @@ public final class AppointmentRepository {
     }
   }
 
-  private static void ensureAvailable(
+  static void ensureAvailable(
       java.sql.Connection connection,
       long doctorId,
       LocalDateTime startsAt,

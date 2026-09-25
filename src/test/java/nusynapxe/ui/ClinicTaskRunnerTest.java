@@ -139,6 +139,41 @@ final class ClinicTaskRunnerTest {
   }
 
   @Test
+  void closeIsBoundedWhenAWorkerIgnoresInterruption() throws Exception {
+    CountDownLatch started = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    try (SerializedClinicTaskRunner runner =
+        new SerializedClinicTaskRunner(50, 50, TimeUnit.MILLISECONDS)) {
+      try {
+        runner.submit(
+            () -> {
+              started.countDown();
+              while (release.getCount() > 0) {
+                try {
+                  release.await();
+                } catch (InterruptedException ignored) {
+                  // Deliberately model a database operation that does not honor interruption.
+                }
+              }
+              return null;
+            },
+            ignored -> {},
+            failure -> {});
+        assertTrue(started.await(5, TimeUnit.SECONDS));
+
+        long startedAt = System.nanoTime();
+        IllegalStateException failure = assertThrows(IllegalStateException.class, runner::close);
+        long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+
+        assertTrue(elapsedMillis < 2_000, "Shutdown must not wait indefinitely");
+        assertTrue(failure.getMessage().contains("resources must remain open"));
+      } finally {
+        release.countDown();
+      }
+    }
+  }
+
+  @Test
   void immediateRunnerAppliesOnlyTheLatestGeneration() {
     List<Integer> applied = new CopyOnWriteArrayList<>();
     try (ClinicTaskRunner runner = ClinicTaskRunner.immediate()) {

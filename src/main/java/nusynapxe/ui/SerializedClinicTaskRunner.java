@@ -11,11 +11,26 @@ import javafx.application.Platform;
 
 /** Executes clinic database tasks serially because the application owns one SQLite connection. */
 public final class SerializedClinicTaskRunner implements ClinicTaskRunner {
+  private static final long DEFAULT_SHUTDOWN_TIMEOUT_SECONDS = 5;
+
   private final ExecutorService executor;
   private final AtomicBoolean closed = new AtomicBoolean();
+  private final long gracefulShutdownTimeoutNanos;
+  private final long forcedShutdownTimeoutNanos;
 
   /** Creates a runner backed by one daemon worker thread. */
   public SerializedClinicTaskRunner() {
+    this(DEFAULT_SHUTDOWN_TIMEOUT_SECONDS, DEFAULT_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+  }
+
+  SerializedClinicTaskRunner(
+      long gracefulShutdownTimeout, long forcedShutdownTimeout, TimeUnit timeUnit) {
+    if (gracefulShutdownTimeout <= 0 || forcedShutdownTimeout <= 0) {
+      throw new IllegalArgumentException("Shutdown timeouts must be positive");
+    }
+    TimeUnit unit = Objects.requireNonNull(timeUnit, "timeUnit");
+    gracefulShutdownTimeoutNanos = unit.toNanos(gracefulShutdownTimeout);
+    forcedShutdownTimeoutNanos = unit.toNanos(forcedShutdownTimeout);
     executor =
         Executors.newSingleThreadExecutor(
             runnable -> {
@@ -51,27 +66,32 @@ public final class SerializedClinicTaskRunner implements ClinicTaskRunner {
   public void close() {
     if (closed.compareAndSet(false, true)) {
       executor.shutdown();
-      boolean interrupted = false;
-      try {
-        while (!executor.awaitTermination(1, TimeUnit.SECONDS)) {
-          // Keep waiting so the database worker has definitely stopped before its connection
-          // closes.
-          Thread.yield();
-        }
-      } catch (InterruptedException interruption) {
-        executor.shutdownNow();
-        interrupted = true;
-        while (!executor.isTerminated()) {
-          try {
-            executor.awaitTermination(1, TimeUnit.SECONDS);
-          } catch (InterruptedException ignored) {
-            interrupted = true;
-          }
-        }
+    }
+    if (executor.isTerminated()) {
+      return;
+    }
+
+    boolean interrupted = false;
+    try {
+      if (executor.awaitTermination(gracefulShutdownTimeoutNanos, TimeUnit.NANOSECONDS)) {
+        return;
       }
-      if (interrupted) {
-        Thread.currentThread().interrupt();
-      }
+    } catch (InterruptedException interruption) {
+      interrupted = true;
+    }
+
+    executor.shutdownNow();
+    try {
+      executor.awaitTermination(forcedShutdownTimeoutNanos, TimeUnit.NANOSECONDS);
+    } catch (InterruptedException interruption) {
+      interrupted = true;
+    }
+    if (interrupted) {
+      Thread.currentThread().interrupt();
+    }
+    if (!executor.isTerminated()) {
+      throw new IllegalStateException(
+          "Clinic database worker did not stop; database resources must remain open");
     }
   }
 

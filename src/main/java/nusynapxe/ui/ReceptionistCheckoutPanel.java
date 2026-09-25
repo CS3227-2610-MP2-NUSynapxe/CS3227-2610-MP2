@@ -1,32 +1,24 @@
 package nusynapxe.ui;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Clock;
-import java.time.format.DateTimeFormatter;
 import javafx.collections.FXCollections;
+import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.geometry.VPos;
-import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
-import javafx.stage.Modality;
-import javafx.stage.Stage;
+import javafx.util.Duration;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentListRow;
-import nusynapxe.domain.AppointmentStatus;
-import nusynapxe.domain.Patient;
-import nusynapxe.domain.PaymentMethod;
-import nusynapxe.service.AuthorizationException;
-import nusynapxe.service.ValidationException;
 
 /** Owns Receptionist check-in, checkout, and receipt-history controls. */
 final class ReceptionistCheckoutPanel {
@@ -37,12 +29,9 @@ final class ReceptionistCheckoutPanel {
   private static final String QUEUE_CHECKED_IN = "Checked in";
   private static final String QUEUE_ALL = "All";
   private static final String PATIENT_NAME_ID = "Name, NRIC/FIN, phone, or email";
-  private static final DateTimeFormatter DATE_TIME_FORMAT =
-      DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
   private final ReceptionistDataLoader dataLoader;
   private final Label workspaceFeedback;
-  private final Clock clinicClock;
   private final DatePicker queueDate;
   private final SearchSuggestionField<Account> queueDoctor;
   private final TextField queuePatient;
@@ -54,8 +43,13 @@ final class ReceptionistCheckoutPanel {
   private final TextField checkoutPatient;
   private final TableView<AppointmentListRow> checkoutAppointmentList;
   private final ReceptionistReceiptPanel receiptPanel;
+  private final ReceptionistCheckoutDialogs dialogs;
   private final VBox queueView;
   private final VBox checkoutView;
+  private final FxDebouncer queueSearchDebouncer;
+  private final FxDebouncer receiptSearchDebouncer;
+  private final EventHandler<MouseEvent> checkoutMouseReleased =
+      event -> checkoutMouseSelection = false;
   private boolean checkoutTabActive;
   private boolean checkoutMouseSelection;
   private Runnable refreshAppointments =
@@ -67,7 +61,6 @@ final class ReceptionistCheckoutPanel {
       ReceptionistDataLoader dataLoader, Label workspaceFeedback, Clock clinicClock) {
     this.dataLoader = dataLoader;
     this.workspaceFeedback = workspaceFeedback;
-    this.clinicClock = clinicClock;
     queueDate =
         UiComponents.compactDatePicker(
             clinicClock.instant().atZone(clinicClock.getZone()).toLocalDate());
@@ -93,6 +86,11 @@ final class ReceptionistCheckoutPanel {
     Button checkoutSearch = button("Search checkout", "reception-checkout-search");
 
     receiptPanel = new ReceptionistReceiptPanel(dataLoader, workspaceFeedback);
+    dialogs =
+        new ReceptionistCheckoutDialogs(
+            dataLoader, workspaceFeedback, clinicClock, receiptPanel::showReceipt);
+    queueSearchDebouncer = new FxDebouncer(Duration.millis(250), this::refreshQueue);
+    receiptSearchDebouncer = new FxDebouncer(Duration.millis(250), this::refreshReceipts);
 
     configureQueue(queueSearch);
     configureCheckout(checkoutSearch);
@@ -156,7 +154,7 @@ final class ReceptionistCheckoutPanel {
           AppointmentListRow selectedRow = queueList.getSelectionModel().getSelectedItem();
           Appointment selected = selectedRow == null ? null : selectedRow.appointment();
           if (selected != null) {
-            showCheckInDetailsDialog(
+            dialogs.showCheckInDetailsDialog(
                 selected.id(),
                 () -> {
                   refreshQueue();
@@ -167,8 +165,10 @@ final class ReceptionistCheckoutPanel {
     queueDate.valueProperty().addListener((observable, previous, selected) -> refreshQueue());
     queueDoctor.valueProperty().addListener((observable, previous, selected) -> refreshQueue());
     queueStatus.valueProperty().addListener((observable, previous, selected) -> refreshQueue());
-    queuePatient.textProperty().addListener((observable, previous, selected) -> refreshQueue());
-    queueSearch.setOnAction(event -> refreshQueue());
+    queuePatient
+        .textProperty()
+        .addListener((observable, previous, selected) -> queueSearchDebouncer.request());
+    queueSearch.setOnAction(event -> queueSearchDebouncer.runNow());
   }
 
   private void configureCheckout(Button checkoutSearch) {
@@ -178,7 +178,8 @@ final class ReceptionistCheckoutPanel {
         .addListener(
             (observable, previous, selected) -> {
               if (selected != null && checkoutTabActive && !checkoutMouseSelection) {
-                showCheckoutDetailsDialog(selected.appointment().id(), this::refreshAfterCheckout);
+                dialogs.showCheckoutDetailsDialog(
+                    selected.appointment().id(), this::refreshAfterCheckout);
               }
             });
     checkoutAppointmentList.setOnMousePressed(event -> checkoutMouseSelection = true);
@@ -187,14 +188,29 @@ final class ReceptionistCheckoutPanel {
           AppointmentListRow selected =
               checkoutAppointmentList.getSelectionModel().getSelectedItem();
           if (selected != null) {
-            showCheckoutDetailsDialog(selected.appointment().id(), this::refreshAfterCheckout);
+            dialogs.showCheckoutDetailsDialog(
+                selected.appointment().id(), this::refreshAfterCheckout);
           }
-          checkoutMouseSelection = false;
         });
-    checkoutSearch.setOnAction(event -> refreshCheckout());
+    checkoutAppointmentList
+        .sceneProperty()
+        .addListener(
+            (observable, previous, selected) -> {
+              if (previous != null) {
+                previous.removeEventFilter(MouseEvent.MOUSE_RELEASED, checkoutMouseReleased);
+              }
+              if (selected != null) {
+                selected.addEventFilter(MouseEvent.MOUSE_RELEASED, checkoutMouseReleased);
+              }
+            });
+    checkoutSearch.setOnAction(
+        event -> {
+          receiptSearchDebouncer.cancel();
+          refreshCheckout();
+        });
     checkoutPatient
         .textProperty()
-        .addListener((observable, previous, selected) -> refreshReceipts());
+        .addListener((observable, previous, selected) -> receiptSearchDebouncer.request());
     checkoutDoctor
         .valueProperty()
         .addListener((observable, previous, selected) -> refreshReceipts());
@@ -271,143 +287,6 @@ final class ReceptionistCheckoutPanel {
     refreshQueue();
   }
 
-  private void showCheckInDetailsDialog(long appointmentId, Runnable onUpdated) {
-    dataLoader.loadCheckInDetails(
-        appointmentId,
-        details -> showCheckInDetailsDialog(details, appointmentId, onUpdated),
-        failure ->
-            showTaskError(
-                workspaceFeedback, failure, "Check-in details are temporarily unavailable"));
-  }
-
-  private void showCheckInDetailsDialog(
-      ReceptionistDataLoader.AppointmentDetails loaded, long appointmentId, Runnable onUpdated) {
-    Appointment appointment = loaded.appointment();
-    Patient patient = loaded.patient();
-    Label details =
-        new Label(
-            valueOrEmpty(patient.firstName())
-                + " "
-                + valueOrEmpty(patient.lastName())
-                + "\nEmail: "
-                + valueOrEmpty(patient.email())
-                + "\nPhone: "
-                + valueOrEmpty(patient.phone())
-                + "\nDoctor: "
-                + loaded.doctorName()
-                + "\nScheduled: "
-                + appointment.startsAt().format(DATE_TIME_FORMAT)
-                + " - "
-                + appointment.endsAt().toLocalTime()
-                + "\nStatus: "
-                + appointment.status());
-    details.setId("reception-check-in-details");
-    Label feedback = new Label();
-    feedback.setId("reception-check-in-feedback");
-    Button checkIn = button("Check in patient", "reception-check-in-submit");
-    checkIn.setDisable(
-        appointment.status() != AppointmentStatus.ACCEPTED
-            || clinicClock
-                .instant()
-                .atZone(clinicClock.getZone())
-                .toLocalDateTime()
-                .isBefore(appointment.startsAt()));
-    Stage dialog = new Stage();
-    checkIn.setOnAction(
-        event ->
-            dataLoader.checkIn(
-                appointmentId,
-                () -> {
-                  UiComponents.showMessage(workspaceFeedback, "Patient checked in");
-                  onUpdated.run();
-                  dialog.close();
-                },
-                failure ->
-                    showTaskError(feedback, failure, "Check-in is temporarily unavailable")));
-    VBox content = new VBox(12, new Label("Appointment details"), details, checkIn, feedback);
-    content.setPadding(new Insets(18));
-    dialog.initOwner(workspaceFeedback.getScene().getWindow());
-    dialog.initModality(Modality.WINDOW_MODAL);
-    dialog.setTitle("Check-in details");
-    dialog.setScene(new Scene(content, 500, 300));
-    UiComponents.applyStylesheet(dialog.getScene());
-    dialog.show();
-  }
-
-  private void showCheckoutDetailsDialog(long appointmentId, Runnable onUpdated) {
-    dataLoader.loadCheckoutDetails(
-        appointmentId,
-        details -> showCheckoutDetailsDialog(details, appointmentId, onUpdated),
-        failure ->
-            showTaskError(
-                workspaceFeedback, failure, "Checkout details are temporarily unavailable"));
-  }
-
-  private void showCheckoutDetailsDialog(
-      ReceptionistDataLoader.AppointmentDetails loaded, long appointmentId, Runnable onUpdated) {
-    Appointment appointment = loaded.appointment();
-    Patient patient = loaded.patient();
-    Label details =
-        new Label(
-            valueOrEmpty(patient.firstName())
-                + " "
-                + valueOrEmpty(patient.lastName())
-                + "\nEmail: "
-                + valueOrEmpty(patient.email())
-                + "\nPhone: "
-                + valueOrEmpty(patient.phone())
-                + "\nDoctor: "
-                + loaded.doctorName()
-                + "\nScheduled: "
-                + appointment.startsAt().format(DATE_TIME_FORMAT)
-                + " - "
-                + appointment.endsAt().toLocalTime()
-                + "\nStatus: "
-                + appointment.status());
-    details.setId("reception-checkout-details");
-    TextField charge = field("reception-charge", "Amount");
-    ComboBox<PaymentMethod> method = UiComponents.compactSelector();
-    method.setItems(FXCollections.observableArrayList(PaymentMethod.values()));
-    method.setId("reception-method");
-    method.getSelectionModel().select(PaymentMethod.CASH);
-    Button checkout = button("Complete checkout", "reception-checkout");
-    Label feedback = new Label();
-    feedback.setId("reception-checkout-feedback");
-    GridPane paymentForm = new GridPane();
-    paymentForm.setHgap(8);
-    paymentForm.setVgap(8);
-    paymentForm.addRow(0, new Label("Amount"), charge);
-    paymentForm.addRow(1, new Label("Method"), method);
-    Stage dialog = new Stage();
-    checkout.setOnAction(
-        event -> {
-          try {
-            dataLoader.checkout(
-                appointmentId,
-                parseMinor(charge.getText()),
-                method.getValue(),
-                receipt -> {
-                  receipt.ifPresent(receiptPanel::showReceipt);
-                  UiComponents.showMessage(workspaceFeedback, "Checkout completed");
-                  onUpdated.run();
-                  dialog.close();
-                },
-                failure -> showTaskError(feedback, failure, "Checkout is temporarily unavailable"));
-          } catch (ValidationException exception) {
-            UiComponents.showError(feedback, exception.getMessage());
-          }
-        });
-    VBox content =
-        new VBox(12, new Label("Checkout appointment"), details, paymentForm, checkout, feedback);
-    content.setPadding(new Insets(18));
-    dialog.initOwner(workspaceFeedback.getScene().getWindow());
-    dialog.initModality(Modality.WINDOW_MODAL);
-    dialog.setTitle("Checkout details");
-    dialog.setScene(new Scene(content, 500, 400));
-    UiComponents.applyStylesheet(dialog.getScene());
-    dialog.show();
-  }
-
   private static SearchSuggestionField<Account> doctorSelector(String id, String prompt) {
     return new SearchSuggestionField<>(
         id,
@@ -450,37 +329,5 @@ final class ReceptionistCheckoutPanel {
     GridPane.setValignment(button, VPos.BOTTOM);
     button.setMinHeight(38);
     button.setPrefHeight(38);
-  }
-
-  private static long parseMinor(String value) {
-    if (value == null) {
-      throw new ValidationException("Amount must be a positive number with at most two decimals");
-    }
-    try {
-      long amount =
-          new BigDecimal(value.trim())
-              .setScale(2, RoundingMode.UNNECESSARY)
-              .movePointRight(2)
-              .longValueExact();
-      if (amount <= 0) {
-        throw new ValidationException("Amount must be a positive number with at most two decimals");
-      }
-      return amount;
-    } catch (ArithmeticException | NumberFormatException exception) {
-      throw new ValidationException(
-          "Amount must be a positive number with at most two decimals", exception);
-    }
-  }
-
-  private static String valueOrEmpty(String value) {
-    return value == null ? "" : value;
-  }
-
-  private static void showTaskError(Label feedback, Throwable failure, String fallback) {
-    if (failure instanceof ValidationException || failure instanceof AuthorizationException) {
-      UiComponents.showError(feedback, failure.getMessage());
-    } else {
-      UiComponents.showError(feedback, fallback);
-    }
   }
 }

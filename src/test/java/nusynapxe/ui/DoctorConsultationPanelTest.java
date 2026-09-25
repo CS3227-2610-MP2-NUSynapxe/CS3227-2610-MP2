@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
@@ -20,18 +21,21 @@ import org.testfx.framework.junit5.ApplicationTest;
 
 final class DoctorConsultationPanelTest extends ApplicationTest {
   private final CapturingTaskRunner taskRunner = new CapturingTaskRunner();
+  private final AtomicLong selectionGeneration = new AtomicLong(1);
+  private Label feedback;
   private DoctorConsultationPanel panel;
 
   @Override
   public void start(Stage stage) {
+    feedback = new Label();
     panel =
         new DoctorConsultationPanel(
             mock(ClinicServices.class),
             new Session(7, "doctor", Role.DOCTOR),
-            new Label(),
+            feedback,
             taskRunner,
             () -> 42,
-            () -> 1);
+            selectionGeneration::get);
     Scene scene =
         new Scene(
             new StackPane(panel.consultationCardView(), panel.prescriptionCardView()), 1200, 760);
@@ -84,6 +88,46 @@ final class DoctorConsultationPanelTest extends ApplicationTest {
     interact(
         () -> taskRunner.submissions.getFirst().failure().accept(new RuntimeException("failed")));
     assertFalse(panel.addPrescriptionButton().isDisable());
+  }
+
+  @Test
+  void staleConsultationFailureDoesNotDisableOrOverwriteTheNewSelection() {
+    interact(
+        () -> {
+          panel.diagnosisField().setText("Old diagnosis");
+          panel.saveButton().fire();
+          selectionGeneration.set(2);
+          panel.load(null, 2);
+          feedback.setText("New appointment selected");
+        });
+
+    interact(
+        () ->
+            taskRunner.submissions.getFirst().failure().accept(new RuntimeException("old error")));
+
+    assertFalse(panel.saveButton().isDisable());
+    assertFalse(panel.diagnosisField().isDisable());
+    assertEquals("New appointment selected", feedback.getText());
+  }
+
+  @Test
+  void stalePrescriptionCallbackDoesNotAlterANewerSubmission() {
+    interact(
+        () -> {
+          panel.medicationField().setText("Old medication");
+          panel.addPrescriptionButton().fire();
+          selectionGeneration.set(2);
+          panel.load(null, 2);
+          panel.medicationField().setText("New medication");
+          panel.addPrescriptionButton().fire();
+          feedback.setText("New prescription pending");
+        });
+
+    interact(() -> taskRunner.submissions.getFirst().success().accept(null));
+
+    assertTrue(panel.addPrescriptionButton().isDisable());
+    assertEquals("New medication", panel.medicationField().getText());
+    assertEquals("New prescription pending", feedback.getText());
   }
 
   private static final class CapturingTaskRunner implements ClinicTaskRunner {

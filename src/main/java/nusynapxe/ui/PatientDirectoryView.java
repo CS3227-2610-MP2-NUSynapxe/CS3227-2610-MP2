@@ -84,12 +84,11 @@ final class PatientDirectoryView {
             taskRunner.submit(
                 () -> services.patientService().register(session, draft),
                 patient -> {
-                  register.setDisable(false);
-                  cancelRegistration.setDisable(false);
-                  if (generation != registrationGeneration[0]) {
-                    refresh();
+                  if (disposed || generation != registrationGeneration[0]) {
                     return;
                   }
+                  register.setDisable(false);
+                  cancelRegistration.setDisable(false);
                   PatientDirectoryFormView.clear(registerForm);
                   patientSearch.clear();
                   showDirectory();
@@ -98,6 +97,9 @@ final class PatientDirectoryView {
                   handlePatientChanged(patient.id());
                 },
                 failure -> {
+                  if (disposed || generation != registrationGeneration[0]) {
+                    return;
+                  }
                   register.setDisable(false);
                   cancelRegistration.setDisable(false);
                   showTaskError(
@@ -403,6 +405,7 @@ final class PatientDirectoryView {
         workspaceFeedback,
         this::handlePatientChanged,
         taskRunner,
+        this::isActive,
         this::refresh,
         this::showEditing,
         this::showPatientView);
