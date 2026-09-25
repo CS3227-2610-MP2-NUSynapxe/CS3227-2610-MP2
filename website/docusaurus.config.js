@@ -15,7 +15,8 @@ const config = {
   markdown: {
     mermaid: true,
     hooks: {
-      onBrokenMarkdownLinks: 'warn',
+      onBrokenMarkdownLinks: 'throw',
+      onBrokenMarkdownImages: 'throw',
     },
   },
   themes: ['@docusaurus/theme-mermaid'],
@@ -25,7 +26,7 @@ const config = {
       {
         docs: {
           path: '..',
-          include: ['README.md', 'docs/**/*.md'],
+          include: ['docs/**/*.md'],
           routeBasePath: '/',
           sidebarPath: './sidebars.js',
         },
@@ -57,15 +58,15 @@ const config = {
           title: 'Guides',
           items: [
             {label: 'Overview', to: '/'},
-            {label: 'Developer Guide', to: '/docs/DeveloperGuide'},
             {label: 'User Guide', to: '/docs/UserGuide'},
+            {label: 'Developer Guide', to: '/docs/DeveloperGuide'},
           ],
         },
       ],
       copyright: `Copyright ${new Date().getFullYear()} NUSynapxe.`,
     },
     prism: {
-      additionalLanguages: ['gherkin'],
+      additionalLanguages: ['bash', 'json', 'powershell', 'gherkin'],
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
     },

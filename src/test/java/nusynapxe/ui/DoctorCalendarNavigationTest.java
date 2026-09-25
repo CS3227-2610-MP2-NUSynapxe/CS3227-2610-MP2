@@ -11,6 +11,8 @@ import java.sql.SQLException;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
@@ -218,30 +220,50 @@ final class DoctorCalendarNavigationTest extends DoctorCalendarViewTestSupport {
     loginAsDoctor();
     fire("#doctor-nav-calendar");
     waitForNode("#doctor-calendar-page");
+    HBox actionGroup = lookup("#doctor-calendar-action-group").queryAs(HBox.class);
+    VBox toolbar = lookup("#doctor-calendar-toolbar").queryAs(VBox.class);
+    Stage stage = (Stage) toolbar.getScene().getWindow();
     interact(
         () -> {
-          Stage stage = (Stage) lookup("#doctor-calendar-toolbar").query().getScene().getWindow();
+          stage.setMaximized(false);
           stage.setWidth(980);
         });
     WaitForAsyncUtils.waitForFxEvents();
     interact(
         () -> {
-          lookup("#doctor-calendar-toolbar").query().applyCss();
-          lookup("#doctor-calendar-toolbar").queryAs(VBox.class).layout();
+          stage.getScene().getRoot().applyCss();
+          stage.getScene().getRoot().layout();
+          toolbar.applyCss();
+          toolbar.layout();
         });
-    HBox actionGroup = lookup("#doctor-calendar-action-group").queryAs(HBox.class);
+    WaitForAsyncUtils.waitForFxEvents();
+    try {
+      WaitForAsyncUtils.waitFor(
+          10,
+          TimeUnit.SECONDS,
+          () -> "doctor-calendar-toolbar-actions".equals(actionGroup.getParent().getId()));
+    } catch (TimeoutException exception) {
+      assertEquals("doctor-calendar-toolbar-actions", actionGroup.getParent().getId());
+    }
     assertEquals("doctor-calendar-toolbar-actions", actionGroup.getParent().getId());
-    interact(
-        () -> {
-          Stage stage = (Stage) lookup("#doctor-calendar-toolbar").query().getScene().getWindow();
-          stage.setWidth(1400);
-        });
+    interact(() -> stage.setWidth(1400));
     WaitForAsyncUtils.waitForFxEvents();
     interact(
         () -> {
-          lookup("#doctor-calendar-toolbar").query().applyCss();
-          lookup("#doctor-calendar-toolbar").queryAs(VBox.class).layout();
+          stage.getScene().getRoot().applyCss();
+          stage.getScene().getRoot().layout();
+          toolbar.applyCss();
+          toolbar.layout();
         });
+    WaitForAsyncUtils.waitForFxEvents();
+    try {
+      WaitForAsyncUtils.waitFor(
+          10,
+          TimeUnit.SECONDS,
+          () -> "doctor-calendar-toolbar-main".equals(actionGroup.getParent().getId()));
+    } catch (TimeoutException exception) {
+      assertEquals("doctor-calendar-toolbar-main", actionGroup.getParent().getId());
+    }
     assertEquals("doctor-calendar-toolbar-main", actionGroup.getParent().getId());
   }
 }

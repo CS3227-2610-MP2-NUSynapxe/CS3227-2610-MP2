@@ -203,6 +203,7 @@ final class ReceptionistCheckoutPanel {
 
   private VBox buildQueueView(Button queueSearch) {
     GridPane filters = filterGrid("reception-check-in-filter-grid");
+    filters.getStyleClass().add("uniform-filter-grid");
     addUniformColumns(filters, 4, 170, 220, 220);
     filters.add(UiComponents.fieldGroup(DATE_LABEL, queueDate), 0, 0);
     filters.add(UiComponents.fieldGroup(DOCTOR_LABEL, queueDoctor), 1, 0);
@@ -329,6 +330,7 @@ final class ReceptionistCheckoutPanel {
     dialog.initModality(Modality.WINDOW_MODAL);
     dialog.setTitle("Check-in details");
     dialog.setScene(new Scene(content, 500, 300));
+    UiComponents.applyStylesheet(dialog.getScene());
     dialog.show();
   }
 
@@ -402,6 +404,7 @@ final class ReceptionistCheckoutPanel {
     dialog.initModality(Modality.WINDOW_MODAL);
     dialog.setTitle("Checkout details");
     dialog.setScene(new Scene(content, 500, 400));
+    UiComponents.applyStylesheet(dialog.getScene());
     dialog.show();
   }
 
@@ -445,8 +448,8 @@ final class ReceptionistCheckoutPanel {
 
   private static void alignFilterAction(Button button) {
     GridPane.setValignment(button, VPos.BOTTOM);
-    button.setMinHeight(34);
-    button.setPrefHeight(34);
+    button.setMinHeight(38);
+    button.setPrefHeight(38);
   }
 
   private static long parseMinor(String value) {

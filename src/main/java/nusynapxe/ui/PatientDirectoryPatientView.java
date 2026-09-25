@@ -121,9 +121,10 @@ final class PatientDirectoryPatientView {
       Runnable refresh,
       Runnable showEditing,
       Consumer<Patient> showView) {
+    Patient formPatient = selected;
     PatientDirectoryFormView.PatientForm form =
         PatientDirectoryFormView.createForm(prefix + "-patient", false, clock);
-    PatientDirectoryFormView.populate(selected, form);
+    PatientDirectoryFormView.populate(formPatient, form);
     Patient[] current = {selected};
     Label feedback = new Label();
     feedback.setId(prefix + "-patient-edit-feedback");
@@ -377,6 +378,7 @@ final class PatientDirectoryPatientView {
     dialog.initModality(Modality.WINDOW_MODAL);
     dialog.setTitle("Confirm patient deletion");
     dialog.setScene(new Scene(content, 460, 190));
+    UiComponents.applyStylesheet(dialog.getScene());
     dialog.showAndWait();
     return confirmed[0];
   }
@@ -410,6 +412,7 @@ final class PatientDirectoryPatientView {
     dialog.initModality(Modality.WINDOW_MODAL);
     dialog.setTitle("Patient cannot be deleted");
     dialog.setScene(new Scene(content, 500, 320));
+    UiComponents.applyStylesheet(dialog.getScene());
     dialog.showAndWait();
   }
 

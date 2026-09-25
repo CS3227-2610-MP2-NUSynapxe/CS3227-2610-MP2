@@ -1,783 +1,382 @@
+---
+sidebar_position: 1
+title: Developer Guide
+sidebar_label: Developer Guide
+---
+
 # Developer Guide
 
-## Development prerequisites
+## 1. Development Prerequisites
 
-The project uses Java 25, Gradle Wrapper 9.7.1, JavaFX 25.0.4, SQLite JDBC
-3.53.4.0, and Node.js 24 for the Docusaurus site. JavaFX is resolved by the
-Gradle plugin; a separate JavaFX SDK is not required.
+NUSynapxe is built on modern Java and desktop UI standards. The project uses:
+- **Java**: OpenJDK 25 (Java 25 toolchain)
+- **Build System**: Gradle Wrapper 9.7.1
+- **UI Toolkit**: JavaFX 25.0.4 (resolved via the `org.openjfx.javafxplugin` Gradle plugin; no external JavaFX SDK installation is needed)
+- **Embedded Database**: SQLite JDBC 3.53.4.0 with Xerial SQLite driver
+- **Documentation Platform**: Node.js 24 and Docusaurus 3.10.2
+- **Testing & Verification**: JUnit 6.1.3 (via `junit-bom`), Mockito 5.23.0, TestFX 4.0.18, ArchUnit 1.5.0, Spotless 8.10.2 (Google Java Format 1.36.1), Checkstyle 14.1.0, PMD 7.26.0, SpotBugs 4.10.3 with FindSecBugs 1.14.0, and JaCoCo 0.8.14.
 
-Use the checked-in Gradle Wrapper rather than a separately installed Gradle
-version. Native Windows packaging additionally requires WiX Toolset v3 or
-newer, but WiX is not needed for normal development or testing.
+Use the checked-in Gradle Wrapper (`.\gradlew.bat` on Windows, `./gradlew` on macOS/Linux) rather than an externally installed Gradle binary. Native Windows packaging (`.msi`) additionally requires the [WiX Toolset v3](https://wixtoolset.org/) or newer on system `PATH`; WiX is not needed for routine development, compilation, or testing.
 
-## Getting started
+---
 
-### Running NUSynapxe from source
+## 2. Getting Started
 
-Run the desktop application from the repository root:
+### 2.1 Running NUSynapxe from Source
+
+Start the desktop application from the repository root:
 
 ```powershell
+# Windows PowerShell
 .\gradlew.bat run
 ```
 
-On macOS or Linux, use `./gradlew run`. The application creates or opens the
-local database described in the User Guide unless the
-`nusynapxe.database` Java system property supplies an isolated path.
+```bash
+# macOS / Linux
+./gradlew run
+```
 
-### Useful build and quality commands
+The application creates or opens the local SQLite database described in the [User Guide](UserGuide.md) at `%USERPROFILE%\.nusynapxe\nusynapxe.db` (Windows) or `~/.nusynapxe/nusynapxe.db` (macOS/Linux). To isolate development data from your personal environment when running via Gradle, pass the `-PdemoDatabasePath` project property (which the `run` task in `build.gradle` forwards to the forked application JVM as the `nusynapxe.database` system property):
 
-Run the complete local Java quality gate with:
+```powershell
+# Windows PowerShell
+.\gradlew.bat run -PdemoDatabasePath="build/dev-test.db"
+```
+
+```bash
+# macOS / Linux
+./gradlew run -PdemoDatabasePath="build/dev-test.db"
+```
+
+*(Note: When launching a standalone fat JAR directly via `java -jar`, pass `-Dnusynapxe.database="build/dev-test.db"` directly to the JVM).*
+
+> [!NOTE]
+> When launching against a fresh custom database path, `run` creates an unpopulated database that presents the initial administrator registration screen. To populate it with showcase accounts and sample clinical records beforehand, seed it first using `scripts/seed-demo-data.ps1` (or the `demoData` Gradle task):
+> ```powershell
+> # Windows PowerShell
+> .\scripts\seed-demo-data.ps1 -DatabasePath "build/dev-test.db" -Reset
+> .\gradlew.bat run -PdemoDatabasePath="build/dev-test.db"
+> ```
+> ```bash
+> # macOS / Linux
+> ./gradlew demoData -PdemoDataCommand=seed -PdemoDatabasePath="build/dev-test.db" -PdemoDataReset=true --no-daemon --console=plain
+> ./gradlew run -PdemoDatabasePath="build/dev-test.db"
+> ```
+
+### 2.2 Useful Build and Quality Commands
+
+Execute the complete local Java quality gate:
 
 ```powershell
 .\gradlew.bat spotlessApply check javadoc --no-daemon --console=plain
 ```
 
-Useful focused commands are:
+Individual focused commands for targeted development:
 
 ```powershell
+# Run the complete test suite
 .\gradlew.bat test --no-daemon --console=plain
+
+# Run specific unit/service tests
 .\gradlew.bat test --tests nusynapxe.service.AppointmentServiceTest --no-daemon --console=plain
 .\gradlew.bat test --tests nusynapxe.persistence.SchemaMigrationTest --tests nusynapxe.persistence.PatientDirectoryRepositoryTest --no-daemon --console=plain
-.\gradlew.bat test --tests nusynapxe.service.PatientServiceTest --tests nusynapxe.ui.ReceptionistViewTest --no-daemon --console=plain
-.\gradlew.bat test --tests nusynapxe.service.PatientServiceTest --tests nusynapxe.persistence.PatientDirectoryRepositoryTest --tests nusynapxe.ui.DoctorViewTest --no-daemon --console=plain
+.\gradlew.bat test --tests nusynapxe.service.PatientServiceValidationTest --tests nusynapxe.ui.ReceptionistBookingTest --no-daemon --console=plain
+.\gradlew.bat test --tests nusynapxe.service.PatientServiceMaintenanceTest --tests nusynapxe.persistence.PatientDirectoryRepositoryTest --tests nusynapxe.ui.DoctorDashboardTest --no-daemon --console=plain
+
+# Run static analysis and linting
 .\gradlew.bat checkstyleMain checkstyleTest --no-daemon --console=plain
 .\gradlew.bat pmdMain --no-daemon --console=plain
-.\gradlew.bat spotbugsMain --no-daemon --console=plain
+.\gradlew.bat spotbugsMain spotbugsTest --no-daemon --console=plain
+
+# Generate coverage reports
 .\gradlew.bat jacocoTestReport --no-daemon --console=plain
 ```
 
-`spotlessApply` formats Java source. `spotlessCheck` is the read-only CI
-equivalent. `check` runs JUnit, Checkstyle, PMD, SpotBugs with FindSecBugs, and
-JaCoCo. Production quality gates fail the build on violations. `pmdTest` is
-enabled with its test-specific ruleset; `spotbugsTest` is disabled because
-bytecode analysis of the TestFX harness is not part of the production contract.
+- `spotlessApply` formats Java sources according to Google Java Format. `spotlessCheck` is the read-only CI equivalent.
+- `check` runs JUnit, Checkstyle, PMD, SpotBugs with FindSecBugs, file size limit verification, and JaCoCo. Quality gates fail the build on any violation.
+- Both `pmdTest` (using a test-specific ruleset) and `spotbugsTest` are enabled and enforced as part of the `check` quality gate.
 
-### Demo database tooling
+### 2.3 Demo Database Tooling
 
-`scripts/reset-demo-database.ps1` and `scripts/seed-demo-data.ps1` are the
-supported Windows workflow for resetting and creating the local-development
-database used by `.\gradlew.bat run`. Both use
-the `demoData` Gradle `JavaExec` task, which delegates to
-`nusynapxe.tools.DemoDataSeeder` and the normal repositories and password
-hashing service. The default target is `%USERPROFILE%\.nusynapxe\nusynapxe.db`,
-which is also the application's default when no `nusynapxe.database` property
-is supplied. A different target can be supplied with `-DatabasePath`.
+`scripts/reset-demo-database.ps1` and `scripts/seed-demo-data.ps1` are the supported Windows workflow for resetting and creating the local-development database used by `.\gradlew.bat run`. Both delegate to the `demoData` Gradle `JavaExec` task, which executes `nusynapxe.tools.DemoDataSeeder` through standard service and repository abstractions.
 
-Reset is destructive; the standalone reset script requires `-Force` for an
-existing database. Seeding only accepts an empty database, while
-`seed-demo-data.ps1 -Reset` explicitly replaces the target before seeding. The
-reset operation removes only the SQLite file and its adjacent `-wal`, `-shm`,
-and `-journal` files, then reinitializes the current schema. The generated data
-is time-relative to the Singapore clinic date: it creates 18 patients and two
-non-overlapping appointments for each Doctor on every date from seven days
-before today through fourteen days after today. Historical checked-in,
-completed, and checked-out appointments are persisted with deterministic
-clinical records, and completed or checked-out records receive a prescription.
-The wrapper prints the short showcase credentials `ada` / `ada1234!`, `grace` /
-`grace123!`, and `reception` / `recept123!`; the System Admin remains
-`admin.demo` / `DemoAdmin123!`. Keep these credentials and generated records
-limited to local demonstrations.
+- **Default Target**: `%USERPROFILE%\.nusynapxe\nusynapxe.db`. A custom path can be supplied via `-DatabasePath`.
+- **Reset Command**: Destructive operation requiring `-Force` for an existing database. It removes the SQLite database and its supporting files, then reinitializes the schema.
+  ```powershell
+  .\scripts\reset-demo-database.ps1 -Force
+  ```
+- **Seed Command**: Populates an empty database with realistic, time-relative clinical data centered on the current Singapore clinic date (`Asia/Singapore`):
+  ```powershell
+  .\scripts\seed-demo-data.ps1 -Reset
+  ```
+  - Creates realistic patient profiles across active and inactive states.
+  - Provisions 2 non-overlapping appointments per doctor for every date from 7 days before today through 14 days after today.
+  - Generates realistic clinical records, notes, and multi-drug prescriptions for completed and checked-out visits.
+  - Outputs showcase credentials:
+    - **Doctor 1**: `ada` / `ada1234!` (Dr. Ada Lovelace)
+    - **Doctor 2**: `grace` / `grace123!` (Dr. Grace Hopper)
+    - **Receptionist**: `reception` / `recept123!`
+    - **System Admin**: `admin.demo` / `DemoAdmin123!`
 
-## Product definition
+### 2.4 Running the Documentation Site
 
-### Goal
-
-NUSynapxe is a local desktop clinic application that coordinates patient
-administration, Doctor schedules, appointment lifecycle, consultation records,
-checkout, receipts, and revenue reporting while enforcing role and ownership
-boundaries between System Admin, Receptionist, and Doctor users.
-
-### Current capabilities
-
-- System Admin creates and views Doctor and Receptionist accounts.
-- Receptionists maintain administrative patient data, schedule and check in
-  visits, complete checkout, view receipts, and generate revenue reports.
-- Doctors maintain administrative patient data, manage their own schedule and
-  time off, decide assigned appointments, and record assigned consultations and
-  prescriptions.
-- SQLite stores versioned local data, and native installers package the Java
-  runtime for Windows, macOS, and Linux.
-
-### Non-goals
-
-The current product does not provide cloud synchronization, online booking,
-government identity verification, insurance claims, inventory management,
-multi-clinic tenancy, or an in-application backup/restore workflow. Calendar
-working hours shade the display but do not impose booking policy.
-
-## Architecture
-
-### Package layout and boundaries
-
-```text
-src/main/java/nusynapxe/             Application entry point and database paths
-src/main/java/nusynapxe/domain/      Immutable records and workflow enums
-src/main/java/nusynapxe/tools/       Database reset and demo-data utilities
-src/main/java/nusynapxe/persistence/SQLite connection, schema, repositories
-src/main/java/nusynapxe/service/     Authorization and business-use-case rules
-src/main/java/nusynapxe/ui/          Programmatic JavaFX views and scene router
-src/test/java/nusynapxe/             JUnit, Mockito, persistence, service, TestFX tests
-config/checkstyle/                   Checkstyle configuration
-config/pmd/                          PMD ruleset
-config/spotbugs/                     SpotBugs exclusions
-website/                             Docusaurus configuration and lockfile
-```
-
-The UI calls `ClinicServices`; it does not write SQL. Services validate the
-actor, role, ownership, state, and input before calling repositories.
-Repositories contain explicit projections and transaction boundaries. This
-keeps the confidentiality boundary testable even if a future UI accidentally
-renders an unauthorized control.
-
-### Enforced dependency rules
-
-`nusynapxe.architecture.ArchitectureTest` uses ArchUnit 1.5.0 to import only
-production classes and enforce the package direction documented above. Domain
-classes remain independent from outer layers; persistence cannot reach UI,
-services, or tools; services cannot reach UI or tools; and UI classes cannot
-reach tools or persistence except for `ApplicationRouter`, the database-opening
-composition root. The `domain`, `persistence`, `service`, `ui`, and `tools`
-slices must also remain free of cycles.
-
-The architecture rules run as part of `.\gradlew.bat check`; run the focused
-test with:
+The Docusaurus documentation website is located in `website/`:
 
 ```powershell
-.\gradlew.bat test --tests nusynapxe.architecture.ArchitectureTest --no-daemon --console=plain
-```
-
-## Persistence and schema
-
-`SqliteDatabase.open()` creates the parent directory, enables SQLite foreign
-keys, and delegates to the idempotent `SchemaInitializer`. The initializer
-stores the schema version in `app_metadata` and creates:
-
-```text
-users                 account identity, role, enabled flag, salt/verifier
-patients              Patient ID, documented identity, basic data, active flag
-appointments          patient/Doctor interval and lifecycle status
-doctor_time_off       blocked Doctor availability intervals
-doctor_calendar_settings
-                      Doctor-owned Calendar settings, including the retained
-                      first-day value used for compatibility
-doctor_working_intervals
-                      Doctor-owned daily display intervals and breaks
-clinical_records      diagnosis and consultation/follow-up notes
-prescriptions         medication and usage instructions
-payments              checkout amount in integer minor units and method
-```
-
-Schema version 2 adds nullable identity type/number/country, sex, height,
-weight, and active columns for backward compatibility. Schema version 3
-removes `patients.billing_information` and clears legacy sex values other than
-`FEMALE` and `MALE`; it does not alter the separate `payments` table. Schema
-version 4 renames legacy `phone` to `phone_number` and adds nullable
-`phone_country_code`. Existing telephone text is retained verbatim and a
-migrated row requires a country code on its next save. Version-1
-databases apply all migrations in order within one transaction. Existing rows keep their generated numeric
-Patient IDs and related records; no identity or measurement values are
-invented. New registrations require complete identity and sex values, and a
-legacy row requires complete identity fields on its next basic-data save.
-Migration advances `app_metadata.schema_version` only after every statement
-succeeds, so failure rolls back both schema changes and the version marker.
-Schema version 5 adds `doctor_calendar_settings` and
-`doctor_working_intervals`. Existing Doctors receive a Sunday-first default
-with Monday-Friday `08:00`-`18:00` intervals; a missing interval list means a
-disabled day. Intervals are stored as integer minutes through an explicit
-`1440` midnight end and are validated as non-overlapping before an atomic
-whole-profile replacement. Calendar working intervals are display preferences
-only: they do not participate in appointment availability or conflict checks.
-
-`patients.id INTEGER PRIMARY KEY AUTOINCREMENT` is the immutable relational
-Patient ID. The UI formats value `42` as `P000042` without storing another
-identifier. NRIC, FIN, passport, and other documents are business identifiers,
-not primary keys. SQLite enforces uniqueness over the normalized
-`(identity_type, issuing_country, identity_number)` tuple. Repository binding
-trims and uppercases document values, while the service performs a friendly
-pre-check and maps uniqueness races to a non-sensitive duplicate message.
-
-NRIC syntax is `[ST][0-9]{7}[A-Z]`, FIN syntax is
-`[FGM][0-9]{7}[A-Z]`, and both require normalized issuing country `SG` at the
-service boundary. Passport syntax is `[A-Z0-9]{5,20}`; these rules do
-not perform government checksum validation. `phone_country_code` follows
-`^[1-9][0-9]{0,2}$` and `phone_number` contains digits only. The plus sign is
-added only when formatting the combined telephone number. Calling-code
-suggestions use Google libphonenumber metadata and remain editable. Email has
-non-empty text around `@`. Height is an optional positive whole number of
-centimetres; weight is optional, positive, and limited to one decimal place.
-Patient sex is limited to `FEMALE` or `MALE`. Patient-level billing information
-is not stored; appointment payments remain in `payments`.
-Patient deactivation sets `active = 0`, and reactivation restores `active = 1`;
-neither transition reuses the Patient ID or deletes appointment, payment, or
-clinical history.
-
-Directory search accepts an exact numeric or `P`-formatted Patient ID and
-case-insensitive partial document, country, name, phone, or email text. SQL
-wildcards supplied by a user are escaped and treated literally. Blank search
-lists the directory, and results use deterministic name-then-ID ordering.
-
-Patient deletion uses `PatientDeletionBlockers` as a non-sensitive relationship
-projection. The repository counts appointments, clinical records,
-prescriptions reached through clinical records, payments, receipts, and any
-other table with a direct foreign key to `patients`. `deleteIfUnrelated` repeats
-the counts and the patient-row delete in one transaction. It deletes only the
-patient row when every count is zero; it never deletes child rows or uses
-`ON DELETE CASCADE`. A final SQLite foreign-key failure is rolled back and
-returned as an additional safe blocker category for a stale or newly added
-relationship. `PatientDeletionBlockedException` carries only the patient ID
-and category counts to the UI.
-
-New schema changes should remain ordered, versioned, and transactional. Keep
-basic administrative and clinical columns in separate repository projections.
-`ClinicalRecordRepository.findHistoryByPatient` is a terminal-only clinical
-projection: it joins the consultation, appointment, and assigned Doctor display
-name, filters by patient and `COMPLETED`/`CHECKED_OUT` status, and orders by
-appointment timestamp then appointment ID descending. All
-appointment and time-off interval writes use transactions and reject overlap;
-the overlap rule is `existing_start < new_end` and `existing_end > new_start`,
-so adjacent intervals are valid.
-
-## Account, session, and authorization design
-
-The first account must be a System Admin. `AccountService` uses the
-`PasswordHasher` PBKDF2WithHmacSHA256 implementation with a random per-account
-salt and stores only the salt/verifier byte arrays. `AuthenticationService`
-creates an in-memory `Session` after verifying an enabled account and clears
-the submitted password array. Sessions are never serialized to SQLite.
-
-`Authorization.requireRole` and `requireDoctorOwnership` are called by every
-protected service operation. `Authorization.requirePatientAdministration`
-accepts only authenticated `Role.DOCTOR` or `Role.RECEPTIONIST` sessions for
-patient registration, search, retrieval, update, activation, deactivation,
-deletion preflight, and deletion. `PatientRepository` selects an explicit
-basic-data projection and never joins clinical tables;
-the `Patient` record cannot contain diagnoses, notes, or prescriptions.
-`ClinicalService` requires the assigned Doctor for clinical writes and for the
-assigned-Doctor consultation workspace. Its history read path requires only a
-Doctor role and terminal appointment status, so all Doctors can read completed
-or checked-out records while in-progress records remain unavailable to other
-Doctors. System Admin is limited to account administration.
-
-Treat document numbers as private data: do not include complete values in
-exceptions, logs, screenshots, fixtures, or generated reports. Duplicate
-failures use one fixed message and never echo the submitted identity tuple.
-
-## Workflow rules
-
-The Receptionist scheduling dashboard uses `AppointmentRepository.search` and
-`AppointmentService.searchAppointments` for optional date, Doctor, patient, and
-status filters. It derives summary counts from the same filtered result set.
-The repository joins only the administrative patient projection, and the UI
-formats table rows with patient name, Doctor name, interval, and status without
-generated identifier columns. Booking
-rejects inactive patients at the service boundary. Reactivation restores booking
-eligibility subject to the normal schedule-conflict rules. Existing appointments
-and all history remain available after deactivation. Booking and rescheduling use
-a calendar date plus separate hour (`00`–`23`) and minute (`00`/`30`) selectors, and
-all conflict and lifecycle checks remain transactional service/repository
-rules.
-Patient and Doctor appointment selectors use `SearchSuggestionField`, with
-filtered keyboard- and mouse-selectable results below their text editors.
-Appointment times are generated in 30-minute increments from `00:00` through
-`23:30`. Rescheduling is handled in an owned modal Stage that displays the
-selected patient's administrative projection and exposes reschedule/cancel
-actions; successful completion refreshes the dashboard.
-The Check-in Queue reuses the administrative appointment search, defaults to
-Singapore's current date, combines accepted and checked-in appointments, and
-opens an administrative details popup with an eligibility-aware check-in action.
-Checkout uses a completed-appointment search and a separate receipt-history
-projection. Successful payments create one receipt with a unique daily sequence;
-history viewing is read-only and contains administrative fields only.
-
-The lifecycle policy is:
-
-```text
-PENDING -> ACCEPTED -> CHECKED_IN -> COMPLETED -> CHECKED_OUT
-    \          /
-     \-> CANCELLED
-```
-
-Receptionists book for any Doctor, check in at or after the start time, and
-check out a completed appointment. Doctors accept assigned appointments,
-reschedule their own pending/accepted appointments, manage time off from Calendar, save one
-clinical record per consultation, add prescriptions, and complete checked-in
-appointments. Invalid transitions leave persistence unchanged. Billing
-stores integer minor units and aggregates successful payments by local date.
-
-The shared availability query treats `PENDING`, `ACCEPTED`, `CHECKED_IN`,
-`COMPLETED`, and `CHECKED_OUT` as blocking states. `DECLINED` and `CANCELLED`
-appointments remain persisted and searchable but do not block booking,
-rescheduling, or time-off creation. Time-off removal derives the owner from the
-authenticated Doctor session and deletes with both `id` and `doctor_id`; a
-missing or differently owned row produces the same safe validation result.
-
-Revenue Reports are built from persisted successful-payment receipts. The
-Receptionist-only service accepts an inclusive Singapore-local date range and
-optional patient, Doctor, and payment-method filters, then returns receipt
-detail rows plus total and breakdown projections. The UI renders an explicit
-empty state and exports the current projection as CSV or JSON; exporting never
-creates or mutates a payment or receipt.
-
-The Doctor Calendar uses a separate authorized read path. Its range query
-matches appointments and time off with `starts_at < range_end` and
-`ends_at > range_start`. The immutable `DoctorCalendarWeek` projection contains
-Calendar settings, administrative `CalendarAppointment` values, and ranged
-`DoctorTimeOff` values with stable IDs; it does not load clinical records or
-prescriptions. Doctor-owned and Receptionist-selected reads populate the same
-non-clinical time-off projection after their role and ownership checks.
-Calendar working-hours settings are owned by the authenticated Doctor and are
-persisted transactionally. The fixed clinic zone is `Asia/Singapore`; it is
-shown as informational text and is not configurable or stored as a preference.
-The persisted first-day value remains part of the settings snapshot for
-compatibility, but the settings page no longer presents it because Calendar
-ranges and Agenda anchors are selected explicitly. Agenda mode uses the same
-administrative projection through `CalendarService.getSchedulePage`: it takes
-an inclusive Singapore-local start date, a bounded page size, and an optional
-`CalendarScheduleCursor` containing `(startsAt, appointmentId)`. The repository
-orders by `starts_at, id` and reads one look-ahead row to derive `hasMore`, so
-equal timestamps cannot cause skips or duplicates. `CalendarScheduleList` is a
-virtualized, append-only JavaFX list; it groups each page by start date and
-does not add a duplicate date header when a page boundary splits a group.
-Agenda navigation clears the cursor and list, while a failed later page
-keeps prior rows and exposes Retry. Agenda working-hour and break shading is
-intentionally confined to the weekly grid; it never blocks appointment writes.
-
-`CalendarTimeGrid` shares day clipping, working-hour shading, current-time
-presentation, appointment selection, time-off rendering, and proportional
-minute geometry. Its full profile retains 100-pixel half-hour rows and inline
-Doctor decisions. Its compact profile uses 44-pixel rows, combines time and
-written status on one line, and makes the whole appointment block selectable.
-A 60-minute event therefore occupies twice the time span of a 30-minute event,
-less the same inset at both edges. `DoctorDashboardDayView` owns the Dashboard
-date, Singapore clock, Today and previous/next navigation, date picker, refresh,
-useful initial scrolling, minute ticker, and selection reconciliation.
-`DoctorView` resolves an authorized Calendar selection through
-`AppointmentService` before loading clinical data in the detail pane.
-`ClinicalHistoryView` is a separate Doctor-only read-only state reachable from
-the Patients directory and from a selected Dashboard patient. Its stable UI
-markers are `doctor-clinical-history-view`, `doctor-history-patient`,
-`doctor-history-list`, `doctor-history-state`, `doctor-history-detail`,
-`doctor-history-diagnosis`, `doctor-history-consultation-notes`,
-`doctor-history-follow-up`, and `doctor-history-prescription-list`; it exposes
-no clinical save, edit, prescription, or completion action.
-
-## UI and TestFX conventions
-
-`ApplicationRouter` opens Login or first-run Setup and routes an authenticated
-session to one of the role workspaces. Every routed scene loads
-`src/main/resources/nusynapxe/ui.css`; the application opens the stage
-maximized, while the router uses a restored initial size of `1200 x 760`, a
-minimum size of `980 x 640`, and keeps the stage resizable.
-`UiComponents` contains presentation-only factories for cards, headings,
-field groups, action bars, feedback, empty states, buttons, status badges, and
-the authenticated header. It has no service or persistence dependency.
-`UiComponents.statusBadge` renders a `Label` with a `status-badge` style class
-plus a semantic `status-<value>` class defined in `ui.css`; it is the single
-source of status colour across the app (Doctor Calendar blocks and schedule
-list, `SystemAdminView` account status, `PatientDirectoryView` patient status,
-and the Receptionist appointment/queue/checkout `TableView`s), so a status
-`TableColumn` uses a `TableCell` `cellFactory` that calls it via `setGraphic`
-rather than rendering plain text.
-
-Views are built programmatically so semantic ids remain easy to assert. The
-patient area has one default directory view with search controls, a `TableView`
-with `Name`, `Date of birth`, `Phone`, `Email`, `Status`, and rightmost
-`Actions` columns, and a bottom `Register new patient` action. Each populated
-Actions cell has a stable `*-patient-view-<id>` button. Registration, read-only
-viewing, and editing are separate managed page states. Successful registration
-clears the draft and search, while successful editing returns to the read-only
-patient view. Both refresh the directory and dependent selectors. Validation
-or persistence failure keeps the active form page open with feedback. Country
-options come from `Locale.getISOCountries()`, use English display names, persist
-ISO two-letter codes, and order Singapore first. NRIC and FIN selection chooses
-and locks Singapore automatically; service validation independently enforces
-the same rule. All identity, country, date, and sex `ComboBox` controls use the
-shared `.compact-selector` style; impossible day/month combinations clamp to
-the month's final day. Age is derived with the `Asia/Singapore` date, has no
-placeholder, and is never persisted. Male precedes Female in the sex selector.
-The telephone `+` is a fixed label outside the editable, digits-only country-code
-field. Clicking a table row does not open a window; its explicit View action
-shows all permitted administrative details with Edit, status, delete, and back
-actions. Edit then opens a form with Save and Discard changes.
-
-All date-picker fields use `UiComponents.compactDatePicker()` and the shared
-`compact-date-picker` marker. The stylesheet keeps the control at the compact
-selector height, gives the embedded text field transparent treatment, and uses
-an understated calendar button while preserving the native popup, keyboard,
-focus, accessible-label, and validation behavior. New date-picker fields should
-use this factory rather than constructing `DatePicker` directly.
-The top-level `reception-workspace-tabs` is an internal page stack with hidden
-headers. The visible `reception-navigation` rail uses ordinary horizontal-text
-buttons for directory, appointments, Calendar, check-in, checkout, and revenue.
-`ReceptionistCalendarView` reads one selected Doctor's administrative projection
-through `CalendarService.getReceptionistWeek`; empty slots open a Receptionist
-creation dialog and appointment blocks open the Receptionist edit dialog without
-exposing clinical data. Successful dialog actions refresh the grid. Actions and page
-selection refresh affected data, so Receptionist view has no manual refresh
-control. Important ids include `login-submit`, `setup-submit`,
-`admin-account-submit`, `reception-patient-directory-view`,
-`reception-patient-open-register`, `reception-patient-register-view`,
-`reception-patient-register-cancel`,
-`reception-register-identity-type`, `reception-register-issuing-country`,
-`reception-register-phone-country-code`, `reception-register-phone-number`,
-`reception-register-phone-plus`, `reception-register-date-of-birth`,
-`reception-register-date-of-birth-month`, `reception-register-date-of-birth-year`,
-`reception-register-age`, `reception-patient-view`, `reception-patient-edit-view`,
-`reception-patient-identity-type`, `reception-patient-identity-number`,
-`reception-patient-issuing-country`, `reception-patient-search`,
-`reception-patient-search-submit`, `reception-patient-search-clear`,
-`reception-patient-table`, `reception-patient-view-<id>`,
-`reception-patient-update`, `reception-patient-edit-cancel`,
-`reception-patient-deactivate`, `reception-book`, `reception-checkout`,
-`doctor-consultation-save`, and `logout-button`.
-
-Doctor navigation adds `doctor-nav-calendar`. The Calendar page uses
-`doctor-calendar-today`, `doctor-calendar-previous`, `doctor-calendar-next`,
-`doctor-calendar-schedule-date`, `doctor-calendar-view-mode`, and
-`doctor-calendar-settings`. The view mode values are `Calendar` and `Agenda`;
-Agenda's date picker is a shared compact `DatePicker` and has no custom popup
-identifier. The responsive toolbar exposes
-`doctor-calendar-toolbar-main`, `doctor-calendar-toolbar-actions`, and
-`doctor-calendar-action-group`. Agenda mode uses
-`doctor-calendar-schedule-list`, `doctor-calendar-schedule-date-<date>`,
-`doctor-calendar-schedule-appointment-<id>`, and explicit
-`doctor-calendar-schedule-loading`, `doctor-calendar-schedule-empty`,
-`doctor-calendar-schedule-end`, `doctor-calendar-schedule-error`, and
-`doctor-calendar-schedule-retry` state markers. The settings page uses
-`doctor-calendar-settings-page`, `doctor-calendar-settings-timezone`,
-`doctor-calendar-settings-working-hours`, and `doctor-calendar-settings-save`;
-there is no first-day selector or Calendar Preferences card. Working-interval
-rows are visual-only and support multiple intervals so a break can be
-represented without changing appointment scheduling.
-
-`PatientDirectoryView` is the shared administrative directory embedded by the
-Receptionist and Doctor workspaces. It receives the authenticated session,
-services, an ID prefix, a feedback label, and a callback for refreshing
-dependent selectors. The Doctor instance may additionally receive a callback
-that switches to `ClinicalHistoryView`; the Receptionist instance does not
-expose that action. Receptionist IDs retain the `reception-*` prefix; Doctor
-IDs use `doctor-*`. The table's explicit View action is backed by the row's
-`Patient` cell value, so JavaFX cell reuse cannot detach an action after a
-search refresh. It replaces the directory with a read-only administrative
-page containing **Edit**, **Activate/Deactivate
-patient**, **Delete patient**, and **Back to patients**. Edit opens a separate
-form containing **Save** and **Discard changes**. Eligible
-deletion opens an explicit confirmation window; a blocked deletion opens the
-owned `*-patient-delete-blocked-window` modal with category/count labels and
-deactivation guidance. No ordinary patient-details window is created, and
-failed writes leave the edit page and its draft available for correction.
-
-The shared authenticated header has `workspace-header`, `app-brand`,
-`workspace-title`, `workspace-identity`, and `logout-button`. The Receptionist
-top-level `reception-workspace-tabs` remains a hidden-header `TabPane`;
-`reception-navigation` is the visible rail and its **Navigation** label is a
-distinct non-interactive title. The appointment subflow uses compact secondary
-tabs. Workspace feedback sits directly below the shared header and
-`UiComponents.feedback` clears it after six seconds. Error feedback uses the
-red `error-feedback` treatment and `notificationArea` centres banners at the
-top. `passwordInput` overlays its faded visibility toggle within the password
-field rather than placing a separate adjacent button. New layout markers include
-`reception-patient-search-card`, `reception-patient-results-card`,
-`reception-booking-card`, `reception-appointment-results-card`,
-`reception-checkout-payment-card`, `reception-revenue-card`,
-`doctor-master-detail`, `doctor-detail-scroll`, `doctor-no-selection`,
-`doctor-dashboard-day-calendar`, `doctor-dashboard-date`,
-`doctor-dashboard-previous`, `doctor-dashboard-next`, `doctor-dashboard-today`,
-`doctor-dashboard-refresh`, `doctor-calendar-block-time`,
-`doctor-calendar-refresh`, `doctor-calendar-time-off-dialog-content`,
-`doctor-calendar-time-off-<id>-<date>`,
-`doctor-calendar-time-off-remove-confirmation`,
-`doctor-selected-appointment`, `doctor-selected-content`,
-`doctor-patient-details-card`, `doctor-patient-details`, `doctor-decline`,
-`doctor-status-message`, `doctor-clinical-read-only`,
-`doctor-view-patient-history`, `doctor-patient-clinical-history`,
-`doctor-clinical-history-view`, `doctor-history-patient`,
-`doctor-history-load`, `doctor-history-clear`, `doctor-history-list`,
-`doctor-history-state`, `doctor-history-detail`,
-`doctor-history-prescription-list`, and
-`admin-account-form-card`, and `admin-account-list-card`.
-
-Operational results use dedicated JavaFX tables. Patient rows show name,
-contact details, and active status without a generated-ID column. Receptionist
-appointment rows show administrative patient context, Doctor name, date/time,
-and a written lifecycle status without Patient or Doctor ID columns. Searchable
-patient and Doctor fields use `SearchSuggestionField`, which filters options
-beneath the editor and supports mouse plus Up/Down/Enter selection. Doctor
-prescription cells show medication and usage fields. System Admin staff
-accounts use a compact table with Username, Display Name, Role, and Status
-columns. Empty results use stable `*-empty` markers and an explanatory
-message. Color is supplementary to status text, and the stylesheet provides a
-visible focus outline for keyboard navigation.
-
-The Doctor workspace uses a compact, internally scrollable single-day Calendar
-as the master pane and a separately scrollable, status-driven selected-
-appointment detail pane. Its header contains the patient name, appointment
-time, and written status with a matching semantic colour class; it deliberately
-does not expose the generated Patient ID. The selected pane renders the shared
-administrative patient details grid read-only. Pending and accepted visits get
-only their permitted lifecycle actions, while checked-in visits get the
-consultation, prescription, and completion cards. Completed and checked-out
-clinical cards remain readable but have no editing actions; declined and
-cancelled visits show a non-actionable status message. Rescheduling reuses
-`AppointmentDialog.showDoctorEdit`, so date/time validation is shared with
-Calendar. The old Dashboard appointment `ListView` and time-off form are
-absent; time off is created and removed only from the full Calendar. The
-existing services still own authorization and lifecycle validation, and a
-successful action refreshes the Dashboard so the selected branch follows the
-current status.
-The Doctor shell keeps that content under the `Dashboard` destination and
-places the shared administrative directory under `Patients`;
-`doctor-nav-dashboard`, `doctor-nav-patients`, and `doctor-patients-page` are
-the navigation markers. The navigation `VBox` uses zero spacing and its two
-buttons are styled with infinite maximum width, flush edges, and full-panel
-alignment while retaining active, hover, and keyboard-focus states. The
-Patients destination has no clinical service or prescription controls.
-
-TestFX tests require a display. The CI workflow runs the Java suite through
-`xvfb-run --auto-servernum` on Ubuntu. For controls inside a scroll pane,
-tests should wait for the view marker and use semantic JavaFX-thread actions
-when a control is not physically visible. This avoids coupling tests to
-layout coordinates while still exercising each control's event handler.
-
-JaCoCo reports are generated at:
-
-```text
-build/reports/jacoco/test/html/index.html
-build/reports/jacoco/test/jacocoTestReport.xml
-```
-
-## Testing strategy
-
-### Test levels
-
-```mermaid
-flowchart TB
-    Domain["Domain tests\nrecords, transitions, calculations, boundaries"]
-    Persistence["Persistence tests\nreal temporary SQLite and migrations"]
-    Service["Service tests\nauthorization, validation, transactions"]
-    Integration["Workflow integration\nrole-separated clinic lifecycle"]
-    UI["TestFX UI tests\nnavigation, forms, tables, dialogs"]
-    Architecture["Architecture tests\npackage direction and cycles"]
-    Tools["Tool tests\nrepeatable reset and demo data"]
-    Domain --> Service
-    Persistence --> Service
-    Service --> Integration
-    Integration --> UI
-    Architecture -. independent structural gate .-> Domain
-    Tools --> Persistence
-```
-
-Repository and service tests use isolated databases under JUnit `@TempDir`;
-they never open the developer's default clinic database. Time-sensitive service
-tests inject fixed `Clock` values. TestFX classes create their own temporary
-database and wait for JavaFX events instead of depending on arbitrary sleeps.
-This keeps the suite repeatable and prevents test patients, credentials, or
-clinical records from leaking into local working data.
-
-### Test inventory
-
-The current source contains 168 `@Test` methods across 35 test classes. The
-inventory is grouped by the package boundary it exercises so it can be checked
-against the architecture rather than maintained as a long list of class names.
-
-| Test area | Classes | Tests | Main evidence |
-| --- | ---: | ---: | --- |
-| Application root | 1 | 2 | Stable and normalized default database paths. |
-| Architecture | 1 | 5 | Layer direction, exceptions, slice cycles, and UI/persistence separation. |
-| Domain | 3 | 9 | Calendar invariants, schedule paging values, exact revenue boundaries and overflow rejection. |
-| Persistence | 8 | 36 | Schema creation/migration, transactions, CRUD, conflicts, wildcard escaping, deletion blockers, and pagination. |
-| Service | 14 | 51 | Authentication, authorization, patient validation, appointment lifecycle, billing, clinical ownership, and end-to-end workflow. |
-| Tools | 1 | 2 | Protected reset and deterministic demo-data seeding. |
-| UI | 7 | 63 | Login/routing, role workspaces, searchable selectors, responsive tables, dialogs, calendars, feedback, checkout, and exports. |
-| **Total** | **35** | **168** | Source inventory; rerun the suite after any production or test change. |
-
-### Risk-based coverage priorities
-
-| Risk | Mitigation and automated evidence |
-| --- | --- |
-| Unauthorized clinical-data access | Service role/ownership checks, projection-specific repositories, `AuthorizationTest`, `ClinicalServiceTest`, and `ClinicWorkflowIntegrationTest`. |
-| Partial appointment, checkout, or deletion writes | Explicit SQLite transactions and rollback tests in service and persistence suites. |
-| Time conflicts and lifecycle mistakes | Boundary tests for adjacent/overlapping intervals, released declined/cancelled slots, check-in timing, and invalid transitions. |
-| Monetary sign, precision, or overflow errors | Integer minor-unit storage; `BigDecimal.longValueExact()` at UI parsing; positive service validation; exact report aggregation; `BillingServiceTest` and `RevenueReportTest`, including `Long.MAX_VALUE` and overflow. |
-| Migration data loss | `SchemaMigrationTest` covers every supported source version and rollback after partial failure. |
-| Search mistakes or SQL wildcard leakage | Repository tests cover names, identity/contact fields, combined criteria, deterministic ordering, and literal `%`/`_` input. |
-| Duplicate or skipped agenda rows | Stable `(startsAt, appointmentId)` cursors and sparse-page/concurrent-insert tests. |
-| Invalid CSV or JSON exports | Receptionist export tests cover quotes, commas, backslashes, line breaks, tabs, and JSON control characters. |
-| Layer erosion | ArchUnit rules reject forbidden dependencies and package cycles during `check`. |
-| UI regressions | TestFX covers semantic control ids and workflows; manual review remains appropriate for visual balance, native file choosers, and installer behaviour. |
-
-Extreme-value tests are required wherever input is converted to a narrower
-representation or later aggregated. A boundary is not considered covered only
-because rejected input was tested: the largest supported valid value and the
-first overflowing combination must also have explicit expected behaviour. This
-rule directly protects money, identifiers, date ranges, page sizes, and
-calendar arithmetic from silent wraparound.
-
-### Local verification commands
-
-From the repository root:
-
-```powershell
-# Windows PowerShell
-.\gradlew.bat spotlessApply
-.\gradlew.bat test --no-daemon --console=plain
-.\gradlew.bat check javadoc --no-daemon --console=plain
-git diff --check
-```
-
-```bash
-# macOS/Linux
-./gradlew spotlessApply
-./gradlew test --no-daemon --console=plain
-xvfb-run --auto-servernum ./gradlew check javadoc --no-daemon --console=plain
-git diff --check
-```
-
-Use `spotlessCheck` instead of `spotlessApply` when a read-only formatting
-check is required. A passing `test` task is not the complete quality gate.
-
-### Quality tasks and reports
-
-| Task or tool | Purpose | Output or failure policy |
-| --- | --- | --- |
-| `spotlessApply` / `spotlessCheck` | Apply or verify Google Java Format. | Formatting differences fail `spotlessCheck`. |
-| `checkstyleMain`, `checkstyleTest` | Enforce the configured Java style rules. | Reports are under `build/reports/checkstyle/`; violations fail. |
-| `pmdMain`, `pmdTest` | Run production and test-specific PMD rulesets. | Reports are under `build/reports/pmd/`; violations fail. |
-| `spotbugsMain` with FindSecBugs | Analyse production bytecode at maximum effort. | Reports are under `build/reports/spotbugs/`; medium-confidence findings fail. |
-| `test` | Run JUnit, ArchUnit, repository/service tests, integration tests, and TestFX. | JUnit XML and HTML reports are generated under `build/`. |
-| `jacocoTestReport` | Generate instruction and branch coverage evidence. | HTML/XML reports use the paths above and are published by CI. |
-| `javadoc` | Verify and generate public API documentation. | Output is under `build/docs/javadoc/`; warnings promoted by compilation policy fail where configured. |
-| `npm ci && npm run build` in `website/` | Reproduce and build the documentation site. | Broken Docusaurus links fail the production build. |
-| `git diff --check` | Detect whitespace errors in the final patch. | Must produce no errors before commit. |
-
-## Documentation site and CI
-
-From the repository root, build or serve the Docusaurus site with:
-
-```powershell
-Set-Location website
+cd website
 npm ci
 npm run build
 npm run start
 ```
 
-`website/docusaurus.config.js` includes `README.md` and `docs/**/*.md` in the
-documentation build. The sidebar exposes the overview and the two guides;
-reflection files remain unlisted but are still parsed by the production build.
-Broken site links fail the production build. GitHub
-Actions uses JDK 25, Node.js 24, `xvfb-run`, `./gradlew check javadoc`, and
-`npm ci && npm run build`; it publishes the generated `build/reports/` files
-as a quality-report artifact. `website/src/css/custom.css` mirrors the desktop
-app's palette from `src/main/resources/nusynapxe/ui.css` (teal `#0f8f83`
-primary, navy `#17324d` headings, slate `#52677b` body text) in both light and
-dark Docusaurus themes.
+---
 
-## Native packaging and releases
+## 3. Product Definition
 
-The `packageNative` Gradle task (registered near the bottom of `build.gradle`)
-builds a platform-native installer with `jpackage`, using the current
-toolchain's bundled JDK:
+### 3.1 Goal
 
-```powershell
-.\gradlew.bat installDist packageNative "-PreleaseVersion=0.1.0" --no-daemon
+NUSynapxe is an enterprise-grade, single-workstation desktop clinic management system designed for Singapore general practitioner clinics and specialized outpatient medical centres. It coordinates patient administration, doctor scheduling, appointment lifecycles, clinical consultation documentation, pharmacy prescriptions, billing checkout, and revenue accounting while maintaining rigid role and ownership boundaries between System Administrators, Receptionists, and Doctors.
+
+### 3.2 Current Capabilities
+
+- **Role-Based Access Control**: Strict segregation between System Admin (account provisioning), Receptionist (front-desk administrative & billing operations), and Doctor (clinical documentation & scheduling).
+- **Patient Directory**: Standardized identity management supporting NRIC, FIN, and Passport documents with syntax validation, country locking, deduplication, soft deactivation, and safe blocker-verified deletion.
+- **Multi-Day Clinic Scheduling**: Multi-doctor 30-minute interval scheduler, conflict detection, appointment rescheduling, and appointment cancellation.
+- **Real-Time Check-in Queue**: Arrival processing gated by Singapore local time (`Asia/Singapore`).
+- **Clinical Documentation & Pharmacy**: Assigned-doctor consultation recording, clinical examination findings, and itemized multi-drug prescription management.
+- **Continuity of Care**: Cross-doctor historical consultation browser allowing attending physicians to inspect completed medical records across all clinic colleagues.
+- **Physician Calendar & Agenda**: Dual-mode calendar with interactive multi-day time-grid and virtualized infinite-scrolling agenda stream, personal time-off blocking, and recurring working hours configuration with split lunch breaks.
+- **Atomic Checkout & Daily Receipts**: Minor-currency unit financial tracking, diverse payment method support, and sequential daily receipt numbering.
+- **Financial Auditing & Data Exports**: Date-bounded revenue auditing with multi-dimensional breakdowns and RFC 4180 compliant CSV and structured JSON data export.
+- **Versioned SQLite Storage**: Zero-configuration embedded relational persistence with atomic schema migrations (v1 through v7).
+
+### 3.3 Non-Goals
+
+The current version of NUSynapxe intentionally omits:
+- Multi-tenant cloud synchronization or remote server backends (architecture is strictly local-first to ensure patient privacy and offline reliability).
+- Online patient self-booking or web-facing patient portals.
+- Government health insurance (Medisave/CHAS) or third-party corporate claims API integration.
+- Automated pharmaceutical inventory stock decrementing or barcode dispensing.
+- In-application automated cloud backup/restore services (backup is handled via file-level database archiving).
+
+---
+
+## 4. Product Specifications Overview
+
+Detailed user personas, prioritized user stories, formal use cases, and illustrative behavioral specifications (Gherkin feature scenarios) are organized in the standalone specifications document:
+
+👉 **[Read the Full Product Specifications Guide](ProductSpecifications.md)**
+
+The standalone specifications document covers:
+- **Target User Personas**: Clinic Receptionist, Attending Physician / Doctor, and System Administrator.
+- **Prioritized User Stories**: Comprehensive user stories organized across administrative, patient identity, appointment scheduling, clinical documentation, doctor availability, and billing checkout workflows.
+- **Formal Use Cases**: Detailed end-to-end operational use cases specifying actors, preconditions, triggers, main success scenarios, and alternative extensions.
+- **Behavioral Specifications (Gherkin)**: Illustrative Given-When-Then behavioral specifications with syntax highlighting covering account security, document deduplication, conflict prevention, queue management, consultations, and revenue auditing.
+
+---
+
+## 5. Architecture & System Design Overview
+
+Technical design specifications, class layouts, database schemas, and sequence diagrams are detailed in the dedicated architectural guide:
+
+👉 **[Read the Full Architecture & System Design Guide](ArchitectureAndDesign.md)**
+
+The standalone design guide details:
+- **Component & Tier Architecture**: Strict unidirectional dependencies between JavaFX UI, Business Services, Persistence Projections, and SQLite storage.
+- **Package Layout & ArchUnit Rules**: Codified layer boundaries preventing architectural erosion.
+- **Persistence & Entity-Relationship Schema**: Relational database schema, foreign key constraints, and transactional schema migrations (v1 through v7).
+- **Safe Patient Deletion**: Multi-category preflight blocker inspection algorithm preventing orphan records.
+- **Cryptographic Security & Session Flow**: PBKDF2WithHmacSHA256 password hashing with per-account salt (210,000 iterations) and volatile in-memory sessions.
+- **Appointment Finite State Machine**: State transitions (`PENDING` through `CHECKED_OUT`) and conflict validation.
+- **Dual Doctor Scheduling**: Interactive 24-hour time-grid vs. infinite-scrolling cursor-paginated agenda stream.
+- **UI Design System & TestFX Conventions**: Programmatic JavaFX view construction and semantic element IDs.
+
+---
+
+## 6. Software Engineering Process
+
+### 6.1 OpenSpec Artifact Lifecycle
+
+All architectural, functional, and schema modifications follow the **OpenSpec** engineering process:
+
+```mermaid
+flowchart LR
+    Explore["1. Explore<br/>(Problem analysis)"] --> Propose["2. Propose<br/>(Change proposal)"]
+    Propose --> Design["3. Design<br/>(Architecture & schema)"]
+    Design --> Spec["4. Spec<br/>(Delta requirements)"]
+    Spec --> Tasks["5. Tasks<br/>(Work breakdown)"]
+    Tasks --> Apply["6. Apply<br/>(Implementation & tests)"]
+    Apply --> Verify["7. Verify<br/>(Quality gates & DoD)"]
+    Verify --> Archive["8. Archive<br/>(Sync to main specs)"]
+
+    classDef default fill:#ffffff,stroke:#17324d,stroke-width:1.5px,color:#17324d;
 ```
 
-`-PreleaseVersion` is required and must be `<major>.<minor>.<patch>`; the task
-fails fast without it. It packages whichever installer type matches the host
-OS (`.msi` on Windows, `.dmg` on macOS, `.deb` on Linux), reading the app image
-from `build/install/CS3227-2610-MP2/lib` (populated by `installDist`) and the
-platform-specific JavaFX modules resolved on `runtimeClasspath` by the OpenJFX
-Gradle plugin. The finished installer is copied to
-`build/packages/NUSynapxe-<version>-<platform>.<extension>`. Building an
-`.msi` on Windows requires the [WiX Toolset](https://wixtoolset.org) v3+ on
-`PATH`.
+1. **Explore**: Clarify functional requirements, review risk boundaries, and determine schema impact.
+2. **Propose & Design**: Author `proposal.md` and `design.md` detailing architectural implications, data migrations, and UI mockups.
+3. **Spec**: Define exact delta specifications using strict RFC 2119 requirement keywords (`SHALL`, `MUST`, `SHOULD`).
+4. **Tasks**: Break implementation into small, atomic, independently testable tasks.
+5. **Apply & Verify**: Implement code, author unit/integration/UI tests, and verify against quality gates.
+6. **Archive**: Sync delta specs to the canonical system specifications and archive the completed change artifact.
 
-The `fatJar` task builds the current host's platform-specific executable JAR:
+### 6.2 Conventional Commits & Branching Strategy
 
-```powershell
-.\gradlew.bat fatJar "-PreleaseVersion=0.1.0" --no-daemon
+Git commits adhere strictly to the Conventional Commits specification:
+- `feat(...)`: New user-facing feature or enhancement.
+- `fix(...)`: Bug fix or error resolution.
+- `test(...)`: Adding or modifying automated test suites.
+- `refactor(...)`: Code refactoring without changing observable behavior.
+- `docs(...)`: Documentation updates, guides, or markdown revisions.
+- `chore(...)`: Dependency bumps, Gradle build script maintenance, or tool configuration.
+
+Pull requests require linear git history, zero merge commits on release branches, and complete green CI check status before merging.
+
+### 6.3 Definition of Done (DoD)
+
+A task or pull request is considered **Done** only when:
+- [x] Code passes `.\gradlew.bat spotlessCheck` with zero formatting differences.
+- [x] Code passes `.\gradlew.bat check` (Checkstyle, PMD, SpotBugs with FindSecBugs, file size limits, JaCoCo thresholds) with zero violations.
+- [x] All automated tests in `.\gradlew.bat test` pass cleanly.
+- [x] `.\gradlew.bat javadoc` generates complete API documentation without compilation warnings.
+- [x] `npm run build` in `website/` completes with exit code 0 and zero broken links.
+- [x] Git patch passes `git diff --check` with zero trailing whitespace or carriage-return warnings.
+- [x] User Guide and Developer Guide are updated to reflect the new functionality.
+
+---
+
+## 7. Testing Strategy Overview
+
+Automated test structures, quality tasks, coverage risk matrices, and manual peer-testing scripts are detailed in the testing guide:
+
+👉 **[Read the Full Testing Strategy & Peer Testing Guide](TestingStrategy.md)**
+
+The standalone testing guide covers:
+- **Test Levels Pyramid**: Domain records, temporary SQLite persistence, transactional services, integration workflows, and headless TestFX UI tests.
+- **Automated Test Inventory**: Full inventory of automated test classes spanning domain, persistence, service, and UI layers.
+- **Risk-Based Coverage Matrix**: Specific test suites mitigating data privacy leaks, transaction splits, schedule conflicts, and numeric overflow.
+- **Quality Gates**: Repo-wide enforcement of Spotless formatting, Checkstyle rules, PMD static analysis, SpotBugs bytecode inspection, 500-line source file limits, and JaCoCo coverage (85% instruction, 70% branch, 85% line).
+- **Manual Peer Testing Walkthrough Scenarios**: End-to-end walkthrough scenarios covering setup, patient deduplication, booking conflicts, consultations, cross-doctor history, and revenue exports.
+
+---
+
+## 8. Documentation Site and CI
+
+### 8.1 Docusaurus Production Build
+
+The project documentation website is built with Docusaurus 3.10.2:
+- Configuration is declared in `website/docusaurus.config.js`.
+- Documents are organized in `docs/` and structured via `website/sidebars.js`.
+- Custom styling is declared in `website/src/css/custom.css`, mirroring NUSynapxe's clinical desktop palette (teal `#0f8f83`, dark navy `#17324d`, slate `#52677b`).
+
+### 8.2 Continuous Integration Pipeline
+
+The GitHub Actions workflow (`.github/workflows/ci.yml`) executes on every push to `master`, pull request, and manual workflow dispatch:
+1. Sets up JDK 25 and Node.js 24.
+2. Executes `./gradlew spotlessCheck` to enforce formatting.
+3. Executes `./gradlew check javadoc` under `xvfb-run` to run the complete test suite and static analysis.
+4. Executes `npm ci && npm run build` in `website/` to ensure documentation site integrity.
+5. Archives JaCoCo, Checkstyle, PMD, and SpotBugs reports as build artifacts.
+
+---
+
+## 9. Distribution Packaging and Native Releases
+
+### 9.1 Packaging Architecture
+
+```mermaid
+flowchart LR
+    Gradle["Gradle Build System"] --> NativePkg["packageNative<br/>(Platform Installer)"]
+    Gradle --> HostFat["fatJar<br/>(Host Platform JAR)"]
+    Gradle --> UnivFat["universalFatJar<br/>(Cross-Platform JAR)"]
+
+    NativePkg --> MSI["Windows x64/ARM64<br/>(.msi via WiX)"]
+    NativePkg --> DMG["macOS x64/ARM64<br/>(.dmg via jpackage)"]
+    NativePkg --> DEB["Linux x64/ARM64<br/>(.deb via jpackage)"]
+
+    HostFat --> PlatJARs["Platform-Specific JAR<br/>(Host OS Target)"]
+    UnivFat --> UnivJAR["Universal JAR<br/>(Win x64, Linux x64, Mac ARM64)"]
+
+    classDef default fill:#ffffff,stroke:#17324d,stroke-width:1.5px,color:#17324d;
 ```
 
-It writes `build/libs/NUSynapxe-<version>-fat.jar`. The JAR contains the
-application, its non-JavaFX runtime dependencies, and the JavaFX modules for
-the host platform. It requires a matching Java 25 runtime when it is run
-outside a native installer.
+### 9.2 Gradle Packaging Tasks
 
-The `universalFatJar` task assembles one additional executable JAR for the
-three explicitly supported targets Windows x64, Linux x64, and macOS ARM64:
+- **`packageNative`**: Builds platform-native installer with bundled JDK using `jpackage` (requires `-PreleaseVersion=<major>.<minor>.<patch>`):
+  ```powershell
+  .\gradlew.bat packageNative -PreleaseVersion=1.0.0 --no-daemon --console=plain
+  ```
+  Generates `.msi` (Windows, requires WiX v3+), `.dmg` (macOS), or `.deb` (Linux, requires `fakeroot`).
+- **`fatJar`**: Assembles host-specific executable fat JAR:
+  ```powershell
+  .\gradlew.bat fatJar --no-daemon --console=plain
+  ```
+  Writes `build/libs/NUSynapxe-<version>-fat.jar` bundling host JavaFX binaries.
+- **`universalFatJar`**: Assembles universal executable fat JAR embedding JavaFX for the three primary targets:
+  ```powershell
+  .\gradlew.bat universalFatJar --no-daemon --console=plain
+  ```
+  Writes `build/libs/NUSynapxe-<version>.jar` embedding native libraries for **Windows x64**, **Linux x64**, and **macOS ARM64**.
 
-```powershell
-.\gradlew.bat universalFatJar "-PreleaseVersion=0.1.0" --no-daemon
-```
+### 9.3 Official Release Asset Matrix
 
-It writes `build/libs/NUSynapxe-<version>.jar`. This task excludes the host's
-JavaFX artifacts and embeds the JavaFX `win`, `linux`, and `mac-aarch64`
-artifacts in a deterministic order, together with the application and its
-other runtime dependencies. Because JavaFX contains native libraries, this is
-not a platform-neutral Java-only JAR: it requires Java 25 and is limited to
-those three OS/architecture combinations. Use a platform-specific fat JAR or
-native installer for the other targets.
+On every tag push matching `v*.*.*`, `.github/workflows/release.yml` executes packaging across a matrix of 6 platform runners and attaches verified assets to the GitHub Release:
 
-`.github/workflows/release.yml` runs the native packaging and platform-specific
-fat JAR task on six explicit Windows/Linux/macOS x64 and ARM64 targets whenever
-a tag matching `vX.Y.Z` is pushed. The Windows ARM64 job intentionally uses an
-x64 Java/JavaFX build for Windows ARM emulation. A separate Windows x64 job
-builds the universal JAR. Each target uploads one installer and one JAR; the
-universal job uploads the additional `NUSynapxe-<version>.jar`. The final
-`publish` job verifies and attaches 13 files to the GitHub Release: six native
-installers, six platform-specific fat JARs, and the one universal JAR. macOS
-jobs compile tests and run static checks but skip the TestFX runtime suite
-because there is no `xvfb` equivalent there. To cut a release, push a tag from
-`master`:
+| Operating System & Architecture | Native Installer Asset | Dedicated Platform Executable JAR Asset | Universal JAR (`NUSynapxe-<version>.jar`) Supported? |
+| --- | --- | --- | :---: |
+| **Windows x64** (Intel / AMD) | `NUSynapxe-<version>-windows-x64.msi` | `NUSynapxe-<version>-windows-x64.jar` | **Yes** |
+| **Windows ARM64** (Surface Pro, Snapdragon) | `NUSynapxe-<version>-windows-arm64-compat.msi` | `NUSynapxe-<version>-windows-arm64-compat.jar` | **No** (Requires Platform JAR) |
+| **macOS Apple Silicon** (M1 / M2 / M3 / M4) | `NUSynapxe-<version>-macos-arm64.dmg` | `NUSynapxe-<version>-macos-arm64.jar` | **Yes** |
+| **macOS Intel (x64)** (Pre-2020 Macs) | `NUSynapxe-<version>-macos-x64.dmg` | `NUSynapxe-<version>-macos-x64.jar` | **No** (Requires Platform JAR) |
+| **Linux x64** (Ubuntu, Debian, Mint) | `NUSynapxe-<version>-linux-x64.deb` | `NUSynapxe-<version>-linux-x64.jar` | **Yes** |
+| **Linux ARM64** (Raspberry Pi, ARM Linux) | `NUSynapxe-<version>-linux-arm64.deb` | `NUSynapxe-<version>-linux-arm64.jar` | **No** (Requires Platform JAR) |
 
-```bash
-git tag v0.2.0
-git push origin v0.2.0
-```
+---
 
-## Requirements-to-implementation mapping
+## 10. Requirements-to-Implementation Mapping
 
-| Requirement | Implementation | Automated evidence |
+| Functional Requirement | Implementation Classes | Automated Test Verification |
 | --- | --- | --- |
-| Role-based authentication and confidentiality | `AuthenticationService`, `Authorization`, administrative projections, assigned-Doctor checks | `AuthenticationServiceTest`, `AuthorizationTest`, `ClinicalServiceTest`, workflow integration test |
-| Patient administration without exposing clinical history | `PatientService`, `PatientRepository`, `PatientDirectoryView` | Patient service/repository suites and Doctor/Receptionist TestFX suites |
-| Appointment lifecycle and conflict prevention | `AppointmentService`, `AppointmentTransitions`, `AppointmentRepository` | Service and repository schedule tests |
-| Doctor Calendar, agenda, settings, and time off | `CalendarService`, calendar domain records, `DoctorCalendarView` | Calendar domain/service/calculation and TestFX suites |
-| Atomic checkout, receipts, and revenue | `BillingService`, payment/receipt repositories, `RevenueReport` | Billing, persistence, integration, revenue-boundary, and export tests |
-| Versioned local persistence | `SqliteDatabase`, `SchemaInitializer`, `SqliteTransactions` | Database, transaction, and migration suites |
-| Enforced package boundaries and quality gates | Gradle configuration, ArchUnit, Checkstyle, PMD, SpotBugs, JaCoCo | `ArchitectureTest`, `check`, CI reports |
-| Reproducible documentation and delivery | Docusaurus configuration, `packageNative`, CI/Pages/release workflows | Documentation build and platform release jobs |
+| **Role-Based Authentication & Session Isolation** | `AuthenticationService`, `PasswordHasher`, `Session` | `AuthenticationServiceTest`, `AuthorizationTest` |
+| **Patient Directory & Document Syntax Rules** | `PatientService`, `PatientDirectoryRepository` | `PatientServiceValidationTest`, `PatientDirectoryRepositoryTest` |
+| **Safe Patient Deletion with Blocker Preflight** | `PatientService`, `PatientDeletionBlockers` | `PatientServiceMaintenanceTest`, `PatientDirectoryRepositoryTest` |
+| **Appointment Lifecycle & Conflict Checking** | `AppointmentService`, `AppointmentTransitions` | `AppointmentServiceTest`, `AppointmentRepositoryTest` |
+| **Arrival Check-in Gate with Singapore Time** | `AppointmentService`, `ReceptionistCheckoutPanel` | `AppointmentServiceTest`, `ReceptionistBookingTest` |
+| **Assigned Doctor Consultation & Prescriptions** | `ClinicalService`, `ClinicalRecordRepository` | `ClinicalServiceTest`, `DoctorDashboardTest` |
+| **Cross-Doctor Consultation History** | `ClinicalService`, `ClinicalHistoryView` | `ClinicalServiceTest`, `DoctorDashboardTest` |
+| **Doctor Calendar, Agenda & Working Intervals** | `CalendarService`, `CalendarSettingsRepository` | `CalendarServiceTest`, `CalendarSettingsRepositoryTest` |
+| **Atomic Billing Checkout & Receipts** | `BillingService`, `PaymentRepository`, `ReceiptRepository` | `BillingServiceTest`, `ReceiptRepositoryTest` |
+| **Revenue Reports & CSV/JSON Exporting** | `RevenueReport`, `BillingService`, `ReportExporter` | `RevenueReportTest`, `ReceptionistRevenueTest` |
+| **Versioned Relational SQLite Storage** | `SqliteDatabase`, `SchemaInitializer` | `SqliteDatabaseTest`, `SchemaMigrationTest` |
+| **Layered Architecture & Package Direction** | Architecture and layer boundaries | `ArchitectureTest` |
+| **Cross-Platform Delivery & Packaging** | `build.gradle`, `.github/workflows/release.yml` | GitHub Actions multi-platform release matrix |
 
-Behavioural or architectural changes should update the relevant OpenSpec
-artifact first, implement and test the change, synchronize the main specs, pass
-strict OpenSpec validation, and archive the completed change. Documentation
-examples must be checked against the final method signatures, visible labels,
-and build configuration rather than an earlier design draft.
+---
 
-## Known limitations and future work
+## 11. Known Limitations & Future Work
 
-- The application and database are local to one computer; there is no cloud
-  synchronization or built-in backup/restore workflow.
-- Identity-document validation checks documented syntax but not government
-  checksums or external registries.
-- Calendar working intervals control shading only; appointment conflicts and
-  explicit Doctor time off enforce availability.
-- Native installers are not code-signed or notarized, so operating systems may
-  display a publisher or trust warning.
-- The universal JAR requires Java 25 and embeds native JavaFX files for Windows
-  x64, Linux x64, and macOS ARM64 only; it is not a replacement for the
-  platform-specific JARs or native installers on other targets.
-- Hosted macOS release jobs compile tests and run static checks but do not run
-  the TestFX runtime suite because the workflow has no Xvfb equivalent.
+1. **Single-Workstation Concurrency**: The application is optimized for single-workstation local desktop use with a dedicated SQLite database connection. Future iterations could incorporate an optional remote PostgreSQL sync connector for multi-counter clinic networks.
+2. **External Identity Verification**: Identity document syntax (NRIC/FIN/Passport) is strictly verified via pattern matching and issuing country checks, but does not query government identity registries (e.g. Singpass API).
+3. **Calendar Shading vs Booking Policy**: Doctor working intervals and lunch breaks provide visual calendar shading to assist front-desk scheduling without strictly blocking emergency walk-in bookings.
+4. **Code Signing**: Open-source binaries are unsigned. Operating systems may present a one-time trust prompt on first run. Future releases could integrate Apple Developer ID and Microsoft Authenticode code-signing certificates.
+5. **Universal JAR Scope**: The universal JAR embeds native libraries for Windows x64, Linux x64, and macOS Apple Silicon. Other architectures (Windows ARM64, macOS Intel, Linux ARM64) require their respective dedicated platform JARs or native installers.
 
-## Acknowledgements
+---
 
-| Source | Use in NUSynapxe |
+## 12. Acknowledgements
+
+We gratefully acknowledge the following open-source projects, frameworks, specifications, and reference documentation that made the development of NUSynapxe possible:
+
+| Source / Project | Role and Utilization in NUSynapxe |
 | --- | --- |
-| [OpenJFX](https://openjfx.io/) | Desktop UI controls and application lifecycle. |
-| [SQLite](https://www.sqlite.org/docs.html) and [Xerial SQLite JDBC](https://github.com/xerial/sqlite-jdbc) | Embedded relational storage and JDBC driver. |
-| [Google libphonenumber](https://github.com/google/libphonenumber) | Country calling-code metadata. |
-| [JUnit](https://junit.org/), [TestFX](https://github.com/TestFX/TestFX), and [ArchUnit](https://www.archunit.org/) | Unit/integration testing, JavaFX interaction, and package-boundary enforcement. |
-| [Spotless](https://github.com/diffplug/spotless), [Checkstyle](https://checkstyle.org/), [PMD](https://pmd.github.io/), [SpotBugs](https://spotbugs.github.io/), [FindSecBugs](https://find-sec-bugs.github.io/), and [JaCoCo](https://www.jacoco.org/jacoco/) | Formatting, static analysis, security checks, and coverage reports. |
-| [Docusaurus](https://docusaurus.io/) and [Mermaid](https://mermaid.js.org/) | Documentation site and source-controlled diagrams. |
-| [GitHub Actions](https://docs.github.com/actions) and `jpackage` | Continuous verification, documentation deployment, and native packaging. |
+| [OpenJFX](https://openjfx.io/) | High-performance desktop UI controls, scene graph, layouts, and JavaFX application lifecycle. |
+| [SQLite](https://www.sqlite.org/docs.html) & [Xerial SQLite JDBC](https://github.com/xerial/sqlite-jdbc) | Zero-configuration embedded relational persistence, transactional schema initialization, and foreign key enforcement. |
+| [Google libphonenumber](https://github.com/google/libphonenumber) | International telephone country calling-code mapping and metadata resolution. |
+| [JUnit 5](https://junit.org/junit5/) & [Mockito](https://site.mockito.org/) | Comprehensive unit, parameterized, and service layer mock testing. |
+| [TestFX](https://github.com/TestFX/TestFX) | Automated headless JavaFX user interface interaction, form automation, and scene assertion. |
+| [ArchUnit](https://www.archunit.org/) | Automated structural linting and architectural dependency direction enforcement. |
+| [Spotless](https://github.com/diffplug/spotless) & [Google Java Format](https://github.com/google/google-java-format) | Deterministic code formatting and automated style checking. |
+| [Checkstyle](https://checkstyle.org/) & [PMD](https://pmd.github.io/) | Static source analysis, maintainability rules, and coding standards enforcement. |
+| [SpotBugs](https://spotbugs.github.io/) & [FindSecBugs](https://find-sec-bugs.github.io/) | Bytecode security vulnerability detection and static bug pattern analysis. |
+| [JaCoCo](https://www.jacoco.org/jacoco/) | Branch and instruction code coverage analysis and report generation. |
+| [Docusaurus](https://docusaurus.io/) & [Mermaid](https://mermaid.js.org/) | Production documentation website generation, MDX rendering, and source-controlled architectural diagrams. |
+| [WiX Toolset](https://wixtoolset.org/) & `jpackage` | Native Windows (`.msi`), macOS (`.dmg`), and Linux (`.deb`) installer compilation. |
