@@ -5,8 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.nio.file.Path;
 import java.sql.SQLException;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
+import nusynapxe.ClinicClock;
 import nusynapxe.domain.Account;
 import nusynapxe.domain.Appointment;
 import nusynapxe.domain.AppointmentStatus;
@@ -71,7 +71,8 @@ final class ClinicWorkflowIntegrationTest {
                       170.0,
                       65.0,
                       true));
-      LocalDateTime start = LocalDateTime.now().minusMinutes(5).withSecond(0).withNano(0);
+      LocalDateTime start =
+          ClinicClock.now(ClinicClock.system()).minusMinutes(5).withSecond(0).withNano(0);
       Appointment appointment =
           services
               .appointmentService()
@@ -113,13 +114,13 @@ final class ClinicWorkflowIntegrationTest {
           1,
           services
               .billingService()
-              .dailyRevenue(receptionistSession, LocalDate.now())
+              .dailyRevenue(receptionistSession, ClinicClock.today(ClinicClock.system()))
               .transactionCount());
       assertEquals(
           4500,
           services
               .billingService()
-              .dailyRevenue(receptionistSession, LocalDate.now())
+              .dailyRevenue(receptionistSession, ClinicClock.today(ClinicClock.system()))
               .totalMinor());
 
       var clinicalBefore =

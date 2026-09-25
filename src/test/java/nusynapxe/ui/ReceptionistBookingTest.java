@@ -127,7 +127,7 @@ final class ReceptionistBookingTest extends ReceptionistViewTestSupport {
     verifyThat("#reception-feedback", hasText("Checkout completed"));
 
     selectWorkspaceTab(5);
-    setText("#reception-revenue-date", LocalDate.now().toString());
+    setText("#reception-revenue-date", ClinicClock.today(ClinicClock.system()).toString());
     fire("#reception-revenue-submit");
     verifyThat("#reception-revenue", hasText("1 successful payment(s), total 45.00"));
 
